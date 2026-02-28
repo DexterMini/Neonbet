@@ -1,0 +1,108 @@
+# Casino Platform - Development Docker Compose
+# Includes hot-reload, debug mode, and dev tools
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: casino_db_dev
+    environment:
+      POSTGRES_USER: casino
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: casino_dev
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U casino -d casino_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - casino_dev_network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: casino_redis_dev
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - casino_dev_network
+
+  # Casino API Backend (Development with hot-reload)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: casino_api_dev
+    environment:
+      DATABASE_URL: postgresql+asyncpg://casino:devpassword@db:5432/casino_dev
+      REDIS_URL: redis://redis:6379/0
+      DEBUG: "true"
+      SECRET_KEY: dev-secret-key
+      JWT_SECRET: dev-jwt-secret
+      HOUSE_EDGE: "0.01"
+      MIN_BET: "0.0001"
+      MAX_BET: "100.0"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - casino_dev_network
+    command: ["uvicorn", "casino.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: casino_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@casino.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+    networks:
+      - casino_dev_network
+    profiles:
+      - tools
+
+  # Redis Commander for Redis management (optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: casino_redis_commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - casino_dev_network
+    profiles:
+      - tools
+
+networks:
+  casino_dev_network:
+    driver: bridge
+
+volumes:
+  postgres_dev_data:
+  redis_dev_data:

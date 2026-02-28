@@ -1,0 +1,155 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ─── Crypto Casino Tokens (Shuffle/Winna style) ─── */
+    --background:          #0A0B0F;
+    --background-deep:     #060709;
+    --foreground:          #E8EAF0;
+    --card:                #141620;
+    --card-foreground:     #E8EAF0;
+    --primary:             #00E87B;
+    --primary-foreground:  #0A0B0F;
+    --secondary:           #1A1D28;
+    --secondary-foreground:#E8EAF0;
+    --muted:               #222530;
+    --muted-foreground:    #9CA3B8;
+    --accent:              #00E87B;
+    --accent-foreground:   #0A0B0F;
+    --destructive:         #FF4757;
+    --border:              #1A1D28;
+    --input:               #1A1D28;
+    --ring:                #00E87B;
+    --radius:              0.75rem;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "rlig" 1, "calt" 1, "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* ─── Premium Typography ─── */
+  h1, h2, h3, h4, h5, h6 {
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+}
+
+/* ─── Scrollbar ─── */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #222530 transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #222530;
+    border-radius: 999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #2E3340;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ─── Glass / Surface utilities ─── */
+  .glass {
+    @apply bg-white/[0.02] backdrop-blur-xl border border-white/[0.04];
+  }
+  .glass-card {
+    @apply bg-surface/80 backdrop-blur-xl border border-white/[0.04] rounded-2xl;
+  }
+
+  /* ─── Text utilities ─── */
+  .text-gradient-gold {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-dark via-brand to-brand-light;
+  }
+
+  .text-gradient-shine {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-brand-light to-white;
+  }
+
+  /* ─── Shimmer skeleton ─── */
+  .shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.03), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+  @keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+  }
+
+  /* ─── Game result overlays ─── */
+  .win-overlay::after {
+    content: "";
+    @apply absolute inset-0 bg-gradient-to-t from-accent-green/10 to-transparent pointer-events-none rounded-2xl;
+  }
+  .lose-overlay::after {
+    content: "";
+    @apply absolute inset-0 bg-gradient-to-t from-accent-red/10 to-transparent pointer-events-none rounded-2xl;
+  }
+
+  /* ─── Game animations ─── */
+  @keyframes win-pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.02); }
+  }
+  @keyframes multiplier-glow {
+    0%, 100% { text-shadow: 0 0 10px rgba(0, 232, 123, 0.4), 0 0 20px rgba(0, 232, 123, 0.2); }
+    50%      { text-shadow: 0 0 20px rgba(0, 232, 123, 0.6), 0 0 40px rgba(0, 232, 123, 0.3); }
+  }
+  @keyframes crash-line {
+    0%   { stroke-dashoffset: 1000; }
+    100% { stroke-dashoffset: 0; }
+  }
+  .animate-win-pulse      { animation: win-pulse 0.5s ease-in-out; }
+  .animate-multiplier-glow { animation: multiplier-glow 2s ease-in-out infinite; }
+  .animate-crash-line      { animation: crash-line 0.5s ease-out forwards; }
+
+  /* ─── Noise texture ─── */
+  .noise::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.015;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+}
+
+/* ─── Focus ─── */
+:focus-visible {
+  @apply outline-none ring-2 ring-brand/40 ring-offset-2 ring-offset-background;
+}
+
+/* ─── Selection ─── */
+::selection {
+  @apply bg-brand/20 text-white;
+}
