@@ -10,6 +10,8 @@ import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
 import { Circle, RotateCcw, TrendingUp, ChevronDown, Sparkles } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
+import { useHotkeys } from '@/hooks/useHotkeys'
 
 interface Ball { id: number; x: number; y: number; path: number[]; finalSlot: number; multiplier: number }
 interface BetHistory { id: number; multiplier: number; payout: number; bet: number; risk: string; rows: number; timestamp: Date }
@@ -87,6 +89,7 @@ export default function PlinkoPage() {
   const [betHistory, setBetHistory] = useState<BetHistory[]>([])
   const [showRowsDropdown, setShowRowsDropdown] = useState(false)
   const [totalProfit, setTotalProfit] = useState(0)
+  const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
 
   const multipliers = PLINKO_MULTIPLIERS[plinkoRisk][plinkoRows] || PLINKO_MULTIPLIERS.medium[12]
 
@@ -208,14 +211,13 @@ export default function PlinkoPage() {
   useEffect(() => { drawBoard() }, [drawBoard])
 
   // Drop ball
-  const dropBall = async () => {
-    if (!initialized || isPlacing) return
-    const bet = parseFloat(betAmount)
-    if (bet <= 0 || isNaN(bet)) { toast.error('Invalid bet amount'); return }
+  const dropBall = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
+    const bet = amount ?? parseFloat(betAmount)
+    if (!initialized || isPlacing || bet <= 0 || isNaN(bet)) return { won: false, profit: -bet }
     setIsDropping(true); setLastResult(null)
 
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas) return { won: false, profit: -bet }
     const { width, height } = canvas
     const startY = 35; const endY = height - 80; const rowHeight = (endY - startY) / plinkoRows
 
@@ -229,7 +231,7 @@ export default function PlinkoPage() {
         const { result: pathResult } = await generateBet('plinko', { rows: plinkoRows })
         path = pathResult as number[]
       }
-    } catch (err: any) { toast.error(err?.message || 'Error placing bet'); setIsDropping(false); return }
+    } catch (err: any) { toast.error(err?.message || 'Error placing bet'); setIsDropping(false); return { won: false, profit: -bet } }
 
     let position = 0
     path.forEach(dir => { position += dir === 0 ? -1 : 1 })
@@ -270,10 +272,17 @@ export default function PlinkoPage() {
     setTotalProfit(prev => prev + profit)
     sessionStats.recordBet(multiplier >= 1, bet, profit, multiplier)
     setBetHistory(prev => [{ id: ballId, multiplier, payout, bet, risk: plinkoRisk, rows: plinkoRows, timestamp: new Date() }, ...prev].slice(0, 20))
-    if (multiplier >= 1) toast.success(`${multiplier}x multiplier! Won $${payout.toFixed(2)}`)
+    const won = multiplier >= 1
+    if (won) toast.success(`${multiplier}x multiplier! Won $${payout.toFixed(2)}`)
     else toast.error(`${multiplier}x - Lost $${(bet - payout).toFixed(2)}`)
-    setTimeout(() => { setBalls([]); setIsDropping(false) }, 800)
-  }
+    await new Promise(r => setTimeout(r, 800))
+    setBalls([]); setIsDropping(false)
+    return { won, profit }
+  }, [betAmount, initialized, isPlacing, isAuthenticated, plinkoRows, plinkoRisk, multipliers, placeBet, generateBet, sessionStats])
+
+  const autoBetHandler = useCallback(async (amount: number) => dropBall(amount), [dropBall])
+  const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)
+  useHotkeys(() => { if (!isDropping && !autoBetState.running) dropBall() }, () => autoBetStop(), !isDropping)
 
   const getMultiplierColor = (mult: number) => {
     if (mult >= 100) return 'text-amber-400'
@@ -297,9 +306,13 @@ export default function PlinkoPage() {
               serverSeedHash={serverSeedHash}
               nonce={nonce}
               onShowFairness={() => setShowFairness(true)}
-              showAutoTab={false}
+              autoBetConfig={autoBetConfig}
+              onAutoBetConfigChange={setAutoBetConfig}
+              autoBetState={autoBetState}
+              onAutoBetStart={autoBetStart}
+              onAutoBetStop={autoBetStop}
               actionButton={
-                <button onClick={dropBall} disabled={isDropping || !initialized}
+                <button onClick={() => dropBall()} disabled={isDropping || !initialized}
                   className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2
                     ${isDropping || !initialized ? 'bg-surface cursor-not-allowed text-muted' : 'bg-gradient-to-r from-brand to-emerald-400 text-background-deep shadow-lg shadow-brand/30 hover:brightness-110'}`}>
                   {isDropping ? <><RotateCcw className="w-4 h-4 animate-spin" />Dropping...</> : <><Sparkles className="w-4 h-4" />Drop Ball</>}

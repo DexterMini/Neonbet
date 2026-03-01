@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GameLayout } from '@/components/GameLayout'
 import { FairnessModal } from '@/components/FairnessModal'
@@ -10,6 +10,8 @@ import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
 import { Grid3X3, Shield, Sparkles, Zap, Trophy, X, RotateCcw, Play } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
+import { useHotkeys } from '@/hooks/useHotkeys'
 
 type RiskLevel = 'low' | 'classic' | 'medium' | 'high'
 
@@ -102,6 +104,7 @@ export default function KenoPage() {
   const [riskLevel, setRiskLevel] = useState<RiskLevel>('classic')
   const [showFairness, setShowFairness] = useState(false)
   const [lastBetInfo, setLastBetInfo] = useState<{ nonce: number; clientSeed: string; serverSeedHash: string } | null>(null)
+  const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
 
   const matches = useMemo(() => selectedNumbers.filter(n => drawnNumbers.includes(n)).length, [selectedNumbers, drawnNumbers])
 
@@ -140,11 +143,11 @@ export default function KenoPage() {
     setSelectedNumbers([]); setDrawnNumbers([]); setGameEnded(false)
   }
 
-  const handlePlay = async () => {
-    if (isPlaying || isPlacing || !initialized) return
-    if (selectedNumbers.length === 0) { toast.error('Select at least 1 number'); return }
-    const bet = parseFloat(betAmount)
-    if (bet <= 0 || isNaN(bet)) { toast.error('Invalid bet amount'); return }
+  const handlePlay = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
+    const bet = amount ?? parseFloat(betAmount)
+    if (isPlaying || isPlacing || !initialized) return { won: false, profit: 0 }
+    if (selectedNumbers.length === 0) { toast.error('Select at least 1 number'); return { won: false, profit: 0 } }
+    if (bet <= 0 || isNaN(bet)) { toast.error('Invalid bet amount'); return { won: false, profit: 0 } }
 
     setIsPlaying(true); setDrawnNumbers([]); setGameEnded(false)
 
@@ -175,17 +178,25 @@ export default function KenoPage() {
 
       setGameEnded(true)
       const winnings = bet * multiplier
-      if (multiplier > 0) {
+      const won = multiplier > 0
+      const profit = won ? winnings - bet : -bet
+      if (won) {
         sessionStats.recordBet(true, bet, winnings - bet, multiplier)
         toast.success(`${hits} hits! Won $${winnings.toFixed(2)} (${multiplier}x)`)
       } else {
         sessionStats.recordBet(false, bet, -bet, 0)
         toast.error(`${hits} hits - Better luck next time!`)
       }
+      return { won, profit }
     } catch (error: any) {
       toast.error(error?.message || 'Error generating result')
+      return { won: false, profit: -bet }
     } finally { setIsPlaying(false) }
-  }
+  }, [betAmount, isPlaying, isPlacing, initialized, selectedNumbers, isAuthenticated, riskLevel, placeBet, generateBet, sessionStats])
+
+  const autoBetHandler = useCallback(async (amount: number) => handlePlay(amount), [handlePlay])
+  const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)
+  useHotkeys(() => { if (!isPlaying && !autoBetState.running) handlePlay() }, () => autoBetStop(), !isPlaying)
 
   const getNumberState = (num: number) => {
     const isSelected = selectedNumbers.includes(num)
@@ -210,9 +221,13 @@ export default function KenoPage() {
               serverSeedHash={serverSeedHash}
               nonce={nonce}
               onShowFairness={() => setShowFairness(true)}
-              showAutoTab={false}
+              autoBetConfig={autoBetConfig}
+              onAutoBetConfigChange={setAutoBetConfig}
+              autoBetState={autoBetState}
+              onAutoBetStart={autoBetStart}
+              onAutoBetStop={autoBetStop}
               actionButton={
-                <button onClick={handlePlay} disabled={isPlaying || selectedNumbers.length === 0 || !initialized}
+                <button onClick={() => handlePlay()} disabled={isPlaying || selectedNumbers.length === 0 || !initialized}
                   className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2
                     ${isPlaying || selectedNumbers.length === 0
                       ? 'bg-surface cursor-not-allowed text-muted'

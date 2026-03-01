@@ -10,6 +10,8 @@ import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
 import { Shield, Sparkles, RotateCcw } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
+import { useHotkeys } from '@/hooks/useHotkeys'
 
 /* ── Floating particles ───────────────────────────── */
 function FloatingCards() {
@@ -102,6 +104,7 @@ export default function TwentyOnePage() {
   const [cards, setCards] = useState<Card[]>([])
   const [total, setTotal] = useState(0)
   const [winMultiplier, setWinMultiplier] = useState(0)
+  const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
 
   const currentTable = useMemo(() => MULTIPLIER_TABLES[numCards], [numCards])
   const isWin = gameState === 'finished' && total >= 16 && total <= 21
@@ -130,10 +133,10 @@ export default function TwentyOnePage() {
     return t
   }, [])
 
-  const handleBet = async () => {
-    const bet = parseFloat(betAmount)
-    if (bet <= 0) { toast.error('Enter a valid bet'); return }
-    if (!initialized && !isAuthenticated) { toast.error('Not initialized'); return }
+  const handleBet = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
+    const bet = amount ?? parseFloat(betAmount)
+    if (bet <= 0) { toast.error('Enter a valid bet'); return { won: false, profit: 0 } }
+    if (!initialized && !isAuthenticated) { toast.error('Not initialized'); return { won: false, profit: 0 } }
 
     setCards([]); setTotal(0); setWinMultiplier(0); setGameState('revealing')
 
@@ -148,24 +151,33 @@ export default function TwentyOnePage() {
 
       setCards(drawn); setTotal(handTotal); setWinMultiplier(mult)
 
-      setTimeout(() => {
-        setGameState('finished')
-        if (won) {
-          sessionStats.recordBet(true, bet, bet * mult - bet, mult)
-          toast.success(`${handTotal}! Won $${(bet * mult - bet).toFixed(2)} (${fmtMult(mult)})`)
-        } else if (handTotal > 21) {
-          sessionStats.recordBet(false, bet, -bet, 0)
-          toast.error('Bust! Over 21')
-        } else {
-          sessionStats.recordBet(false, bet, -bet, 0)
-          toast.error(`${handTotal} — under 16`)
-        }
-      }, numCards * 180 + 700)
+      return new Promise<{ won: boolean; profit: number }>((resolve) => {
+        setTimeout(() => {
+          setGameState('finished')
+          const profit = won ? bet * mult - bet : -bet
+          if (won) {
+            sessionStats.recordBet(true, bet, bet * mult - bet, mult)
+            toast.success(`${handTotal}! Won $${(bet * mult - bet).toFixed(2)} (${fmtMult(mult)})`)
+          } else if (handTotal > 21) {
+            sessionStats.recordBet(false, bet, -bet, 0)
+            toast.error('Bust! Over 21')
+          } else {
+            sessionStats.recordBet(false, bet, -bet, 0)
+            toast.error(`${handTotal} — under 16`)
+          }
+          resolve({ won, profit })
+        }, numCards * 180 + 700)
+      })
     } catch {
       toast.error('Failed to place bet')
       setGameState('betting')
+      return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
     }
-  }
+  }, [betAmount, initialized, isAuthenticated, generateBet, buildDeck, calcTotal, numCards, sessionStats])
+
+  const autoBetHandler = useCallback(async (amount: number) => handleBet(amount), [handleBet])
+  const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)
+  useHotkeys(() => { if (gameState === 'betting' && !autoBetState.running) handleBet() }, () => autoBetStop(), gameState === 'betting')
 
   const newGame = () => { setGameState('betting'); setCards([]); setTotal(0); setWinMultiplier(0) }
 
@@ -184,10 +196,14 @@ export default function TwentyOnePage() {
               serverSeedHash={serverSeedHash}
               nonce={nonce}
               onShowFairness={() => setShowFairness(true)}
-              showAutoTab={false}
+              autoBetConfig={autoBetConfig}
+              onAutoBetConfigChange={setAutoBetConfig}
+              autoBetState={autoBetState}
+              onAutoBetStart={autoBetStart}
+              onAutoBetStop={autoBetStop}
               actionButton={
                 gameState === 'betting' ? (
-                  <button onClick={handleBet} disabled={parseFloat(betAmount) <= 0 || isPlacing}
+                  <button onClick={() => handleBet()} disabled={parseFloat(betAmount) <= 0 || isPlacing}
                     className="w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-400 text-background-deep shadow-lg shadow-emerald-500/30 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed">
                     <Sparkles className="w-4 h-4" />{isPlacing ? 'Dealing...' : 'Deal Cards'}
                   </button>

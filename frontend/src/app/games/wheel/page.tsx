@@ -10,6 +10,8 @@ import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
 import { CircleDot, RefreshCw, Shield, Zap, TrendingUp, Sparkles } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
+import { useHotkeys } from '@/hooks/useHotkeys'
 
 interface WheelSegment {
   value: number
@@ -260,6 +262,7 @@ export default function WheelPage() {
   const [result, setResult] = useState<WheelSegment | null>(null)
   const [showResult, setShowResult] = useState(false)
   const [showFairness, setShowFairness] = useState(false)
+  const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
 
   const segments = WHEEL_CONFIGS[wheelSegments]?.[riskLevel] || WHEEL_CONFIGS[10].medium
 
@@ -383,11 +386,11 @@ export default function WheelPage() {
   }, [rotation, segments])
 
   // Spin the wheel
-  const handleSpin = async () => {
-    if (isSpinning || isPlacing) return
-    if (!initialized) { toast.error('Initializing provably fair system...'); return }
-    const bet = parseFloat(betAmount)
-    if (bet <= 0 || bet > displayBalance) { toast.error('Invalid bet amount'); return }
+  const handleSpin = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
+    const bet = amount ?? parseFloat(betAmount)
+    if (isSpinning || isPlacing) return { won: false, profit: 0 }
+    if (!initialized) { toast.error('Initializing provably fair system...'); return { won: false, profit: 0 } }
+    if (bet <= 0 || bet > displayBalance) { toast.error('Invalid bet amount'); return { won: false, profit: 0 } }
 
     setIsSpinning(true)
     setShowResult(false)
@@ -410,7 +413,7 @@ export default function WheelPage() {
       toast.error(err?.message || 'Error placing bet')
       if (!isAuthenticated) setDemoBalance(prev => prev + bet)
       setIsSpinning(false)
-      return
+      return { won: false, profit: -bet }
     }
 
     const segmentAngle = 360 / segments.length
@@ -422,33 +425,42 @@ export default function WheelPage() {
     const startTime = Date.now()
     const startRotation = rotation
 
-    const animate = () => {
-      const elapsed = Date.now() - startTime
-      const progress = Math.min(elapsed / duration, 1)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      const currentRotation = startRotation + (finalRotation * eased)
-      setRotation(currentRotation % 360)
+    return new Promise<{ won: boolean; profit: number }>((resolve) => {
+      const animate = () => {
+        const elapsed = Date.now() - startTime
+        const progress = Math.min(elapsed / duration, 1)
+        const eased = 1 - Math.pow(1 - progress, 3)
+        const currentRotation = startRotation + (finalRotation * eased)
+        setRotation(currentRotation % 360)
 
-      if (progress < 1) {
-        requestAnimationFrame(animate)
-      } else {
-        setResult(resultSegment)
-        setShowResult(true)
-        setIsSpinning(false)
-
-        const payout = bet * resultSegment.value
-        if (resultSegment.value > 0) {
-          if (!isAuthenticated) setDemoBalance(prev => prev + payout)
-          sessionStats.recordBet(true, bet, payout - bet, resultSegment.value)
-          toast.success(`${resultSegment.value}x! Won $${payout.toFixed(2)}`)
+        if (progress < 1) {
+          requestAnimationFrame(animate)
         } else {
-          sessionStats.recordBet(false, bet, -bet, 0)
-          toast.error(`0x - Lost $${bet.toFixed(2)}`)
+          setResult(resultSegment)
+          setShowResult(true)
+          setIsSpinning(false)
+
+          const payout = bet * resultSegment.value
+          const won = resultSegment.value > 0
+          const profit = won ? payout - bet : -bet
+          if (won) {
+            if (!isAuthenticated) setDemoBalance(prev => prev + payout)
+            sessionStats.recordBet(true, bet, payout - bet, resultSegment.value)
+            toast.success(`${resultSegment.value}x! Won $${payout.toFixed(2)}`)
+          } else {
+            sessionStats.recordBet(false, bet, -bet, 0)
+            toast.error(`0x - Lost $${bet.toFixed(2)}`)
+          }
+          resolve({ won, profit })
         }
       }
-    }
-    requestAnimationFrame(animate)
-  }
+      requestAnimationFrame(animate)
+    })
+  }, [betAmount, isSpinning, isPlacing, initialized, displayBalance, isAuthenticated, placeBet, generateBet, segments, rotation, sessionStats])
+
+  const autoBetHandler = useCallback(async (amount: number) => handleSpin(amount), [handleSpin])
+  const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)
+  useHotkeys(() => { if (!isSpinning && !autoBetState.running) handleSpin() }, () => autoBetStop(), !isSpinning)
 
   return (
     <GameLayout>
@@ -465,8 +477,13 @@ export default function WheelPage() {
               serverSeedHash={serverSeedHash}
               nonce={nonce}
               onShowFairness={() => setShowFairness(true)}
+              autoBetConfig={autoBetConfig}
+              onAutoBetConfigChange={setAutoBetConfig}
+              autoBetState={autoBetState}
+              onAutoBetStart={autoBetStart}
+              onAutoBetStop={autoBetStop}
               actionButton={
-                <button onClick={handleSpin} disabled={isSpinning}
+                <button onClick={() => handleSpin()} disabled={isSpinning}
                   className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2 ${
                     isSpinning ? 'bg-surface text-muted cursor-not-allowed' :
                     'bg-gradient-to-r from-violet-500 to-purple-400 text-white shadow-lg shadow-violet-500/30 hover:brightness-110'
