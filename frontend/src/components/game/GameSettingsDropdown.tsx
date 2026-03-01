@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Settings, Volume2, VolumeX, Zap, ZapOff, Keyboard, ShieldAlert, Gauge } from 'lucide-react'
 import { useSettingsStore, type GameSpeed } from '@/stores/settingsStore'
@@ -93,7 +94,9 @@ function SpeedSelector({
 /* ── Main dropdown ────────────────────────────────── */
 export function GameSettingsDropdown() {
   const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState({ top: 0, right: 0 })
 
   const {
     soundEnabled,
@@ -108,11 +111,20 @@ export function GameSettingsDropdown() {
     setGameSpeed,
   } = useSettingsStore()
 
+  // Calculate position when opening
+  const updatePos = useCallback(() => {
+    if (!btnRef.current) return
+    const rect = btnRef.current.getBoundingClientRect()
+    setPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+  }, [])
+
   // Close on outside click
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      if (btnRef.current?.contains(e.target as Node)) return
+      if (panelRef.current?.contains(e.target as Node)) return
+      setOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -128,10 +140,25 @@ export function GameSettingsDropdown() {
     return () => document.removeEventListener('keydown', handler)
   }, [open])
 
+  // Recalculate on scroll/resize
+  useEffect(() => {
+    if (!open) return
+    const handler = () => updatePos()
+    window.addEventListener('scroll', handler, true)
+    window.addEventListener('resize', handler)
+    return () => { window.removeEventListener('scroll', handler, true); window.removeEventListener('resize', handler) }
+  }, [open, updatePos])
+
+  const handleToggle = () => {
+    if (!open) updatePos()
+    setOpen(!open)
+  }
+
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
-        onClick={() => setOpen(!open)}
+        ref={btnRef}
+        onClick={handleToggle}
         className={cn(
           'flex items-center justify-center w-8 h-8 rounded-lg transition-all ring-1',
           open
@@ -143,62 +170,67 @@ export function GameSettingsDropdown() {
         <Settings className="w-4 h-4" />
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.97 }}
-            transition={{ duration: 0.15 }}
-            className="absolute right-0 top-full mt-1.5 z-50 w-64 bg-background-secondary rounded-xl border border-border/80 shadow-2xl shadow-black/40 overflow-hidden"
-          >
-            {/* Header */}
-            <div className="px-3.5 py-2.5 border-b border-border/60">
-              <div className="text-[13px] text-white font-bold">Settings</div>
-            </div>
-
-            {/* Options */}
-            <div className="px-3.5 py-1 divide-y divide-border/30">
-              <ToggleRow
-                icon={soundEnabled ? Volume2 : VolumeX}
-                label="Sound Effects"
-                description="Game sounds and notifications"
-                value={soundEnabled}
-                onChange={setSoundEnabled}
-              />
-              <ToggleRow
-                icon={animationsEnabled ? Zap : ZapOff}
-                label="Animations"
-                description="Visual effects and transitions"
-                value={animationsEnabled}
-                onChange={setAnimationsEnabled}
-              />
-              <ToggleRow
-                icon={Keyboard}
-                label="Hotkeys"
-                description="Space to bet, Esc to stop"
-                value={hotkeysEnabled}
-                onChange={setHotkeysEnabled}
-              />
-              <ToggleRow
-                icon={ShieldAlert}
-                label="Max Bet Confirm"
-                description="Confirm before large bets"
-                value={maxBetConfirm}
-                onChange={setMaxBetConfirm}
-              />
-              <SpeedSelector value={gameSpeed} onChange={setGameSpeed} />
-            </div>
-
-            {/* Footer */}
-            <div className="px-3.5 py-2 border-t border-border/60 bg-surface/30">
-              <div className="text-[10px] text-muted text-center">
-                Settings are saved automatically
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              ref={panelRef}
+              initial={{ opacity: 0, y: -4, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -4, scale: 0.97 }}
+              transition={{ duration: 0.15 }}
+              className="fixed z-[9999] w-64 bg-background-secondary rounded-xl border border-border/80 shadow-2xl shadow-black/40 overflow-hidden"
+              style={{ top: pos.top, right: pos.right }}
+            >
+              {/* Header */}
+              <div className="px-3.5 py-2.5 border-b border-border/60">
+                <div className="text-[13px] text-white font-bold">Settings</div>
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+
+              {/* Options */}
+              <div className="px-3.5 py-1 divide-y divide-border/30">
+                <ToggleRow
+                  icon={soundEnabled ? Volume2 : VolumeX}
+                  label="Sound Effects"
+                  description="Game sounds and notifications"
+                  value={soundEnabled}
+                  onChange={setSoundEnabled}
+                />
+                <ToggleRow
+                  icon={animationsEnabled ? Zap : ZapOff}
+                  label="Animations"
+                  description="Visual effects and transitions"
+                  value={animationsEnabled}
+                  onChange={setAnimationsEnabled}
+                />
+                <ToggleRow
+                  icon={Keyboard}
+                  label="Hotkeys"
+                  description="Space to bet, Esc to stop"
+                  value={hotkeysEnabled}
+                  onChange={setHotkeysEnabled}
+                />
+                <ToggleRow
+                  icon={ShieldAlert}
+                  label="Max Bet Confirm"
+                  description="Confirm before large bets"
+                  value={maxBetConfirm}
+                  onChange={setMaxBetConfirm}
+                />
+                <SpeedSelector value={gameSpeed} onChange={setGameSpeed} />
+              </div>
+
+              {/* Footer */}
+              <div className="px-3.5 py-2 border-t border-border/60 bg-surface/30">
+                <div className="text-[10px] text-muted text-center">
+                  Settings are saved automatically
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
   )
 }

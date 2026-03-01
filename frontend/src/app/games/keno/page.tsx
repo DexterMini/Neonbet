@@ -236,7 +236,7 @@ export default function KenoPage() {
               onAutoBetStop={autoBetStop}
               actionButton={
                 <button onClick={() => handlePlay()} disabled={isPlaying || selectedNumbers.length === 0 || !initialized}
-                  className="w-full py-3.5 rounded-xl font-bold text-[14px] transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+                  className="w-full py-3 rounded-xl font-bold text-[14px] transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
                   style={isPlaying || selectedNumbers.length === 0 ? {
                     background: 'rgba(255,255,255,0.04)',
                     color: 'rgba(255,255,255,0.3)',
@@ -251,10 +251,10 @@ export default function KenoPage() {
             >
               {/* Demo Balance */}
               {!isAuthenticated && (
-                <div className="flex items-center justify-between bg-surface/80 rounded-xl p-2.5 border border-border">
+                <div className="flex items-center justify-between bg-surface/80 rounded-xl p-2 border border-border">
                   <div>
                     <div className="text-[10px] text-muted uppercase tracking-wider">Demo Balance</div>
-                    <div className="text-base font-bold text-white font-mono">${demoBalance.toFixed(2)}</div>
+                    <div className="text-sm font-bold text-white font-mono">${demoBalance.toFixed(2)}</div>
                   </div>
                   {demoBalance < 1 && (
                     <button onClick={refill}
@@ -267,13 +267,13 @@ export default function KenoPage() {
 
               {/* Risk Level — horizontal row like Thrill */}
               <div>
-                <span className="text-[11px] font-bold text-muted uppercase tracking-wider block mb-2">Risk Level</span>
+                <span className="text-[11px] font-bold text-muted uppercase tracking-wider block mb-1.5">Risk Level</span>
                 <div className="flex bg-surface/80 rounded-xl border border-border p-1">
                   {(['classic', 'low', 'medium', 'high'] as RiskLevel[]).map(risk => {
                     const isActive = riskLevel === risk
                     return (
                       <button key={risk} onClick={() => setRiskLevel(risk)} disabled={isPlaying}
-                        className={`flex-1 py-2 rounded-lg text-[12px] font-bold capitalize transition-all duration-200 disabled:opacity-40
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold capitalize transition-all duration-200 disabled:opacity-40
                           ${isActive
                             ? 'text-white'
                             : 'text-muted hover:text-muted-light'
@@ -292,15 +292,15 @@ export default function KenoPage() {
 
               {/* Number Picker — slider + pick button */}
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] font-bold text-muted uppercase tracking-wider">Number Picker</span>
                   <button onClick={handleClearSelection} disabled={isPlaying || selectedNumbers.length === 0}
                     className="text-[11px] font-semibold text-muted-light hover:text-white underline underline-offset-2 transition-colors disabled:opacity-40 disabled:no-underline">
                     Clear Picks
                   </button>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-white font-bold font-mono text-lg w-6 text-center">{pickerCount}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-white font-bold font-mono text-base w-5 text-center">{pickerCount}</span>
                   <div className="flex-1 relative">
                     <input
                       type="range"
@@ -332,15 +332,15 @@ export default function KenoPage() {
 
               {/* Picks / Hits */}
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-surface/80 rounded-xl p-3 border border-border">
-                  <div className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1">Picks</div>
-                  <div className="text-xl font-black font-mono tracking-tight" style={{ color: 'rgb(0,210,190)' }}>
-                    {selectedNumbers.length}<span className="text-muted text-sm font-semibold">/{MAX_PICKS}</span>
+                <div className="bg-surface/80 rounded-xl p-2 border border-border">
+                  <div className="text-[10px] text-muted uppercase tracking-wider font-bold mb-0.5">Picks</div>
+                  <div className="text-lg font-black font-mono tracking-tight" style={{ color: 'rgb(0,210,190)' }}>
+                    {selectedNumbers.length}<span className="text-muted text-xs font-semibold">/{MAX_PICKS}</span>
                   </div>
                 </div>
-                <div className="bg-surface/80 rounded-xl p-3 border border-border">
-                  <div className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1">Hits</div>
-                  <div className="text-xl font-black font-mono tracking-tight text-amber-400">
+                <div className="bg-surface/80 rounded-xl p-2 border border-border">
+                  <div className="text-[10px] text-muted uppercase tracking-wider font-bold mb-0.5">Hits</div>
+                  <div className="text-lg font-black font-mono tracking-tight text-amber-400">
                     {gameEnded ? matches : <span className="text-muted">—</span>}
                   </div>
                 </div>
@@ -349,11 +349,11 @@ export default function KenoPage() {
               {/* Payout Table */}
               {selectedNumbers.length > 0 && (
                 <div>
-                  <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-2">Payouts ({selectedNumbers.length} picks)</span>
+                  <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">Payouts ({selectedNumbers.length} picks)</span>
                   <div className="bg-surface/80 rounded-xl border border-border overflow-hidden">
-                    <div className="max-h-36 overflow-y-auto scrollbar-thin">
+                    <div className="max-h-28 overflow-y-auto scrollbar-thin">
                       {potentialPayouts.map(({ hits, multiplier, payout }) => (
-                        <div key={hits} className={`flex items-center justify-between px-3 py-1.5 text-[12px] border-b border-border/30 last:border-0 transition-colors
+                        <div key={hits} className={`flex items-center justify-between px-3 py-1 text-[11px] border-b border-border/30 last:border-0 transition-colors
                           ${gameEnded && matches === hits ? 'bg-[rgba(0,210,190,0.1)]' : 'hover:bg-white/[0.02]'}`}>
                           <span className={`${gameEnded && matches === hits ? 'text-white font-semibold' : 'text-muted-light'}`}>
                             {hits} hit{hits !== 1 ? 's' : ''}

@@ -53,7 +53,7 @@ export function BetControls({
           <button
             onClick={() => !isAutoRunning && setActiveTab('manual')}
             className={cn(
-              'flex-1 py-3 text-[13px] font-bold transition-colors',
+              'flex-1 py-2.5 text-[13px] font-bold transition-colors',
               activeTab === 'manual'
                 ? 'text-brand bg-brand/[0.06] border-b-2 border-brand'
                 : 'text-muted hover:text-muted-light',
@@ -66,7 +66,7 @@ export function BetControls({
             <button
               onClick={() => !isAutoRunning && setActiveTab('auto')}
               className={cn(
-                'flex-1 py-3 text-[13px] font-bold transition-colors',
+                'flex-1 py-2.5 text-[13px] font-bold transition-colors',
                 activeTab === 'auto'
                   ? 'text-brand bg-brand/[0.06] border-b-2 border-brand'
                   : 'text-muted hover:text-muted-light',
@@ -78,7 +78,7 @@ export function BetControls({
           )}
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="p-3 space-y-3">
           {/* Bet Amount — always shown */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -95,7 +95,7 @@ export function BetControls({
                 value={betAmount}
                 onChange={e => onBetAmountChange(e.target.value)}
                 disabled={disabled || isAutoRunning}
-                className="w-full bg-surface border border-border rounded-xl pl-7 pr-3 py-2.5 font-mono tabular-nums text-[13px] text-white focus:outline-none focus:border-brand/40 transition-all disabled:opacity-50"
+                className="w-full bg-surface border border-border rounded-xl pl-7 pr-3 py-2 font-mono tabular-nums text-[13px] text-white focus:outline-none focus:border-brand/40 transition-all disabled:opacity-50"
               />
             </div>
             <div className="flex gap-1.5 mt-1.5">

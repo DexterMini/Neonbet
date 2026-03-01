@@ -47,7 +47,7 @@ export function LiveBetsTable({ game }: LiveBetsTableProps) {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={cn(
-              'flex-1 py-2.5 text-[12px] font-medium transition-colors',
+              'flex-1 py-1.5 text-[11px] font-medium transition-colors',
               tab === t.key
                 ? 'text-brand bg-brand/[0.06] border-b-2 border-brand font-bold'
                 : 'text-muted hover:text-muted-light'
@@ -59,7 +59,7 @@ export function LiveBetsTable({ game }: LiveBetsTableProps) {
       </div>
 
       {/* Table header */}
-      <div className="grid grid-cols-[1fr_0.8fr_0.6fr_0.8fr] gap-2 px-3 py-2 text-[10px] font-semibold text-muted uppercase tracking-wider border-b border-border/40">
+      <div className="grid grid-cols-[1fr_0.8fr_0.6fr_0.8fr] gap-2 px-3 py-1.5 text-[10px] font-semibold text-muted uppercase tracking-wider border-b border-border/40">
         <span>Player</span>
         <span className="text-right">Bet</span>
         <span className="text-right">Multi</span>
@@ -67,10 +67,10 @@ export function LiveBetsTable({ game }: LiveBetsTableProps) {
       </div>
 
       {/* Rows */}
-      <div className="max-h-[280px] overflow-y-auto scrollbar-thin">
+      <div className="max-h-[160px] overflow-y-auto scrollbar-thin">
         <AnimatePresence initial={false}>
           {visibleBets.length === 0 ? (
-            <div className="py-8 text-center text-muted text-xs">
+            <div className="py-4 text-center text-muted text-xs">
               {tab === 'my' ? 'Place a bet to see your history' : 'No high roller bets yet'}
             </div>
           ) : (
@@ -93,7 +93,7 @@ function BetRow({ bet }: { bet: LiveBet }) {
       animate={{ opacity: 1, x: 0, height: 'auto' }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="grid grid-cols-[1fr_0.8fr_0.6fr_0.8fr] gap-2 px-3 py-2 text-[12px] border-b border-border/20 hover:bg-white/[0.02] transition-colors"
+      className="grid grid-cols-[1fr_0.8fr_0.6fr_0.8fr] gap-2 px-3 py-1 text-[11px] border-b border-border/20 hover:bg-white/[0.02] transition-colors"
     >
       {/* Player */}
       <div className="flex items-center gap-2 min-w-0">
