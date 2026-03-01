@@ -52,13 +52,17 @@ const getSnakeMultiplier = (gems: number): number => {
   return MULTIPLIER_TABLE[gems]
 }
 
-const placeGem = (snake: Pos[], currentGem: Pos | null): Pos => {
+const placeGemFromFloat = (snake: Pos[], currentGem: Pos | null, randomFloat: number): Pos => {
   const occupied = new Set(snake.map(s => `${s.r},${s.c}`))
   if (currentGem) occupied.add(`${currentGem.r},${currentGem.c}`)
-  let pos: Pos
-  do { pos = { r: Math.floor(Math.random() * GRID_ROWS), c: Math.floor(Math.random() * GRID_COLS) } }
-  while (occupied.has(`${pos.r},${pos.c}`))
-  return pos
+  const available: Pos[] = []
+  for (let r = 0; r < GRID_ROWS; r++) {
+    for (let c = 0; c < GRID_COLS; c++) {
+      if (!occupied.has(`${r},${c}`)) available.push({ r, c })
+    }
+  }
+  if (available.length === 0) return { r: 0, c: 0 }
+  return available[Math.floor(randomFloat * available.length)]
 }
 
 export default function SnakePage() {
@@ -87,6 +91,8 @@ export default function SnakePage() {
   const gameActiveRef = useRef(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const gemRandomsRef = useRef<number[]>([])
+  const gemRandomIdxRef = useRef(0)
 
   const currentMult = getSnakeMultiplier(score)
   const profit = parseFloat(betAmount) * currentMult - parseFloat(betAmount)
@@ -217,7 +223,11 @@ export default function SnakePage() {
     const g = gemRef.current
     if (newHead.r === g.r && newHead.c === g.c) {
       scoreRef.current += 1; setScore(scoreRef.current)
-      const newGem = placeGem(s, null); gemRef.current = newGem; setGem(newGem)
+      const idx = gemRandomIdxRef.current
+      const randoms = gemRandomsRef.current
+      const rv = idx < randoms.length ? randoms[idx] : Math.random()
+      gemRandomIdxRef.current = idx + 1
+      const newGem = placeGemFromFloat(s, null, rv); gemRef.current = newGem; setGem(newGem)
     } else { s.pop() }
 
     snakeRef.current = s; setSnake([...s]); draw()
@@ -247,8 +257,18 @@ export default function SnakePage() {
   const startGame = async () => {
     if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
     try {
+      // Pre-generate provably fair random values for gem placements
+      const PF_GEM_COUNT = 50
+      const randoms: number[] = []
+      for (let i = 0; i < PF_GEM_COUNT; i++) {
+        const { result } = await generateBet('snake')
+        randoms.push(result as number)
+      }
+      gemRandomsRef.current = randoms
+      gemRandomIdxRef.current = 1 // index 0 used for initial gem
+
       const startSnake: Pos[] = [{ r: 7, c: 7 }]
-      const startGem = placeGem(startSnake, null)
+      const startGem = placeGemFromFloat(startSnake, null, randoms[0])
       snakeRef.current = startSnake; gemRef.current = startGem; dirRef.current = 'RIGHT'; scoreRef.current = 0; gameActiveRef.current = true
       setSnake(startSnake); setGem(startGem); setDir('RIGHT'); setScore(0)
       setGameOver(false); setCashedOut(false); setGameActive(true); draw()
@@ -271,7 +291,9 @@ export default function SnakePage() {
     gameActiveRef.current = false
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
     const startSnake: Pos[] = [{ r: 7, c: 7 }]
-    const startGem = placeGem(startSnake, null)
+    // Use a PF value if available, otherwise fall back for reset (no money at stake)
+    const rv = gemRandomsRef.current.length > 0 ? gemRandomsRef.current[0] : 0.5
+    const startGem = placeGemFromFloat(startSnake, null, rv)
     snakeRef.current = startSnake; gemRef.current = startGem; dirRef.current = 'RIGHT'; scoreRef.current = 0
     setSnake(startSnake); setGem(startGem); setDir('RIGHT'); setScore(0)
     setGameActive(false); setGameOver(false); setCashedOut(false); draw()
