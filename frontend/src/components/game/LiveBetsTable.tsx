@@ -15,19 +15,22 @@ type Tab = 'all' | 'my' | 'high'
 export function LiveBetsTable({ game }: LiveBetsTableProps) {
   const { bets, myBets, startGenerating, stopGenerating } = useLiveBetsStore()
   const [tab, setTab] = useState<Tab>('all')
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
+    setMounted(true)
     startGenerating(game)
     return () => stopGenerating()
   }, [game, startGenerating, stopGenerating])
 
   const visibleBets = useMemo(() => {
+    if (!mounted) return []
     switch (tab) {
       case 'my': return myBets
       case 'high': return [...bets].filter(b => b.betAmount >= 100).sort((a, b) => b.betAmount - a.betAmount)
       default: return bets
     }
-  }, [tab, bets, myBets])
+  }, [tab, bets, myBets, mounted])
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'all', label: 'All Bets' },

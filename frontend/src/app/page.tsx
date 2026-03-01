@@ -205,7 +205,12 @@ function randomBet() {
 export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activePromo, setActivePromo] = useState(0)
-  const [bets, setBets] = useState(() => Array.from({ length: 8 }, randomBet))
+  const [bets, setBets] = useState<ReturnType<typeof randomBet>[]>([])
+
+  // Generate initial bets on client mount only (avoid SSR hydration mismatch)
+  useEffect(() => {
+    setBets(Array.from({ length: 8 }, randomBet))
+  }, [])
 
   // Rotate promo banners
   useEffect(() => {

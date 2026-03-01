@@ -131,13 +131,15 @@ export const useLiveBetsStore = create<LiveBetsState>((set, get) => ({
     if (intervalId) clearInterval(intervalId)
     set({ isGenerating: true })
 
-    // Generate initial batch (stagger timestamps so they look historical)
-    const now = Date.now()
-    const initialBets: LiveBet[] = Array.from({ length: 10 }, (_, i) => ({
-      ...generateFakeBet(game),
-      timestamp: now - (10 - i) * (2000 + Math.random() * 4000),
-    }))
-    set({ bets: initialBets })
+    // Generate initial batch only on client (avoid SSR hydration mismatch)
+    if (typeof window !== 'undefined') {
+      const now = Date.now()
+      const initialBets: LiveBet[] = Array.from({ length: 10 }, (_, i) => ({
+        ...generateFakeBet(game),
+        timestamp: now - (10 - i) * (2000 + Math.random() * 4000),
+      }))
+      set({ bets: initialBets })
+    }
 
     // Generate new bets at irregular intervals (real casinos aren't clockwork)
     const scheduleNext = () => {
