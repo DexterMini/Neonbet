@@ -33,6 +33,12 @@ export const metadata: Metadata = {
   authors: [{ name: 'NeonBet' }],
   creator: 'NeonBet',
   robots: 'index, follow',
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/apple-icon.svg',
+  },
 }
 
 export default function RootLayout({
