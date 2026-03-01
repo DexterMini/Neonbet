@@ -7,7 +7,7 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { Sparkles, RotateCcw, Zap, Bird, Car, Flag, User, XCircle, Trophy, Check, AlertTriangle } from 'lucide-react'
+import { Sparkles, RotateCcw, Zap, Bird, Car, Flag, User, XCircle, Trophy, Check, AlertTriangle, Shuffle, Square } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { toast } from 'sonner'
 
@@ -67,8 +67,11 @@ export default function ChickenPage() {
   const [picked, setPicked] = useState<{ row: number; lane: number }[]>([])
   const [hitCar, setHitCar] = useState<{ row: number; lane: number } | null>(null)
   const [cashedOut, setCashedOut] = useState(false)
+  const [autoMode, setAutoMode] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
+  const autoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoModeRef = useRef(false)
 
   const lanes = DIFFICULTY_PRESETS[difficulty].lanes
   const currentMult = getMultiplier(lanes, currentRow)
@@ -121,7 +124,39 @@ export default function ChickenPage() {
 
   const resetGame = () => {
     setGameActive(false); setCurrentRow(0); setRows([]); setPicked([]); setHitCar(null); setCashedOut(false)
+    setAutoMode(false); autoModeRef.current = false
+    if (autoTimerRef.current) { clearTimeout(autoTimerRef.current); autoTimerRef.current = null }
   }
+
+  const startAutoGame = async () => {
+    if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
+    try {
+      const nr = await generateRows()
+      setRows(nr); setCurrentRow(0); setPicked([]); setHitCar(null); setCashedOut(false); setGameActive(true)
+      setAutoMode(true); autoModeRef.current = true
+    } catch (err: any) { toast.error(err?.message || 'Error starting game') }
+  }
+
+  const stopAuto = () => {
+    setAutoMode(false); autoModeRef.current = false
+    if (autoTimerRef.current) { clearTimeout(autoTimerRef.current); autoTimerRef.current = null }
+  }
+
+  // Auto-pick effect
+  useEffect(() => {
+    if (!autoMode || !gameActive || hitCar || cashedOut || rows.length === 0) return
+    autoTimerRef.current = setTimeout(() => {
+      if (!autoModeRef.current) return
+      const safeLanes: number[] = []
+      for (let l = 0; l < lanes; l++) {
+        if (rows[currentRow]?.carIndex !== l) safeLanes.push(l)
+      }
+      // Pick a random lane (NOT guaranteed safe — truly random from all lanes)
+      const randomLane = Math.floor(Math.random() * lanes)
+      pickLane(currentRow, randomLane)
+    }, 450)
+    return () => { if (autoTimerRef.current) clearTimeout(autoTimerRef.current) }
+  }, [autoMode, gameActive, currentRow, hitCar, cashedOut, rows, lanes])
 
   const visibleRows = Array.from({ length: MAX_ROWS }, (_, i) => MAX_ROWS - 1 - i)
   const diffPreset = DIFFICULTY_PRESETS[difficulty]
@@ -145,29 +180,52 @@ export default function ChickenPage() {
               showAutoTab={false}
               actionButton={
                 !gameActive && !gameEnded ? (
-                  <button onClick={startGame} disabled={parseFloat(betAmount) <= 0 || !initialized}
-                    className="w-full py-3.5 bg-gradient-to-r from-brand to-emerald-400 text-background-deep font-bold text-[14px] rounded-xl shadow-lg shadow-brand/25 hover:shadow-brand/40 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
-                    <Sparkles className="w-4 h-4" />Cross the Road
-                  </button>
+                  <div className="space-y-2">
+                    <button onClick={startGame} disabled={parseFloat(betAmount) <= 0 || !initialized}
+                      className="w-full py-3.5 bg-gradient-to-r from-brand to-emerald-400 text-background-deep font-bold text-[14px] rounded-xl shadow-lg shadow-brand/25 hover:shadow-brand/40 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
+                      <Sparkles className="w-4 h-4" />Cross the Road
+                    </button>
+                    <button onClick={startAutoGame} disabled={parseFloat(betAmount) <= 0 || !initialized}
+                      className="w-full py-3 bg-surface border border-purple-500/30 text-purple-400 font-bold text-[13px] rounded-xl hover:bg-purple-500/10 hover:border-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
+                      <Shuffle className="w-4 h-4" />Auto Pick
+                    </button>
+                  </div>
                 ) : gameActive && currentRow > 0 ? (
-                  <motion.button onClick={cashout}
-                    animate={{ scale: [1, 1.02, 1] }}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
-                    className="w-full py-3.5 bg-gradient-to-r from-brand via-emerald-400 to-brand text-background-deep font-bold text-[14px] rounded-xl shadow-lg shadow-brand/30 hover:shadow-brand/50 transition-all flex items-center justify-center gap-2">
-                    <Zap className="w-4 h-4" />Cash Out ${(parseFloat(betAmount) * currentMult).toFixed(2)}
-                  </motion.button>
+                  <div className="space-y-2">
+                    {autoMode ? (
+                      <button onClick={stopAuto}
+                        className="w-full py-3.5 bg-gradient-to-r from-red-500 to-red-400 text-white font-bold text-[14px] rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all flex items-center justify-center gap-2">
+                        <Square className="w-4 h-4" />Stop Auto — ${(parseFloat(betAmount) * currentMult).toFixed(2)}
+                      </button>
+                    ) : (
+                      <motion.button onClick={cashout}
+                        animate={{ scale: [1, 1.02, 1] }}
+                        transition={{ repeat: Infinity, duration: 1.5 }}
+                        className="w-full py-3.5 bg-gradient-to-r from-brand via-emerald-400 to-brand text-background-deep font-bold text-[14px] rounded-xl shadow-lg shadow-brand/30 hover:shadow-brand/50 transition-all flex items-center justify-center gap-2">
+                        <Zap className="w-4 h-4" />Cash Out ${(parseFloat(betAmount) * currentMult).toFixed(2)}
+                      </motion.button>
+                    )}
+                  </div>
                 ) : gameActive ? (
-                  <div className="w-full py-3.5 bg-surface border border-amber-400/30 font-bold text-[14px] text-amber-400 rounded-xl text-center">
-                    <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>
-                      Pick a safe lane!
-                    </motion.span>
+                  <div className="space-y-2">
+                    <div className="w-full py-3.5 bg-surface border border-amber-400/30 font-bold text-[14px] text-amber-400 rounded-xl text-center">
+                      <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>
+                        {autoMode ? 'Auto picking...' : 'Pick a safe lane!'}
+                      </motion.span>
+                    </div>
                   </div>
                 ) : (
-                  <button onClick={resetGame}
-                    className={`w-full py-3.5 font-bold text-[14px] rounded-xl transition-all flex items-center justify-center gap-2
-                      ${hitCar ? 'bg-gradient-to-r from-red-500 to-red-400 text-white shadow-lg shadow-red-500/25' : 'bg-gradient-to-r from-brand to-emerald-400 text-background-deep shadow-lg shadow-brand/25'}`}>
-                    <RotateCcw className="w-4 h-4" />Play Again
-                  </button>
+                  <div className="space-y-2">
+                    <button onClick={resetGame}
+                      className={`w-full py-3.5 font-bold text-[14px] rounded-xl transition-all flex items-center justify-center gap-2
+                        ${hitCar ? 'bg-gradient-to-r from-red-500 to-red-400 text-white shadow-lg shadow-red-500/25' : 'bg-gradient-to-r from-brand to-emerald-400 text-background-deep shadow-lg shadow-brand/25'}`}>
+                      <RotateCcw className="w-4 h-4" />Play Again
+                    </button>
+                    <button onClick={() => { resetGame(); setTimeout(startAutoGame, 50) }}
+                      className="w-full py-3 bg-surface border border-purple-500/30 text-purple-400 font-bold text-[13px] rounded-xl hover:bg-purple-500/10 hover:border-purple-500/50 transition-all flex items-center justify-center gap-2">
+                      <Shuffle className="w-4 h-4" />Auto Pick
+                    </button>
+                  </div>
                 )
               }
             >
