@@ -33,8 +33,8 @@ const USERNAMES = [
   'grindmode', 'BetNCry', 'moon_dust', 'sharkfin', 'high_vol',
 ]
 
-const AVATARS = ['🦊', '🐋', '💎', '🚀', '🔥', '👑', '🎯', '⚡', '🌙', '🎲',
-  '🃏', '🐍', '🦁', '🐺', '🦅', '🗿', '🤖', '🎭', '👻', '💀']
+const AVATARS = ['FX', 'WH', 'DM', 'RK', 'FI', 'CR', 'TG', 'ZP', 'MN', 'DC',
+  'BJ', 'SN', 'LN', 'WF', 'EG', 'ST', 'BT', 'MK', 'GH', 'SK']
 
 // Realistic bet tiers — most players bet small, few bet big
 const BET_TIERS = [

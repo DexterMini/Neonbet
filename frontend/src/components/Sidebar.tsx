@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation'
 import {
   X, Home, Star, Clock, Zap, Gamepad2, Tv, Spade,
   Gift, Crown, Wallet, MessageCircle, ChevronRight,
-  Flame, Trophy,
+  Flame, Trophy, TrendingUp, Bomb, Dices, CircleDot,
+  Target, RotateCcw, Grid3X3, Layers, Gem, Bird,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -26,17 +27,17 @@ const gameCategories = [
 ]
 
 const originalGames = [
-  { id: 'crash', name: 'Crash', href: '/games/crash', emoji: '📈', hot: true },
-  { id: 'dice', name: 'Dice', href: '/games/dice', emoji: '🎲' },
-  { id: 'mines', name: 'Mines', href: '/games/mines', emoji: '💎', hot: true },
-  { id: 'plinko', name: 'Plinko', href: '/games/plinko', emoji: '⚡' },
-  { id: 'limbo', name: 'Limbo', href: '/games/limbo', emoji: '🎯' },
-  { id: 'wheel', name: 'Wheel', href: '/games/wheel', emoji: '🎡' },
-  { id: 'keno', name: 'Keno', href: '/games/keno', emoji: '🔢' },
-  { id: 'twentyone', name: 'Twenty One', href: '/games/twentyone', emoji: '🃏' },
-  { id: 'coinclimber', name: 'Coin Climber', href: '/games/coinclimber', emoji: '🪙', isNew: true },
-  { id: 'snake', name: 'Snake', href: '/games/snake', emoji: '🐍', isNew: true },
-  { id: 'chicken', name: 'Chicken Road', href: '/games/chicken', emoji: '🐔', isNew: true },
+  { id: 'crash', name: 'Crash', href: '/games/crash', icon: TrendingUp, color: 'text-emerald-400', hot: true },
+  { id: 'dice', name: 'Dice', href: '/games/dice', icon: Dices, color: 'text-red-400' },
+  { id: 'mines', name: 'Mines', href: '/games/mines', icon: Bomb, color: 'text-cyan-400', hot: true },
+  { id: 'plinko', name: 'Plinko', href: '/games/plinko', icon: CircleDot, color: 'text-violet-400' },
+  { id: 'limbo', name: 'Limbo', href: '/games/limbo', icon: Target, color: 'text-sky-400' },
+  { id: 'wheel', name: 'Wheel', href: '/games/wheel', icon: RotateCcw, color: 'text-amber-400' },
+  { id: 'keno', name: 'Keno', href: '/games/keno', icon: Grid3X3, color: 'text-green-400' },
+  { id: 'twentyone', name: 'Twenty One', href: '/games/twentyone', icon: Spade, color: 'text-fuchsia-400' },
+  { id: 'coinclimber', name: 'Coin Climber', href: '/games/coinclimber', icon: Layers, color: 'text-yellow-400', isNew: true },
+  { id: 'snake', name: 'Snake', href: '/games/snake', icon: Gem, color: 'text-lime-400', isNew: true },
+  { id: 'chicken', name: 'Chicken Road', href: '/games/chicken', icon: Bird, color: 'text-orange-400', isNew: true },
 ]
 
 const bottomNav = [
@@ -168,7 +169,7 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
                         : 'text-muted-light hover:text-white hover:bg-white/[0.04]'
                     )}
                   >
-                    <span className="text-sm w-5 text-center">{game.emoji}</span>
+                    <game.icon className={cn('w-4 h-4', game.color)} />
                     <span className="text-[13px] font-medium flex-1">{game.name}</span>
                     {game.hot && (
                       <span className="px-1.5 py-0.5 text-[9px] font-bold bg-accent-red/15 text-accent-red rounded border border-accent-red/20 uppercase">

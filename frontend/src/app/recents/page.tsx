@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { GameLayout } from '@/components/GameLayout'
-import { Clock, Play, TrendingUp, TrendingDown, Loader2 } from 'lucide-react'
+import { Clock, Play, TrendingUp, TrendingDown, Loader2, Dices, Bomb, CircleDot, Target, RotateCcw, Grid3X3, Spade, Gamepad2, type LucideIcon } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 
@@ -18,16 +18,18 @@ interface BetRecord {
   timestamp: string
 }
 
-const GAME_META: Record<string, { icon: string; href: string }> = {
-  crash: { icon: '🚀', href: '/games/crash' },
-  dice: { icon: '🎲', href: '/games/dice' },
-  mines: { icon: '💣', href: '/games/mines' },
-  plinko: { icon: '🔮', href: '/games/plinko' },
-  limbo: { icon: '🎯', href: '/games/limbo' },
-  wheel: { icon: '🎡', href: '/games/wheel' },
-  keno: { icon: '⭐', href: '/games/keno' },
-  twentyone: { icon: '🃏', href: '/games/twentyone' },
+const GAME_META: Record<string, { icon: LucideIcon; iconColor: string; href: string }> = {
+  crash: { icon: TrendingUp, iconColor: 'text-brand', href: '/games/crash' },
+  dice: { icon: Dices, iconColor: 'text-violet-400', href: '/games/dice' },
+  mines: { icon: Bomb, iconColor: 'text-cyan-400', href: '/games/mines' },
+  plinko: { icon: CircleDot, iconColor: 'text-orange-400', href: '/games/plinko' },
+  limbo: { icon: Target, iconColor: 'text-rose-400', href: '/games/limbo' },
+  wheel: { icon: RotateCcw, iconColor: 'text-amber-400', href: '/games/wheel' },
+  keno: { icon: Grid3X3, iconColor: 'text-emerald-400', href: '/games/keno' },
+  twentyone: { icon: Spade, iconColor: 'text-red-400', href: '/games/twentyone' },
 }
+
+const DEFAULT_META = { icon: Gamepad2, iconColor: 'text-muted', href: '/' }
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -120,15 +122,16 @@ export default function RecentsPage() {
               {bets.map((bet) => {
                 const profitVal = parseFloat(bet.profit || '0')
                 const isWin = profitVal >= 0
-                const meta = GAME_META[bet.game_type] || { icon: '🎮', href: '/' }
+                const meta = GAME_META[bet.game_type] || DEFAULT_META
+                const GameIcon = meta.icon
                 return (
                   <Link
                     key={bet.bet_id}
                     href={meta.href}
                     className="flex items-center gap-3 bg-surface/50 rounded-lg border border-border/60 p-3 hover:border-border-light transition-colors"
                   >
-                    <div className="w-10 h-10 bg-surface-light rounded-lg flex items-center justify-center text-xl">
-                      {meta.icon}
+                    <div className="w-10 h-10 bg-surface-light rounded-lg flex items-center justify-center">
+                      <GameIcon className={`w-5 h-5 ${meta.iconColor}`} />
                     </div>
 
                     <div className="flex-1 min-w-0">

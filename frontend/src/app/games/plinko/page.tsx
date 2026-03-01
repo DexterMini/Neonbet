@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
 import { Circle, RotateCcw, TrendingUp, ChevronDown, Sparkles } from 'lucide-react'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 
@@ -55,18 +55,19 @@ const PLINKO_MULTIPLIERS: Record<string, Record<number, number[]>> = {
 const ROW_OPTIONS = [8, 9, 10, 11, 12, 13, 14, 15, 16]
 
 /* ── Floating particles ───────────────────────────── */
+const PLINKO_PARTICLE_COLORS = ['#f97316', '#fb923c', '#fdba74', '#ea580c', '#c2410c', '#fed7aa']
 function FloatingBalls({ active }: { active: boolean }) {
   if (!active) return null
-  const items = ['⚪', '🟢', '⭕', '✨', '🔵', '💚']
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {items.map((e, i) => (
+      {PLINKO_PARTICLE_COLORS.map((c, i) => (
         <motion.div key={i}
           initial={{ opacity: 0, y: '110%', x: `${8 + i * 15}%` }}
           animate={{ opacity: [0, 0.3, 0], y: '-10%', x: `${8 + i * 15 + (Math.random() - 0.5) * 12}%` }}
           transition={{ duration: 5 + Math.random() * 3, repeat: Infinity, delay: i * 0.8, ease: 'easeOut' }}
-          className="absolute text-xs select-none"
-        >{e}</motion.div>
+          className="absolute w-2 h-2 rounded-full"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -395,16 +396,19 @@ export default function PlinkoPage() {
                       <p className="text-violet-300/30 text-[10px] mt-0.5">{plinkoRows} rows • {plinkoRisk} risk</p>
                     </div>
                   </div>
-                  {betHistory.length > 0 && (
-                    <div className="flex gap-1.5">
-                      {betHistory.slice(0, 6).map(h => (
-                        <span key={h.id} className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold ring-1 ring-white/[0.06]
-                          ${h.multiplier >= 2 ? 'bg-brand/10 text-brand' : h.multiplier >= 1 ? 'bg-amber-400/10 text-amber-400' : 'bg-accent-red/10 text-accent-red'}`}>
-                          {h.multiplier}×
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {betHistory.length > 0 && (
+                      <div className="flex gap-1.5">
+                        {betHistory.slice(0, 6).map(h => (
+                          <span key={h.id} className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold ring-1 ring-white/[0.06]
+                            ${h.multiplier >= 2 ? 'bg-brand/10 text-brand' : h.multiplier >= 1 ? 'bg-amber-400/10 text-amber-400' : 'bg-accent-red/10 text-accent-red'}`}>
+                            {h.multiplier}×
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <GameSettingsDropdown />
+                  </div>
                 </div>
 
                 <div className="relative z-10 px-4 pb-4">

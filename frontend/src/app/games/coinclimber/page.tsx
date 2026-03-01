@@ -7,17 +7,17 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { Sparkles, RotateCcw, Zap, TrendingUp } from 'lucide-react'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { Sparkles, RotateCcw, Zap, TrendingUp, Coins, Skull, Crown, CircleDot } from 'lucide-react'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { toast } from 'sonner'
 
 /* ── Config ────────────────────────────────────────── */
 const MAX_LEVELS = 10
 
 const DIFFICULTY_PRESETS = [
-  { label: 'Easy',   cols: 4, color: 'text-brand',     bg: 'bg-brand/15 border-brand/40',         accent: '#00E87B', emoji: '🟢' },
-  { label: 'Medium', cols: 3, color: 'text-amber-400', bg: 'bg-amber-400/15 border-amber-400/40', accent: '#FBBF24', emoji: '🟡' },
-  { label: 'Hard',   cols: 2, color: 'text-red-400',   bg: 'bg-red-400/15 border-red-400/40',     accent: '#F87171', emoji: '🔴' },
+  { label: 'Easy',   cols: 4, color: 'text-brand',     bg: 'bg-brand/15 border-brand/40',         accent: '#00E87B' },
+  { label: 'Medium', cols: 3, color: 'text-amber-400', bg: 'bg-amber-400/15 border-amber-400/40', accent: '#FBBF24' },
+  { label: 'Hard',   cols: 2, color: 'text-red-400',   bg: 'bg-red-400/15 border-red-400/40',     accent: '#F87171' },
 ]
 
 const getMultiplier = (cols: number, level: number): number => {
@@ -31,11 +31,12 @@ const getMultiplier = (cols: number, level: number): number => {
 interface Level { correctIndex: number }
 
 /* ── Floating coins background ─────────────────────── */
+const COIN_PARTICLE_COLORS = ['#facc15', '#fbbf24', '#f59e0b', '#eab308', '#ca8a04', '#fde68a', '#fef08a', '#d97706']
 function FloatingCoins({ active }: { active: boolean }) {
   if (!active) return null
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {Array.from({ length: 8 }, (_, i) => (
+      {COIN_PARTICLE_COLORS.map((c, i) => (
         <motion.div
           key={i}
           initial={{ opacity: 0, y: '110%', x: `${10 + i * 11}%`, rotate: 0 }}
@@ -46,10 +47,9 @@ function FloatingCoins({ active }: { active: boolean }) {
             rotate: [0, 180, 360],
           }}
           transition={{ duration: 4 + Math.random() * 3, repeat: Infinity, delay: i * 0.7, ease: 'easeOut' }}
-          className="absolute text-sm select-none"
-        >
-          🪙
-        </motion.div>
+          className="absolute w-2 h-2 rounded-full"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -139,7 +139,7 @@ export default function CoinClimberPage() {
       setCurrentLevel(level + 1); setGameActive(false); setCashedOut(true)
       const fm = getMultiplier(cols, level + 1)
       sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * fm - parseFloat(betAmount), fm)
-      toast.success(`🪙 Summit! Won $${(parseFloat(betAmount) * fm).toFixed(2)}!`)
+      toast.success(`Summit! Won $${(parseFloat(betAmount) * fm).toFixed(2)}!`)
     } else { setCurrentLevel(level + 1) }
   }
 
@@ -189,7 +189,7 @@ export default function CoinClimberPage() {
                 ) : gameActive ? (
                   <div className="w-full py-3.5 bg-surface border border-amber-400/30 font-bold text-[14px] text-amber-400 rounded-xl text-center">
                     <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>
-                      🪙 Pick the right step!
+                      Pick the right step!
                     </motion.span>
                   </div>
                 ) : (
@@ -264,7 +264,7 @@ export default function CoinClimberPage() {
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500/25 to-yellow-600/15 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10">
-                        <span className="text-2xl">🪙</span>
+                        <Coins className="w-6 h-6 text-amber-400" />
                       </div>
                       {gameActive && (
                         <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.8, 0.3, 0.8] }} transition={{ repeat: Infinity, duration: 2 }}
@@ -294,6 +294,7 @@ export default function CoinClimberPage() {
                       <span className="text-amber-400 font-mono font-bold text-sm">{currentLevel}</span>
                       <span className="text-white/25 text-xs">/{MAX_LEVELS}</span>
                     </div>
+                    <GameSettingsDropdown />
                   </div>
                 </div>
 
@@ -311,7 +312,7 @@ export default function CoinClimberPage() {
                         <div className="absolute inset-0 opacity-[0.03]" style={{
                           backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(251,191,36,0.2) 8px, rgba(251,191,36,0.2) 9px)'
                         }} />
-                        <span className="relative text-xl">👑</span>
+                        <Crown className="relative w-5 h-5 text-amber-400" />
                         <div className="relative">
                           <div className="text-amber-400 text-[13px] font-bold tracking-wide">SUMMIT</div>
                           <div className="text-amber-400/40 text-[10px]">Maximum payout</div>
@@ -361,7 +362,7 @@ export default function CoinClimberPage() {
                                     ? 'bg-amber-400/10 border border-amber-400/20'
                                     : 'bg-white/[0.03] border border-white/[0.05]'
                                   }`} />
-                                <span className="relative z-10">{isPastLevel ? '🪙' : lvl + 1}</span>
+                                <span className="relative z-10 flex items-center justify-center">{isPastLevel ? <Coins className="w-3.5 h-3.5 text-amber-400" /> : lvl + 1}</span>
                                 {isCurrentLevel && (
                                   <motion.div animate={{ scale: [1, 1.6, 1], opacity: [0.4, 0, 0.4] }} transition={{ repeat: Infinity, duration: 1.8 }}
                                     className="absolute inset-0 rounded-lg border-2 border-brand/50" />
@@ -439,18 +440,18 @@ export default function CoinClimberPage() {
                                           <motion.div initial={{ scale: 0, y: 10 }} animate={{ scale: 1, y: 0 }}
                                             transition={{ type: 'spring', damping: 8 }}
                                             className="flex flex-col items-center">
-                                            <span className="text-2xl select-none">💀</span>
+                                            <Skull className="w-6 h-6 text-red-400" />
                                             <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
                                               className="text-[8px] text-red-400 font-black uppercase tracking-widest">FALL</motion.span>
                                           </motion.div>
                                         ) : isCorrectRevealed && wasPicked ? (
                                           <motion.div initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }}
                                             transition={{ type: 'spring', damping: 12 }}>
-                                            <span className="text-xl select-none">🪙</span>
+                                            <Coins className="w-5 h-5 text-amber-400" />
                                           </motion.div>
                                         ) : isCorrectRevealed ? (
                                           <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.25 }}
-                                            className="text-sm select-none">🪙</motion.span>
+                                            className="text-sm select-none flex items-center justify-center"><Coins className="w-3.5 h-3.5 text-amber-400/25" /></motion.span>
                                         ) : showResult && !isCorrectTile ? (
                                           <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.1 }}
                                             className="text-xs select-none text-white/20">·</motion.span>
@@ -522,7 +523,7 @@ export default function CoinClimberPage() {
                           <motion.div initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: 0 }}
                             transition={{ type: 'spring', damping: 10, delay: 0.1 }}
                             className="text-5xl mb-3">
-                            {hitWrong ? '💀' : '👑'}
+                            {hitWrong ? <Skull className="w-12 h-12 text-red-400" /> : <Crown className="w-12 h-12 text-amber-400" />}
                           </motion.div>
                           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
                             transition={{ type: 'spring', damping: 10, delay: 0.25 }}

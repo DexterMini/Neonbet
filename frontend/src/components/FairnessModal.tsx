@@ -17,6 +17,174 @@ import {
   generateKenoResult,
   generateRandomSeed
 } from '@/lib/provablyFair'
+import { cn } from '@/lib/utils'
+
+/* ── Visual Game Result Components ────────────────────── */
+function KenoResultVisual({ numbers }: { numbers: number[] }) {
+  const drawn = numbers
+  return (
+    <div>
+      <div className="text-[11px] text-text-muted uppercase tracking-wider font-semibold mb-2">Drawn Numbers</div>
+      <div className="grid grid-cols-8 gap-1.5">
+        {Array.from({ length: 40 }, (_, i) => {
+          const num = i + 1
+          const isDrawn = drawn.includes(num)
+          return (
+            <div
+              key={num}
+              className={cn(
+                'aspect-square rounded-lg flex items-center justify-center text-xs font-bold transition-all',
+                isDrawn
+                  ? 'bg-brand/20 text-brand ring-1 ring-brand/40 shadow-sm shadow-brand/20'
+                  : 'bg-surface-light/50 text-text-muted/40 ring-1 ring-white/[0.04]'
+              )}
+            >
+              {num}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function DiceResultVisual({ result }: { result: number }) {
+  return (
+    <div>
+      <div className="text-[11px] text-text-muted uppercase tracking-wider font-semibold mb-2">Roll Result</div>
+      <div className="relative h-10 bg-surface-light rounded-full overflow-hidden ring-1 ring-white/[0.06]">
+        <div
+          className="absolute top-0 left-0 h-full bg-gradient-to-r from-brand/30 to-brand/10 rounded-full transition-all"
+          style={{ width: `${result}%` }}
+        />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-6 h-6 bg-brand rounded-full shadow-lg shadow-brand/30 flex items-center justify-center"
+          style={{ left: `calc(${result}% - 12px)` }}
+        >
+          <span className="text-[8px] font-black text-background-deep">{result.toFixed(0)}</span>
+        </div>
+        <div className="absolute inset-0 flex items-center justify-between px-3">
+          <span className="text-[10px] text-text-muted font-mono">0</span>
+          <span className="text-[10px] text-text-muted font-mono">100</span>
+        </div>
+      </div>
+      <div className="text-center mt-2">
+        <span className="text-2xl font-black font-mono text-brand">{result.toFixed(2)}</span>
+      </div>
+    </div>
+  )
+}
+
+function CrashResultVisual({ multiplier }: { multiplier: number }) {
+  const crashed = multiplier < 200
+  return (
+    <div>
+      <div className="text-[11px] text-text-muted uppercase tracking-wider font-semibold mb-2">Crash Point</div>
+      <div className="relative h-24 bg-surface-light rounded-xl overflow-hidden ring-1 ring-white/[0.06] flex items-center justify-center">
+        <div className="absolute inset-0 bg-gradient-to-t from-brand/5 to-transparent" />
+        <div className="relative text-center">
+          <div className={cn(
+            'text-4xl font-black font-mono',
+            multiplier >= 10 ? 'text-brand animate-multiplier-glow' : multiplier >= 2 ? 'text-brand' : 'text-accent-red'
+          )}>
+            {multiplier.toFixed(2)}x
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LimboResultVisual({ multiplier }: { multiplier: number }) {
+  return (
+    <div>
+      <div className="text-[11px] text-text-muted uppercase tracking-wider font-semibold mb-2">Target Multiplier</div>
+      <div className="relative h-20 bg-surface-light rounded-xl overflow-hidden ring-1 ring-white/[0.06] flex items-center justify-center">
+        <div className={cn(
+          'text-3xl font-black font-mono',
+          multiplier >= 10 ? 'text-brand' : multiplier >= 2 ? 'text-accent-amber' : 'text-accent-red'
+        )}>
+          {multiplier.toFixed(2)}x
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MinesResultVisual({ gameResult }: { gameResult: string }) {
+  // Parse mine positions from "Mines at: 2, 5, 12, ..."
+  const match = gameResult.match(/[\d,\s]+/)
+  const positions = match ? match[0].split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)) : []
+  return (
+    <div>
+      <div className="text-[11px] text-text-muted uppercase tracking-wider font-semibold mb-2">Mine Positions</div>
+      <div className="grid grid-cols-5 gap-1.5 max-w-[200px]">
+        {Array.from({ length: 25 }, (_, i) => {
+          const isMine = positions.includes(i)
+          return (
+            <div
+              key={i}
+              className={cn(
+                'aspect-square rounded-lg flex items-center justify-center transition-all',
+                isMine
+                  ? 'bg-accent-red/20 ring-1 ring-accent-red/40'
+                  : 'bg-brand/10 ring-1 ring-brand/20'
+              )}
+            >
+              {isMine ? (
+                <svg className="w-3.5 h-3.5 text-accent-red" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="5" /><line x1="12" y1="2" x2="12" y2="7" /><line x1="12" y1="17" x2="12" y2="22" />
+                  <line x1="2" y1="12" x2="7" y2="12" /><line x1="17" y1="12" x2="22" y2="12" />
+                </svg>
+              ) : (
+                <Gem className="w-3 h-3 text-brand/60" />
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function GameResultVisual({ game, gameResult, rawResult }: { game: string; gameResult: string; rawResult: number }) {
+  switch (game) {
+    case 'keno': {
+      const match = gameResult.match(/Numbers:\s*([\d,\s]+)/)
+      const numbers = match ? match[1].split(',').map(n => parseInt(n.trim())).filter(n => !isNaN(n)) : []
+      return <KenoResultVisual numbers={numbers} />
+    }
+    case 'dice': {
+      const match = gameResult.match(/Roll:\s*([\d.]+)/)
+      const result = match ? parseFloat(match[1]) : rawResult * 100
+      return <DiceResultVisual result={result} />
+    }
+    case 'crash': {
+      const match = gameResult.match(/Crash at:\s*([\d.]+)/)
+      const multiplier = match ? parseFloat(match[1]) : 1
+      return <CrashResultVisual multiplier={multiplier} />
+    }
+    case 'limbo': {
+      const match = gameResult.match(/Result:\s*([\d.]+)/)
+      const multiplier = match ? parseFloat(match[1]) : 1
+      return <LimboResultVisual multiplier={multiplier} />
+    }
+    case 'mines': {
+      return <MinesResultVisual gameResult={gameResult} />
+    }
+    default:
+      return null
+  }
+}
+
+/* ── Gem icon for mines visual ────────────────────────── */
+function Gem({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3h12l4 6-10 13L2 9z" /><path d="M11 3l1 10" /><path d="M2 9h20" /><path d="m6 3 5 6" /><path d="m18 3-5 6" />
+    </svg>
+  )
+}
 
 interface FairnessModalProps {
   isOpen: boolean
@@ -236,8 +404,8 @@ export function FairnessModal({
                         {copied === 'prevSeed' ? <Check className="w-5 h-5 text-accent-green" /> : <Copy className="w-5 h-5" />}
                       </button>
                     </div>
-                    <p className="text-accent-green text-xs mt-1">
-                      ✓ You can now verify all bets made with this seed
+                    <p className="text-accent-green text-xs mt-1 flex items-center gap-1">
+                      <Check className="w-3 h-3" /> You can now verify all bets made with this seed
                     </p>
                   </div>
                 )}
@@ -362,36 +530,47 @@ export function FairnessModal({
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`p-4 rounded-xl border ${
+                    className={`rounded-xl border overflow-hidden ${
                       verifyResult.valid
-                        ? 'bg-green-500/10 border-green-500/30'
-                        : 'bg-accent-red/10 border-red-500/30'
+                        ? 'border-green-500/30'
+                        : 'border-red-500/30'
                     }`}
                   >
-                    <div className="flex items-center gap-3 mb-3">
+                    {/* Status header */}
+                    <div className={`flex items-center gap-3 px-4 py-3 ${
+                      verifyResult.valid ? 'bg-green-500/10' : 'bg-accent-red/10'
+                    }`}>
                       {verifyResult.valid ? (
-                        <CheckCircle2 className="w-6 h-6 text-accent-green" />
+                        <CheckCircle2 className="w-5 h-5 text-accent-green" />
                       ) : (
-                        <AlertCircle className="w-6 h-6 text-accent-red" />
+                        <AlertCircle className="w-5 h-5 text-accent-red" />
                       )}
-                      <span className={`font-bold ${verifyResult.valid ? 'text-accent-green' : 'text-accent-red'}`}>
-                        {verifyResult.valid ? 'Verification Successful!' : 'Verification Failed'}
+                      <span className={`font-bold text-sm ${verifyResult.valid ? 'text-accent-green' : 'text-accent-red'}`}>
+                        {verifyResult.valid ? 'Verification Successful' : 'Verification Failed'}
                       </span>
                     </div>
+
+                    {/* Visual game result preview */}
+                    {verifyResult.gameResult && (
+                      <div className="px-4 pt-4 pb-3">
+                        <GameResultVisual game={game} gameResult={verifyResult.gameResult} rawResult={verifyResult.result} />
+                      </div>
+                    )}
                     
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="text-text-secondary">Calculated Hash:</span>
-                        <p className="font-mono text-text-primary break-all">{verifyResult.calculatedHash}</p>
+                    {/* Technical details */}
+                    <div className="px-4 pb-4 space-y-2 text-sm">
+                      <div className="pt-2 border-t border-border/60">
+                        <span className="text-text-muted text-[11px] uppercase tracking-wider font-semibold">Calculated Hash</span>
+                        <p className="font-mono text-text-primary text-xs break-all mt-1 p-2 bg-background/50 rounded-lg">{verifyResult.calculatedHash}</p>
                       </div>
                       <div>
-                        <span className="text-text-secondary">Raw Result:</span>
-                        <p className="font-mono text-text-primary">{verifyResult.result.toFixed(8)}</p>
+                        <span className="text-text-muted text-[11px] uppercase tracking-wider font-semibold">Raw Result</span>
+                        <p className="font-mono text-text-primary text-xs mt-1">{verifyResult.result.toFixed(8)}</p>
                       </div>
                       {verifyResult.gameResult && (
                         <div>
-                          <span className="text-text-secondary">Game Result ({game}):</span>
-                          <p className="font-mono text-brand font-bold">{verifyResult.gameResult}</p>
+                          <span className="text-text-muted text-[11px] uppercase tracking-wider font-semibold">Game Result ({game})</span>
+                          <p className="font-mono text-brand font-bold text-sm mt-1">{verifyResult.gameResult}</p>
                         </div>
                       )}
                     </div>

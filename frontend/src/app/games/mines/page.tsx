@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
 import { Bomb, Diamond, Sparkles, RotateCcw } from 'lucide-react'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 
 const GRID_SIZE = 25
 const GRID_COLS = 5
@@ -23,18 +23,19 @@ const calcMultiplier = (numMines: number, revealed: number): number => {
 }
 
 /* ── Floating sparkle particles ───────────────────── */
+const GEM_COLORS = ['#22d3ee', '#06b6d4', '#67e8f9', '#a5f3fc', '#0891b2', '#0e7490']
 function FloatingGems({ active }: { active: boolean }) {
   if (!active) return null
-  const items = ['💎', '✨', '💠', '🔹', '✦', '⬥']
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {items.map((e, i) => (
+      {GEM_COLORS.map((c, i) => (
         <motion.div key={i}
           initial={{ opacity: 0, y: '110%', x: `${8 + i * 15}%`, rotate: 0 }}
           animate={{ opacity: [0, 0.3, 0], y: '-10%', x: `${8 + i * 15 + (Math.random() - 0.5) * 12}%`, rotate: [0, 120, 240] }}
           transition={{ duration: 4 + Math.random() * 3, repeat: Infinity, delay: i * 0.8, ease: 'easeOut' }}
-          className="absolute text-sm select-none"
-        >{e}</motion.div>
+          className="absolute w-1.5 h-1.5 rounded-full"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -81,7 +82,7 @@ export default function MinesPage() {
       setHitMine(index)
       setGameActive(false)
       sessionStats.recordBet(false, parseFloat(betAmount), -parseFloat(betAmount), 0)
-      toast.error('💥 Mine hit! Game over')
+      toast.error('Mine hit! Game over')
     } else {
       const newRevealed = [...revealed, index]
       setRevealed(newRevealed)
@@ -222,6 +223,8 @@ export default function MinesPage() {
                     </div>
                     <div className="w-px h-4 bg-white/[0.06]" />
                     <span className="text-white/25 text-[11px]">{GRID_SIZE - numMines - revealed.length} left</span>
+                    <div className="w-px h-4 bg-white/[0.06]" />
+                    <GameSettingsDropdown />
                   </div>
                 </div>
 

@@ -75,14 +75,14 @@ const fakeUsers = [
 ]
 
 const chatPhrases = [
-  'gg!', 'nice hit! 🔥', 'lets gooo', 'anyone hitting tonight?',
-  'crash is on fire rn', 'just deposited, wish me luck 🍀',
-  'that multiplier was insane', 'who wants rain? 🌧️',
+  'gg!', 'nice hit!', 'lets gooo', 'anyone hitting tonight?',
+  'crash is on fire rn', 'just deposited, wish me luck',
+  'that multiplier was insane', 'who wants rain?',
   'this game is addicting lol', 'I love this site',
-  'another L 😭', 'mines is my fav game', 'LFG 🚀',
+  'another L', 'mines is my fav game', 'LFG',
   'can someone explain plinko?', 'GL everyone',
-  'bruh that crash 💀', 'easy money', 'diamonds incoming 💎',
-  'vibes are immaculate', 'whos up? 📈', 'that was close',
+  'bruh that crash', 'easy money', 'diamonds incoming',
+  'vibes are immaculate', 'whos up?', 'that was close',
   'green green green', 'cant stop wont stop',
 ]
 

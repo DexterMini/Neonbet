@@ -7,8 +7,8 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { Sparkles, RotateCcw, Zap } from 'lucide-react'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { Sparkles, RotateCcw, Zap, Bird, Car, Flag, User, XCircle, Trophy, Check, AlertTriangle } from 'lucide-react'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { toast } from 'sonner'
 
 /* ── Config ────────────────────────────────────────── */
@@ -101,12 +101,12 @@ export default function ChickenPage() {
     if (!isSafe) {
       setHitCar({ row, lane }); setGameActive(false)
       sessionStats.recordBet(false, parseFloat(betAmount), -parseFloat(betAmount), 0)
-      toast.error('🚗 Hit by a car!')
+      toast.error('Hit by a car!')
     } else if (row + 1 >= MAX_ROWS) {
       setCurrentRow(row + 1); setGameActive(false); setCashedOut(true)
       const fm = getMultiplier(lanes, row + 1)
       sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * fm - parseFloat(betAmount), fm)
-      toast.success(`🐔 Won $${(parseFloat(betAmount) * fm).toFixed(2)}!`)
+      toast.success(`Won $${(parseFloat(betAmount) * fm).toFixed(2)}!`)
     } else { setCurrentRow(row + 1) }
   }
 
@@ -114,7 +114,7 @@ export default function ChickenPage() {
     if (!gameActive || currentRow === 0) return
     setCashedOut(true); setGameActive(false)
     sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * currentMult - parseFloat(betAmount), currentMult)
-    toast.success(`🐔 Cashed out $${(parseFloat(betAmount) * currentMult).toFixed(2)}!`)
+    toast.success(`Cashed out $${(parseFloat(betAmount) * currentMult).toFixed(2)}!`)
   }
 
   const resetGame = () => {
@@ -157,7 +157,7 @@ export default function ChickenPage() {
                 ) : gameActive ? (
                   <div className="w-full py-3.5 bg-surface border border-amber-400/30 font-bold text-[14px] text-amber-400 rounded-xl text-center">
                     <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>
-                      🐔 Pick a safe lane!
+                      Pick a safe lane!
                     </motion.span>
                   </div>
                 ) : (
@@ -232,7 +232,7 @@ export default function ChickenPage() {
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500/25 to-orange-600/15 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10">
-                        <span className="text-2xl">🐔</span>
+                        <Bird className="w-6 h-6 text-brand" />
                       </div>
                       {gameActive && (
                         <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.8, 0.3, 0.8] }} transition={{ repeat: Infinity, duration: 2 }}
@@ -262,6 +262,7 @@ export default function ChickenPage() {
                       <span className="text-amber-400 font-mono font-bold text-sm">{currentRow}</span>
                       <span className="text-white/25 text-xs">/{MAX_ROWS}</span>
                     </div>
+                    <GameSettingsDropdown />
                   </div>
                 </div>
 
@@ -287,7 +288,7 @@ export default function ChickenPage() {
                         backgroundSize: '16px 16px'
                       }} />
                       <div className="relative flex items-center gap-3 flex-1">
-                        <span className="text-xl">🏁</span>
+                        <Flag className="w-5 h-5 text-brand" />
                         <div>
                           <div className="text-brand text-[13px] font-bold tracking-wide">FINISH LINE</div>
                           <div className="text-brand/40 text-[10px]">Safe across all roads</div>
@@ -336,7 +337,7 @@ export default function ChickenPage() {
                                   ? 'bg-brand/10 border border-brand/20'
                                   : 'bg-white/[0.03] border border-white/[0.05]'
                                 }`} />
-                              <span className="relative z-10">{isPastRow ? '✓' : row + 1}</span>
+                              <span className="relative z-10 flex items-center justify-center">{isPastRow ? <Check className="w-3.5 h-3.5 text-brand" /> : row + 1}</span>
                               {isCurrentRow && (
                                 <motion.div animate={{ scale: [1, 1.6, 1], opacity: [0.4, 0, 0.4] }} transition={{ repeat: Infinity, duration: 1.8 }}
                                   className="absolute inset-0 rounded-lg border-2 border-amber-400/50" />
@@ -414,22 +415,22 @@ export default function ChickenPage() {
                                         <motion.div initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: [0, -5, 5, 0] }}
                                           transition={{ type: 'spring', damping: 8 }}
                                           className="flex flex-col items-center">
-                                          <span className="text-2xl select-none drop-shadow-lg">🚗</span>
+                                          <Car className="w-6 h-6 text-red-400 drop-shadow-lg" />
                                           <motion.span initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
                                             className="text-[8px] text-red-400 font-black uppercase tracking-widest mt-0.5">CRASH</motion.span>
                                         </motion.div>
                                       ) : isCarRevealed ? (
                                         <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.3 }}
-                                          className="text-base select-none">🚗</motion.span>
+                                          className="text-base select-none flex items-center justify-center"><Car className="w-4 h-4 text-red-400/30" /></motion.span>
                                       ) : isSafeRevealed && wasPicked ? (
                                         <motion.div initial={{ scale: 0, y: 8 }} animate={{ scale: 1, y: 0 }}
                                           transition={{ type: 'spring', damping: 12 }}
                                           className="flex flex-col items-center">
-                                          <span className="text-xl select-none">🐔</span>
+                                          <Bird className="w-5 h-5 text-brand" />
                                         </motion.div>
                                       ) : isSafeRevealed ? (
                                         <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.2 }}
-                                          className="text-xs text-brand select-none">✓</motion.span>
+                                          className="text-xs text-brand select-none flex items-center justify-center"><Check className="w-3 h-3" /></motion.span>
                                       ) : isCurrentRow ? (
                                         <motion.span animate={{ y: [0, -2, 0], opacity: [0.25, 0.5, 0.25] }}
                                           transition={{ repeat: Infinity, duration: 2.5, delay: l * 0.15 }}
@@ -463,7 +464,7 @@ export default function ChickenPage() {
                   <div className="mt-2">
                     <div className="flex items-center gap-3 py-2.5 px-4 rounded-xl border border-white/[0.05]"
                       style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.015), transparent, rgba(255,255,255,0.015))' }}>
-                      <span className="text-base">🚶</span>
+                      <User className="w-4 h-4 text-white/50" />
                       <div>
                         <div className="text-white/50 text-[12px] font-bold">START</div>
                         <div className="text-white/20 text-[10px]">Step into the road</div>
@@ -498,7 +499,7 @@ export default function ChickenPage() {
                           <motion.div initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: 0 }}
                             transition={{ type: 'spring', damping: 10, delay: 0.1 }}
                             className="text-5xl mb-3">
-                            {hitCar ? '💥' : '🏆'}
+                            {hitCar ? <XCircle className="w-12 h-12 text-red-400" /> : <Trophy className="w-12 h-12 text-brand" />}
                           </motion.div>
                           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
                             transition={{ type: 'spring', damping: 10, delay: 0.25 }}

@@ -3,16 +3,24 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { GameLayout } from '@/components/GameLayout'
-import { Crown, Gift, Zap, Shield, Trophy, Lock, Check } from 'lucide-react'
+import { Crown, Gift, Zap, Shield, Trophy, Lock, Check, Award, Gem, Star } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { formatCurrency } from '@/lib/utils'
 
+const vipIcons: Record<number, React.ElementType> = {
+  1: Award,
+  2: Shield,
+  3: Star,
+  4: Gem,
+  5: Crown,
+}
+
 const vipLevels = [
-  { level: 1, name: 'Bronze', icon: '🥉', color: 'from-amber-700 to-amber-900', wager: 0, rakeback: '5%', unlocked: true },
-  { level: 2, name: 'Silver', icon: '🥈', color: 'from-slate-400 to-slate-600', wager: 5000, rakeback: '10%', unlocked: false },
-  { level: 3, name: 'Gold', icon: '🥇', color: 'from-yellow-500 to-amber-600', wager: 25000, rakeback: '15%', unlocked: false },
-  { level: 4, name: 'Platinum', icon: '💎', color: 'from-cyan-400 to-blue-600', wager: 100000, rakeback: '20%', unlocked: false },
-  { level: 5, name: 'Diamond', icon: '👑', color: 'from-violet-500 to-purple-700', wager: 500000, rakeback: '25%', unlocked: false },
+  { level: 1, name: 'Bronze', color: 'from-amber-700 to-amber-900', iconColor: 'text-amber-300', wager: 0, rakeback: '5%', unlocked: true },
+  { level: 2, name: 'Silver', color: 'from-slate-400 to-slate-600', iconColor: 'text-slate-200', wager: 5000, rakeback: '10%', unlocked: false },
+  { level: 3, name: 'Gold', color: 'from-yellow-500 to-amber-600', iconColor: 'text-yellow-200', wager: 25000, rakeback: '15%', unlocked: false },
+  { level: 4, name: 'Platinum', color: 'from-cyan-400 to-blue-600', iconColor: 'text-cyan-200', wager: 100000, rakeback: '20%', unlocked: false },
+  { level: 5, name: 'Diamond', color: 'from-violet-500 to-purple-700', iconColor: 'text-violet-200', wager: 500000, rakeback: '25%', unlocked: false },
 ]
 
 const perks = [
@@ -70,8 +78,8 @@ export default function VIPPage() {
           <div className="bg-surface/50 rounded-xl border border-border/60 p-4 mb-6">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 bg-gradient-to-br ${currentLevel.color} rounded-xl flex items-center justify-center text-2xl`}>
-                  {currentLevel.icon}
+                <div className={`w-12 h-12 bg-gradient-to-br ${currentLevel.color} rounded-xl flex items-center justify-center`}>
+                  {(() => { const Icon = vipIcons[currentLevel.level] || Award; return <Icon className={`w-6 h-6 ${currentLevel.iconColor}`} /> })()}
                 </div>
                 <div>
                   <p className="text-xs text-text-muted">Current Level</p>
@@ -112,7 +120,9 @@ export default function VIPPage() {
                 }`}
               >
                 {!level.unlocked && <Lock className="absolute top-1.5 right-1.5 w-3 h-3 text-text-muted" />}
-                <div className="text-2xl mb-1">{level.icon}</div>
+                <div className={`w-8 h-8 bg-gradient-to-br ${level.color} rounded-lg flex items-center justify-center mb-1`}>
+                  {(() => { const Icon = vipIcons[level.level] || Award; return <Icon className={`w-4 h-4 ${level.iconColor || 'text-white'}`} /> })()}
+                </div>
                 <p className={`text-xs font-medium ${level.unlocked ? 'text-text-primary' : 'text-text-muted'}`}>
                   {level.name}
                 </p>
@@ -123,8 +133,8 @@ export default function VIPPage() {
           {/* Selected Level Info */}
           <div className="bg-surface/50 rounded-xl border border-border/60 p-4 mb-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className={`w-10 h-10 bg-gradient-to-br ${selected.color} rounded-lg flex items-center justify-center text-xl`}>
-                {selected.icon}
+              <div className={`w-10 h-10 bg-gradient-to-br ${selected.color} rounded-lg flex items-center justify-center`}>
+                {(() => { const Icon = vipIcons[selected.level] || Award; return <Icon className={`w-5 h-5 ${selected.iconColor || 'text-white'}`} /> })()}
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-text-primary">{selected.name}</p>

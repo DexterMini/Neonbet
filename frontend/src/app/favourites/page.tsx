@@ -3,25 +3,26 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { GameLayout } from '@/components/GameLayout'
-import { Star, Heart, Play, Trash2 } from 'lucide-react'
+import { Star, Heart, Play, Trash2, TrendingUp, Dices, Bomb, CircleDot, Target, RotateCcw, Grid3X3, Spade, type LucideIcon } from 'lucide-react'
 
 interface Favourite {
   id: string
   name: string
-  icon: string
+  icon: LucideIcon
+  iconColor: string
   href: string
   mult: string
 }
 
 const ALL_GAMES: Favourite[] = [
-  { id: 'crash', name: 'Crash', icon: '🚀', href: '/games/crash', mult: '∞' },
-  { id: 'dice', name: 'Dice', icon: '🎲', href: '/games/dice', mult: '99x' },
-  { id: 'mines', name: 'Mines', icon: '💣', href: '/games/mines', mult: '24x' },
-  { id: 'plinko', name: 'Plinko', icon: '🔮', href: '/games/plinko', mult: '1000x' },
-  { id: 'limbo', name: 'Limbo', icon: '🎯', href: '/games/limbo', mult: '100x' },
-  { id: 'wheel', name: 'Wheel', icon: '🎡', href: '/games/wheel', mult: '50x' },
-  { id: 'keno', name: 'Keno', icon: '⭐', href: '/games/keno', mult: '3500x' },
-  { id: 'twentyone', name: 'Blackjack', icon: '🃏', href: '/games/twentyone', mult: '2.5x' },
+  { id: 'crash', name: 'Crash', icon: TrendingUp, iconColor: 'text-brand', href: '/games/crash', mult: '∞' },
+  { id: 'dice', name: 'Dice', icon: Dices, iconColor: 'text-violet-400', href: '/games/dice', mult: '99x' },
+  { id: 'mines', name: 'Mines', icon: Bomb, iconColor: 'text-cyan-400', href: '/games/mines', mult: '24x' },
+  { id: 'plinko', name: 'Plinko', icon: CircleDot, iconColor: 'text-orange-400', href: '/games/plinko', mult: '1000x' },
+  { id: 'limbo', name: 'Limbo', icon: Target, iconColor: 'text-rose-400', href: '/games/limbo', mult: '100x' },
+  { id: 'wheel', name: 'Wheel', icon: RotateCcw, iconColor: 'text-amber-400', href: '/games/wheel', mult: '50x' },
+  { id: 'keno', name: 'Keno', icon: Grid3X3, iconColor: 'text-emerald-400', href: '/games/keno', mult: '3500x' },
+  { id: 'twentyone', name: 'Blackjack', icon: Spade, iconColor: 'text-red-400', href: '/games/twentyone', mult: '2.5x' },
 ]
 
 const STORAGE_KEY = 'neonbet_favourites'
@@ -107,7 +108,9 @@ export default function FavouritesPage() {
                   </button>
                   
                   <Link href={game.href}>
-                    <div className="text-4xl mb-3">{game.icon}</div>
+                    <div className="w-10 h-10 rounded-xl bg-surface-light flex items-center justify-center mb-3">
+                      <game.icon className={`w-5 h-5 ${game.iconColor}`} />
+                    </div>
                     <h3 className="font-semibold text-text-primary mb-1">{game.name}</h3>
                     <p className="text-sm text-brand font-mono">{game.mult} max</p>
                   </Link>
@@ -126,7 +129,7 @@ export default function FavouritesPage() {
                       onClick={() => addFavourite(game)}
                       className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-border/60 hover:border-brand/40 hover:bg-surface/30 transition-colors"
                     >
-                      <span className="text-2xl">{game.icon}</span>
+                      <game.icon className={`w-5 h-5 ${game.iconColor}`} />
                       <span className="text-text-muted text-sm">{game.name}</span>
                     </button>
                   ))}

@@ -9,7 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
 import { CircleDot, RefreshCw, Shield, Zap, TrendingUp, Sparkles } from 'lucide-react'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 
@@ -21,17 +21,18 @@ interface WheelSegment {
 type RiskLevel = 'low' | 'medium' | 'high'
 
 /* ── Floating particles ───────────────────────────── */
+const WHEEL_PARTICLE_COLORS = ['#facc15', '#fbbf24', '#f59e0b', '#fde68a', '#eab308', '#fef08a']
 function FloatingSparkles() {
-  const items = ['🎡', '✨', '💎', '⭐', '🎯', '🌟']
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {items.map((e, i) => (
+      {WHEEL_PARTICLE_COLORS.map((c, i) => (
         <motion.div key={i}
           initial={{ opacity: 0, y: '110%', x: `${5 + i * 16}%` }}
           animate={{ opacity: [0, 0.3, 0], y: '-10%', x: `${5 + i * 16 + (Math.random() - 0.5) * 10}%` }}
           transition={{ duration: 5 + Math.random() * 4, repeat: Infinity, delay: i * 0.9, ease: 'easeOut' }}
-          className="absolute text-sm select-none"
-        >{e}</motion.div>
+          className="absolute w-1.5 h-1.5 rounded-full"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -892,10 +893,13 @@ export default function WheelPage() {
                       <p className="text-violet-300/30 text-[10px] mt-0.5">Spin to win up to 100x</p>
                     </div>
                   </div>
-                  <button onClick={() => setShowFairness(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/[0.04] text-muted hover:text-white ring-1 ring-white/[0.06] transition-all">
-                    <Shield className="w-3 h-3" />Fairness
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setShowFairness(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/[0.04] text-muted hover:text-white ring-1 ring-white/[0.06] transition-all">
+                      <Shield className="w-3 h-3" />Fairness
+                    </button>
+                    <GameSettingsDropdown />
+                  </div>
                 </div>
 
                 {/* Wheel Canvas */}

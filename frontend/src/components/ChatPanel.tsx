@@ -85,7 +85,7 @@ function ChatBubble({
           <span className="text-accent-cyan font-mono font-bold">
             {msg.rainAmount} {msg.rainCurrency}
           </span>{' '}
-          to {msg.rainRecipients} lucky chatters! 🌧️
+          to {msg.rainRecipients} lucky chatters!
         </p>
       </div>
     )
@@ -304,7 +304,7 @@ function RainModal({ onClose }: { onClose: () => void }) {
             className="w-full py-3 rounded-xl bg-gradient-to-r from-accent-cyan to-accent-blue text-white font-semibold text-[13px] disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all flex items-center justify-center gap-2"
           >
             <CloudRain className="w-4 h-4" />
-            Make it Rain! 🌧️
+            Make it Rain!
           </button>
         </div>
       </div>

@@ -7,7 +7,7 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { toast } from 'sonner'
@@ -15,18 +15,19 @@ import { Target, RefreshCw, TrendingUp, TrendingDown, Zap, Percent } from 'lucid
 import Decimal from 'decimal.js'
 
 /* ── Floating particles ───────────────────────────── */
+const LIMBO_PARTICLE_COLORS = ['#f43f5e', '#fb7185', '#fda4af', '#e11d48', '#be123c', '#fecdd3']
 function FloatingStars({ active }: { active: boolean }) {
   if (!active) return null
-  const items = ['🎯', '⚡', '💥', '✨', '🔥', '⭐']
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {items.map((e, i) => (
+      {LIMBO_PARTICLE_COLORS.map((c, i) => (
         <motion.div key={i}
           initial={{ opacity: 0, y: '110%', x: `${8 + i * 15}%` }}
           animate={{ opacity: [0, 0.35, 0], y: '-10%', x: `${8 + i * 15 + (Math.random() - 0.5) * 12}%` }}
           transition={{ duration: 4 + Math.random() * 3, repeat: Infinity, delay: i * 0.7, ease: 'easeOut' }}
-          className="absolute text-sm select-none"
-        >{e}</motion.div>
+          className="absolute w-1.5 h-1.5 rounded-full"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -173,8 +174,11 @@ export default function LimboPage() {
                       <p className="text-orange-300/30 text-[10px] mt-0.5">Target {limboTarget.toFixed(2)}x</p>
                     </div>
                   </div>
-                  <div className="px-3 py-1 rounded-full text-[11px] font-bold bg-orange-500/10 text-orange-400 ring-1 ring-orange-400/20 font-mono">
-                    {limboTarget.toFixed(2)}x
+                  <div className="flex items-center gap-2">
+                    <div className="px-3 py-1 rounded-full text-[11px] font-bold bg-orange-500/10 text-orange-400 ring-1 ring-orange-400/20 font-mono">
+                      {limboTarget.toFixed(2)}x
+                    </div>
+                    <GameSettingsDropdown />
                   </div>
                 </div>
 

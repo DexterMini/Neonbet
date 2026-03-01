@@ -7,7 +7,7 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { toast } from 'sonner'
 import { TrendingUp, Users, Clock, Zap, Rocket } from 'lucide-react'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 
 interface GameRound {
   roundId: string
@@ -18,18 +18,19 @@ interface GameRound {
 }
 
 /* ── Floating particles ───────────────────────────── */
+const PARTICLE_COLORS = ['#00E87B', '#34d399', '#6ee7b7', '#a7f3d0', '#059669', '#10b981']
 function FloatingRockets({ active }: { active: boolean }) {
   if (!active) return null
-  const items = ['🚀', '⭐', '✨', '💫', '🌟', '🔥']
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {items.map((e, i) => (
+      {PARTICLE_COLORS.map((c, i) => (
         <motion.div key={i}
           initial={{ opacity: 0, y: '110%', x: `${8 + i * 15}%`, rotate: 0 }}
           animate={{ opacity: [0, 0.35, 0], y: '-10%', x: `${8 + i * 15 + (Math.random() - 0.5) * 12}%`, rotate: [0, 90, 180] }}
           transition={{ duration: 5 + Math.random() * 3, repeat: Infinity, delay: i * 0.9, ease: 'easeOut' }}
-          className="absolute text-sm select-none"
-        >{e}</motion.div>
+          className="absolute w-1.5 h-1.5 rounded-full"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -217,7 +218,7 @@ export default function CrashPage() {
                   </motion.button>
                 ) : (
                   <button disabled className="w-full py-3.5 rounded-xl font-bold text-[14px] bg-surface text-muted cursor-not-allowed">
-                    {hasCashedOut ? '✓ Cashed Out!' : 'Round Over'}
+                    {hasCashedOut ? 'Cashed Out' : 'Round Over'}
                   </button>
                 )
               }
@@ -283,12 +284,15 @@ export default function CrashPage() {
                       <p className="text-brand/30 text-[10px] mt-0.5">Watch it fly</p>
                     </div>
                   </div>
-                  <div className={`px-3 py-1 rounded-full text-[11px] font-bold ring-1 ${
-                    gameRound.status === 'crashed' ? 'bg-accent-red/10 text-accent-red ring-accent-red/20'
-                      : gameRound.status === 'running' ? 'bg-brand/10 text-brand ring-brand/20'
-                      : 'bg-white/[0.04] text-muted ring-white/[0.06]'
-                  }`}>
-                    {gameRound.status === 'crashed' ? '💥 Crashed' : gameRound.status === 'running' ? '🚀 Live' : '⏳ Waiting'}
+                  <div className="flex items-center gap-2">
+                    <div className={`px-3 py-1 rounded-full text-[11px] font-bold ring-1 ${
+                      gameRound.status === 'crashed' ? 'bg-accent-red/10 text-accent-red ring-accent-red/20'
+                        : gameRound.status === 'running' ? 'bg-brand/10 text-brand ring-brand/20'
+                        : 'bg-white/[0.04] text-muted ring-white/[0.06]'
+                    }`}>
+                      {gameRound.status === 'crashed' ? 'Crashed' : gameRound.status === 'running' ? 'Live' : 'Waiting'}
+                    </div>
+                    <GameSettingsDropdown />
                   </div>
                 </div>
 

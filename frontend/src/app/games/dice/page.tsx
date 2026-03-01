@@ -7,19 +7,19 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { toast } from 'sonner'
 import { Dice1, ArrowLeftRight, TrendingUp, TrendingDown, RefreshCw, Percent } from 'lucide-react'
 
 /* ── Floating dice particles ──────────────────────── */
+const DICE_PARTICLE_COLORS = ['#a78bfa', '#8b5cf6', '#c4b5fd', '#7c3aed', '#6d28d9', '#ddd6fe']
 function FloatingDice({ active }: { active: boolean }) {
   if (!active) return null
-  const emojis = ['🎲', '⚄', '⚅', '⚃', '⚁', '⚂']
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {emojis.map((e, i) => (
+      {DICE_PARTICLE_COLORS.map((c, i) => (
         <motion.div
           key={i}
           initial={{ opacity: 0, y: '110%', x: `${10 + i * 14}%`, rotate: 0 }}
@@ -30,10 +30,9 @@ function FloatingDice({ active }: { active: boolean }) {
             rotate: [0, 180, 360],
           }}
           transition={{ duration: 4 + Math.random() * 3, repeat: Infinity, delay: i * 0.7, ease: 'easeOut' }}
-          className="absolute text-sm select-none"
-        >
-          {e}
-        </motion.div>
+          className="absolute w-1.5 h-1.5 rounded-sm"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -190,6 +189,7 @@ export default function DicePage() {
                     <span className={`px-2 py-0.5 rounded-md font-bold ${rollOver ? 'bg-brand/10 text-brand' : 'bg-blue-400/10 text-blue-400'}`}>
                       {rollOver ? '▲ Over' : '▼ Under'}
                     </span>
+                    <GameSettingsDropdown />
                   </div>
                 </div>
 

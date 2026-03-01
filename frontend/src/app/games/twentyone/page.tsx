@@ -8,23 +8,24 @@ import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
-import { Shield, Sparkles, RotateCcw } from 'lucide-react'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { Shield, Sparkles, RotateCcw, Spade } from 'lucide-react'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 
 /* ── Floating particles ───────────────────────────── */
+const CARD_PARTICLE_COLORS = ['#ef4444', '#f87171', '#fca5a5', '#dc2626', '#b91c1c', '#fecaca']
 function FloatingCards() {
-  const items = ['♠', '♥', '♦', '♣', '🃏', '✨']
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {items.map((e, i) => (
+      {CARD_PARTICLE_COLORS.map((c, i) => (
         <motion.div key={i}
           initial={{ opacity: 0, y: '110%', x: `${5 + i * 16}%` }}
           animate={{ opacity: [0, 0.25, 0], y: '-10%', x: `${5 + i * 16 + (Math.random() - 0.5) * 10}%` }}
           transition={{ duration: 5 + Math.random() * 4, repeat: Infinity, delay: i * 0.9, ease: 'easeOut' }}
-          className="absolute text-sm select-none"
-        >{e}</motion.div>
+          className="absolute w-1.5 h-1.5 rounded-sm"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -281,17 +282,20 @@ export default function TwentyOnePage() {
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center ring-1 ring-emerald-400/20"
                       style={{ background: 'linear-gradient(135deg, rgba(52,211,153,0.25) 0%, rgba(52,211,153,0.08) 100%)' }}>
-                      <span className="text-emerald-400 text-sm">🃏</span>
+                      <Spade className="w-4 h-4 text-emerald-400" />
                     </div>
                     <div>
                       <h2 className="text-white font-bold text-base leading-none">Twenty One</h2>
                       <p className="text-emerald-300/30 text-[10px] mt-0.5">{numCards} cards • Hit 16-21 to win</p>
                     </div>
                   </div>
-                  <button onClick={() => setShowFairness(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/[0.04] text-muted hover:text-white ring-1 ring-white/[0.06] transition-all">
-                    <Shield className="w-3 h-3" />Fairness
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setShowFairness(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/[0.04] text-muted hover:text-white ring-1 ring-white/[0.06] transition-all">
+                      <Shield className="w-3 h-3" />Fairness
+                    </button>
+                    <GameSettingsDropdown />
+                  </div>
                 </div>
 
                 {/* Multiplier Grid */}

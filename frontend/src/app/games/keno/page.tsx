@@ -9,24 +9,25 @@ import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
 import { Grid3X3, Shield, Sparkles, Zap, Trophy, X, RotateCcw, Play } from 'lucide-react'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 
 type RiskLevel = 'low' | 'classic' | 'medium' | 'high'
 
 /* ── Floating particles ───────────────────────────── */
+const KENO_PARTICLE_COLORS = ['#00E87B', '#34d399', '#6ee7b7', '#059669', '#047857', '#a7f3d0']
 function FloatingNumbers() {
-  const items = ['🎱', '✨', '🔢', '💫', '🎯', '⭐']
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {items.map((e, i) => (
+      {KENO_PARTICLE_COLORS.map((c, i) => (
         <motion.div key={i}
           initial={{ opacity: 0, y: '110%', x: `${6 + i * 15}%` }}
           animate={{ opacity: [0, 0.3, 0], y: '-10%', x: `${6 + i * 15 + (Math.random() - 0.5) * 10}%` }}
           transition={{ duration: 5 + Math.random() * 3, repeat: Infinity, delay: i * 0.8, ease: 'easeOut' }}
-          className="absolute text-sm select-none"
-        >{e}</motion.div>
+          className="absolute w-1.5 h-1.5 rounded-full"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -326,6 +327,7 @@ export default function KenoPage() {
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/[0.04] text-muted hover:text-white ring-1 ring-white/[0.06] transition-all">
                       <Shield className="w-3 h-3" />
                     </button>
+                    <GameSettingsDropdown />
                   </div>
                 </div>
 

@@ -8,21 +8,22 @@ import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { Shield, Sparkles, RotateCcw, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Gem, Skull } from 'lucide-react'
-import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
+import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { toast } from 'sonner'
 
 /* ── Floating particles ───────────────────────────── */
+const SNAKE_PARTICLE_COLORS = ['#00E87B', '#34d399', '#22c55e', '#4ade80', '#059669', '#86efac']
 function FloatingGems() {
-  const items = ['💎', '🐍', '✨', '⭐', '🟢', '💚']
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {items.map((e, i) => (
+      {SNAKE_PARTICLE_COLORS.map((c, i) => (
         <motion.div key={i}
           initial={{ opacity: 0, y: '110%', x: `${5 + i * 16}%` }}
           animate={{ opacity: [0, 0.3, 0], y: '-10%', x: `${5 + i * 16 + (Math.random() - 0.5) * 10}%` }}
           transition={{ duration: 5 + Math.random() * 4, repeat: Infinity, delay: i * 0.9, ease: 'easeOut' }}
-          className="absolute text-sm select-none"
-        >{e}</motion.div>
+          className="absolute w-1.5 h-1.5 rounded-full"
+          style={{ background: c }}
+        />
       ))}
     </div>
   )
@@ -433,7 +434,7 @@ export default function SnakePage() {
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center ring-1 ring-brand/20"
                       style={{ background: 'linear-gradient(135deg, rgba(0,232,123,0.25) 0%, rgba(0,232,123,0.08) 100%)' }}>
-                      <span className="text-brand text-sm">🐍</span>
+                      <Gem className="w-4 h-4 text-brand" />
                     </div>
                     <div>
                       <h2 className="text-white font-bold text-base leading-none">Snake</h2>
@@ -455,6 +456,7 @@ export default function SnakePage() {
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-semibold bg-white/[0.04] text-muted hover:text-white ring-1 ring-white/[0.06] transition-all">
                       <Shield className="w-3 h-3" />
                     </button>
+                    <GameSettingsDropdown />
                   </div>
                 </div>
 
@@ -471,7 +473,7 @@ export default function SnakePage() {
                         <div className="text-center">
                           <div className="w-16 h-16 rounded-2xl mx-auto mb-3 flex items-center justify-center ring-1 ring-brand/20"
                             style={{ background: 'linear-gradient(145deg, rgba(0,232,123,0.15) 0%, rgba(0,232,123,0.04) 100%)' }}>
-                            <span className="text-3xl">🐍</span>
+                            <Gem className="w-8 h-8 text-brand" />
                           </div>
                           <div className="text-white font-bold text-lg">Snake</div>
                           <div className="text-white/25 text-sm mt-1">Collect gems to win!</div>
