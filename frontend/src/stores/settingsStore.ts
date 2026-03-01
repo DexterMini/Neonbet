@@ -41,3 +41,12 @@ export const useSettingsStore = create<SettingsState>()(
     }
   )
 )
+
+/** Returns animation delay multiplier based on game speed setting */
+export function getSpeedMultiplier(speed: GameSpeed): number {
+  switch (speed) {
+    case 'fast': return 0.5
+    case 'instant': return 0
+    default: return 1
+  }
+}

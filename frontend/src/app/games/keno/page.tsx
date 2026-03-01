@@ -7,8 +7,9 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
+import { useDemoBalance } from '@/stores/demoBalanceStore'
 import { toast } from 'sonner'
-import { Grid3X3, Shield, Sparkles, Zap, Trophy, X, RotateCcw, Play } from 'lucide-react'
+import { Grid3X3, Shield, Sparkles, Zap, Trophy, X, RotateCcw, Play, RefreshCw, Gem } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
@@ -95,6 +96,7 @@ export default function KenoPage() {
   } = useProvablyFair()
   const { isAuthenticated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
+  const { balance: demoBalance, deduct, credit, refill } = useDemoBalance()
   const sessionStats = useSessionStats()
 
   const [betAmount, setBetAmount] = useState('10.00')
@@ -151,7 +153,9 @@ export default function KenoPage() {
     if (isPlaying || isPlacing || !initialized) return { won: false, profit: 0 }
     if (selectedNumbers.length === 0) { toast.error('Select at least 1 number'); return { won: false, profit: 0 } }
     if (bet <= 0 || isNaN(bet)) { toast.error('Invalid bet amount'); return { won: false, profit: 0 } }
+    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance! Click refill to get more funds.'); return { won: false, profit: 0 } }
 
+    if (!isAuthenticated) deduct(bet)
     setIsPlaying(true); setDrawnNumbers([]); setGameEnded(false)
 
     try {
@@ -184,6 +188,7 @@ export default function KenoPage() {
       const won = multiplier > 0
       const profit = won ? winnings - bet : -bet
       if (won) {
+        if (!isAuthenticated) credit(winnings)
         sessionStats.recordBet(true, bet, winnings - bet, multiplier)
         toast.success(`${hits} hits! Won $${winnings.toFixed(2)} (${multiplier}x)`)
       } else {
@@ -244,6 +249,22 @@ export default function KenoPage() {
                 </button>
               }
             >
+              {/* Demo Balance */}
+              {!isAuthenticated && (
+                <div className="flex items-center justify-between bg-surface/80 rounded-xl p-2.5 border border-border">
+                  <div>
+                    <div className="text-[10px] text-muted uppercase tracking-wider">Demo Balance</div>
+                    <div className="text-base font-bold text-white font-mono">${demoBalance.toFixed(2)}</div>
+                  </div>
+                  {demoBalance < 1 && (
+                    <button onClick={refill}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[rgba(0,210,190,0.1)] border border-[rgba(0,210,190,0.3)] rounded-lg text-[rgb(0,210,190)] text-[11px] font-bold hover:bg-[rgba(0,210,190,0.2)] transition-all">
+                      <RefreshCw className="w-3 h-3" />Refill
+                    </button>
+                  )}
+                </div>
+              )}
+
               {/* Risk Level — horizontal row like Thrill */}
               <div>
                 <span className="text-[11px] font-bold text-muted uppercase tracking-wider block mb-2">Risk Level</span>
@@ -422,6 +443,33 @@ export default function KenoPage() {
                     })}
                   </div>
                 </div>
+
+                {/* Payout Ways Row */}
+                {selectedNumbers.length > 0 && (
+                  <div className="relative z-10 px-5 pb-2">
+                    <div className="flex gap-1 overflow-x-auto scrollbar-thin pb-1">
+                      {currentPayoutTable.map((mult, hits) => {
+                        const isCurrentHit = gameEnded && matches === hits
+                        const isPassedHit = gameEnded && matches > hits
+                        return (
+                          <div key={hits}
+                            className={`flex-1 min-w-[56px] flex flex-col items-center gap-1 py-2 px-1 rounded-xl border transition-all
+                              ${isCurrentHit ? 'bg-cyan-400/10 border-cyan-400/30' : isPassedHit ? 'bg-cyan-400/5 border-cyan-400/15' : 'bg-surface/50 border-border/40'}`}>
+                            <span className={`text-[11px] font-bold font-mono ${
+                              isCurrentHit ? 'text-cyan-400' : isPassedHit ? 'text-cyan-400/60' : mult > 0 ? 'text-white/60' : 'text-muted/40'
+                            }`}>
+                              {mult >= 1000 ? `${(mult / 1000).toFixed(1)}kx` : mult > 0 ? mult.toFixed(2) + 'x' : '0.00x'}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-muted">{hits}x</span>
+                              <Gem className={`w-3 h-3 ${isCurrentHit ? 'text-cyan-400' : isPassedHit ? 'text-cyan-400/60' : 'text-cyan-400/30'}`} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Legend */}
                 <div className="relative z-10 flex items-center justify-center gap-6 px-5 py-3 border-t border-white/[0.04]">
