@@ -13,42 +13,42 @@ import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSetti
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 
-interface Ball { id: number; x: number; y: number; path: number[]; finalSlot: number; multiplier: number }
+interface Ball { id: number; x: number; y: number; path: number[]; finalSlot: number; multiplier: number; done?: boolean }
 interface BetHistory { id: number; multiplier: number; payout: number; bet: number; risk: string; rows: number; timestamp: Date }
 
 const PLINKO_MULTIPLIERS: Record<string, Record<number, number[]>> = {
   low: {
-    8: [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6],
-    9: [5.6, 2, 1.6, 1, 0.7, 0.7, 1, 1.6, 2, 5.6],
-    10: [8.9, 3, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 3, 8.9],
-    11: [8.4, 3, 1.9, 1.3, 1, 0.7, 0.7, 1, 1.3, 1.9, 3, 8.4],
-    12: [10, 3, 1.6, 1.4, 1.1, 1, 0.5, 1, 1.1, 1.4, 1.6, 3, 10],
-    13: [8.1, 4, 3, 1.9, 1.2, 0.9, 0.7, 0.7, 0.9, 1.2, 1.9, 3, 4, 8.1],
-    14: [7.1, 4, 1.9, 1.4, 1.3, 1.1, 1, 0.5, 1, 1.1, 1.3, 1.4, 1.9, 4, 7.1],
-    15: [15, 8, 3, 2, 1.5, 1.1, 1, 0.7, 0.7, 1, 1.1, 1.5, 2, 3, 8, 15],
-    16: [16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1, 0.5, 1, 1.1, 1.2, 1.4, 1.4, 2, 9, 16],
+    8: [5.4, 2, 1.07, 0.97, 0.48, 0.97, 1.07, 2, 5.4],
+    9: [5.4, 1.9, 1.55, 0.97, 0.68, 0.68, 0.97, 1.55, 1.9, 5.4],
+    10: [8.6, 2.9, 1.36, 1.07, 0.97, 0.48, 0.97, 1.07, 1.36, 2.9, 8.6],
+    11: [8.1, 2.9, 1.84, 1.26, 0.97, 0.68, 0.68, 0.97, 1.26, 1.84, 2.9, 8.1],
+    12: [9.7, 2.9, 1.55, 1.36, 1.07, 0.97, 0.48, 0.97, 1.07, 1.36, 1.55, 2.9, 9.7],
+    13: [7.8, 3.9, 2.9, 1.84, 1.16, 0.87, 0.68, 0.68, 0.87, 1.16, 1.84, 2.9, 3.9, 7.8],
+    14: [6.9, 3.9, 1.84, 1.36, 1.26, 1.07, 0.97, 0.48, 0.97, 1.07, 1.26, 1.36, 1.84, 3.9, 6.9],
+    15: [14.5, 7.8, 2.9, 1.94, 1.46, 1.07, 0.97, 0.68, 0.68, 0.97, 1.07, 1.46, 1.94, 2.9, 7.8, 14.5],
+    16: [15.5, 8.7, 1.94, 1.36, 1.36, 1.16, 1.07, 0.97, 0.48, 0.97, 1.07, 1.16, 1.36, 1.36, 1.94, 8.7, 15.5],
   },
   medium: {
-    8: [13, 3, 1.3, 0.7, 0.4, 0.7, 1.3, 3, 13],
-    9: [18, 4, 1.7, 0.9, 0.5, 0.5, 0.9, 1.7, 4, 18],
-    10: [22, 5, 2, 1.4, 0.6, 0.4, 0.6, 1.4, 2, 5, 22],
-    11: [24, 6, 3, 1.8, 0.7, 0.5, 0.5, 0.7, 1.8, 3, 6, 24],
-    12: [33, 11, 4, 2, 1.1, 0.6, 0.3, 0.6, 1.1, 2, 4, 11, 33],
-    13: [43, 13, 6, 3, 1.3, 0.7, 0.4, 0.4, 0.7, 1.3, 3, 6, 13, 43],
-    14: [58, 15, 7, 4, 1.9, 1, 0.5, 0.2, 0.5, 1, 1.9, 4, 7, 15, 58],
-    15: [88, 18, 11, 5, 3, 1.3, 0.5, 0.3, 0.3, 0.5, 1.3, 3, 5, 11, 18, 88],
-    16: [110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110],
+    8: [12.6, 2.9, 1.26, 0.68, 0.39, 0.68, 1.26, 2.9, 12.6],
+    9: [17.5, 3.9, 1.65, 0.87, 0.48, 0.48, 0.87, 1.65, 3.9, 17.5],
+    10: [21.3, 4.8, 1.94, 1.36, 0.58, 0.39, 0.58, 1.36, 1.94, 4.8, 21.3],
+    11: [23.3, 5.8, 2.9, 1.75, 0.68, 0.48, 0.48, 0.68, 1.75, 2.9, 5.8, 23.3],
+    12: [32, 10.7, 3.9, 1.94, 1.07, 0.58, 0.29, 0.58, 1.07, 1.94, 3.9, 10.7, 32],
+    13: [41.7, 12.6, 5.8, 2.9, 1.26, 0.68, 0.39, 0.39, 0.68, 1.26, 2.9, 5.8, 12.6, 41.7],
+    14: [56.3, 14.5, 6.8, 3.9, 1.84, 0.97, 0.48, 0.19, 0.48, 0.97, 1.84, 3.9, 6.8, 14.5, 56.3],
+    15: [85.4, 17.5, 10.7, 4.8, 2.9, 1.26, 0.48, 0.29, 0.29, 0.48, 1.26, 2.9, 4.8, 10.7, 17.5, 85.4],
+    16: [107, 39.8, 9.7, 4.8, 2.9, 1.46, 0.97, 0.48, 0.29, 0.48, 0.97, 1.46, 2.9, 4.8, 9.7, 39.8, 107],
   },
   high: {
-    8: [29, 4, 1.5, 0.3, 0.2, 0.3, 1.5, 4, 29],
-    9: [43, 7, 2, 0.6, 0.2, 0.2, 0.6, 2, 7, 43],
-    10: [76, 10, 3, 0.9, 0.3, 0.2, 0.3, 0.9, 3, 10, 76],
-    11: [120, 14, 5.2, 1.4, 0.4, 0.2, 0.2, 0.4, 1.4, 5.2, 14, 120],
-    12: [170, 24, 8.1, 2, 0.7, 0.2, 0.2, 0.2, 0.7, 2, 8.1, 24, 170],
-    13: [260, 37, 11, 4, 1, 0.2, 0.2, 0.2, 0.2, 1, 4, 11, 37, 260],
-    14: [420, 56, 18, 5, 1.9, 0.3, 0.2, 0.2, 0.2, 0.3, 1.9, 5, 18, 56, 420],
-    15: [620, 83, 27, 8, 3, 0.5, 0.2, 0.2, 0.2, 0.2, 0.5, 3, 8, 27, 83, 620],
-    16: [1000, 130, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 130, 1000],
+    8: [28.1, 3.9, 1.46, 0.29, 0.19, 0.29, 1.46, 3.9, 28.1],
+    9: [41.7, 6.8, 1.94, 0.58, 0.19, 0.19, 0.58, 1.94, 6.8, 41.7],
+    10: [73.8, 9.7, 2.9, 0.87, 0.29, 0.19, 0.29, 0.87, 2.9, 9.7, 73.8],
+    11: [116.4, 13.6, 5, 1.36, 0.39, 0.19, 0.19, 0.39, 1.36, 5, 13.6, 116.4],
+    12: [165, 23.3, 7.8, 1.94, 0.68, 0.19, 0.19, 0.19, 0.68, 1.94, 7.8, 23.3, 165],
+    13: [252.2, 35.9, 10.7, 3.9, 0.97, 0.19, 0.19, 0.19, 0.19, 0.97, 3.9, 10.7, 35.9, 252.2],
+    14: [407.4, 54.3, 17.5, 4.8, 1.84, 0.29, 0.19, 0.19, 0.19, 0.29, 1.84, 4.8, 17.5, 54.3, 407.4],
+    15: [601.4, 80.5, 26.2, 7.8, 2.9, 0.48, 0.19, 0.19, 0.19, 0.19, 0.48, 2.9, 7.8, 26.2, 80.5, 601.4],
+    16: [970, 126.1, 25.2, 8.7, 3.9, 1.94, 0.19, 0.19, 0.19, 0.19, 0.19, 1.94, 3.9, 8.7, 25.2, 126.1, 970],
   },
 }
 
@@ -85,6 +85,7 @@ export default function PlinkoPage() {
   const [plinkoRisk, setPlinkoRisk] = useState<'low' | 'medium' | 'high'>('medium')
   const [balls, setBalls] = useState<Ball[]>([])
   const [isDropping, setIsDropping] = useState(false)
+  const activeBallsRef = useRef(0)
   const [lastResult, setLastResult] = useState<{ multiplier: number; payout: number } | null>(null)
   const [showFairness, setShowFairness] = useState(false)
   const [betHistory, setBetHistory] = useState<BetHistory[]>([])
@@ -211,7 +212,7 @@ export default function PlinkoPage() {
 
   useEffect(() => { drawBoard() }, [drawBoard])
 
-  // Drop ball
+  // Drop ball — runs concurrently, multiple balls can fly at once
   const dropBall = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
     if (!initialized || isPlacing || bet <= 0 || isNaN(bet)) return { won: false, profit: -bet }
@@ -240,31 +241,42 @@ export default function PlinkoPage() {
     const clampedSlot = Math.max(0, Math.min(finalSlot, multipliers.length - 1))
     const multiplier = multipliers[clampedSlot]
 
-    const ballId = Date.now()
-    let currentX = width / 2
+    const ballId = Date.now() + Math.random()
+    activeBallsRef.current++
+    let currentX = width / 2 + (Math.random() - 0.5) * 8 // slight offset for multi-ball
     let currentY = startY
 
+    // Animate through pegs — much faster: 4 frames per row, 10ms per frame
     for (let row = 0; row < plinkoRows; row++) {
       const pegsInRow = row + 3
       const pegSpacing = Math.min(35, (width - 60) / (pegsInRow - 1))
       const moveAmount = pegSpacing / 2
       const targetX = currentX + (path[row] === 0 ? -moveAmount : moveAmount)
       const targetY = startY + (row + 1) * rowHeight
-      for (let frame = 0; frame < 8; frame++) {
-        currentX += (targetX - currentX) * 0.35
-        currentY += (targetY - currentY) * 0.35
-        setBalls([{ id: ballId, x: currentX, y: currentY, path, finalSlot: clampedSlot, multiplier }])
-        await new Promise(r => setTimeout(r, 25))
+      for (let frame = 0; frame < 4; frame++) {
+        currentX += (targetX - currentX) * 0.55
+        currentY += (targetY - currentY) * 0.55
+        const bx = currentX, by = currentY
+        setBalls(prev => {
+          const others = prev.filter(b => b.id !== ballId)
+          return [...others, { id: ballId, x: bx, y: by, path, finalSlot: clampedSlot, multiplier }]
+        })
+        await new Promise(r => setTimeout(r, 10))
       }
     }
 
+    // Settle into slot — 6 frames
     const slotWidth = (width - 20) / multipliers.length
     const finalX = 10 + clampedSlot * slotWidth + slotWidth / 2
-    for (let frame = 0; frame < 12; frame++) {
-      currentX += (finalX - currentX) * 0.25
-      currentY += (height - 45 - currentY) * 0.25
-      setBalls([{ id: ballId, x: currentX, y: currentY, path, finalSlot: clampedSlot, multiplier }])
-      await new Promise(r => setTimeout(r, 25))
+    for (let frame = 0; frame < 6; frame++) {
+      currentX += (finalX - currentX) * 0.4
+      currentY += (height - 45 - currentY) * 0.4
+      const bx = currentX, by = currentY
+      setBalls(prev => {
+        const others = prev.filter(b => b.id !== ballId)
+        return [...others, { id: ballId, x: bx, y: by, path, finalSlot: clampedSlot, multiplier }]
+      })
+      await new Promise(r => setTimeout(r, 10))
     }
 
     const payout = bet * multiplier
@@ -276,8 +288,12 @@ export default function PlinkoPage() {
     const won = multiplier >= 1
     if (won) toast.success(`${multiplier}x multiplier! Won $${payout.toFixed(2)}`)
     else toast.error(`${multiplier}x - Lost $${(bet - payout).toFixed(2)}`)
-    await new Promise(r => setTimeout(r, 800))
-    setBalls([]); setIsDropping(false)
+
+    // Remove this ball after brief pause
+    await new Promise(r => setTimeout(r, 400))
+    setBalls(prev => prev.filter(b => b.id !== ballId))
+    activeBallsRef.current--
+    if (activeBallsRef.current <= 0) { activeBallsRef.current = 0; setIsDropping(false) }
     return { won, profit }
   }, [betAmount, initialized, isPlacing, isAuthenticated, plinkoRows, plinkoRisk, multipliers, placeBet, generateBet, sessionStats])
 
@@ -313,10 +329,10 @@ export default function PlinkoPage() {
               onAutoBetStart={autoBetStart}
               onAutoBetStop={autoBetStop}
               actionButton={
-                <button onClick={() => dropBall()} disabled={isDropping || !initialized}
+                <button onClick={() => dropBall()} disabled={!initialized}
                   className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2
-                    ${isDropping || !initialized ? 'bg-surface cursor-not-allowed text-muted' : 'bg-gradient-to-r from-brand to-emerald-400 text-background-deep shadow-lg shadow-brand/30 hover:brightness-110'}`}>
-                  {isDropping ? <><RotateCcw className="w-4 h-4 animate-spin" />Dropping...</> : <><Sparkles className="w-4 h-4" />Drop Ball</>}
+                    ${!initialized ? 'bg-surface cursor-not-allowed text-muted' : 'bg-gradient-to-r from-brand to-emerald-400 text-background-deep shadow-lg shadow-brand/30 hover:brightness-110'}`}>
+                  {isDropping ? <><Sparkles className="w-4 h-4 animate-bounce" />Drop Ball</> : <><Sparkles className="w-4 h-4" />Drop Ball</>}
                 </button>
               }
             >

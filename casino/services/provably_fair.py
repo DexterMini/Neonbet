@@ -278,7 +278,7 @@ class ProvablyFairEngine:
         return Decimal(str(round(normalized * 100, precision)))
     
     @staticmethod
-    def crash_result(normalized: float, house_edge: float = 0.01) -> Decimal:
+    def crash_result(normalized: float, house_edge: float = 0.03) -> Decimal:
         """
         Convert normalized value to crash multiplier.
         
@@ -300,7 +300,7 @@ class ProvablyFairEngine:
         return Decimal(str(max(1.00, round(multiplier, 2))))
     
     @staticmethod
-    def limbo_result(normalized: float, house_edge: float = 0.01) -> Decimal:
+    def limbo_result(normalized: float, house_edge: float = 0.03) -> Decimal:
         """
         Convert normalized value to limbo multiplier.
         
@@ -437,7 +437,7 @@ def verify_bet(
     if game_type == "dice":
         result = round(normalized * 100, 2)
     elif game_type == "crash" or game_type == "limbo":
-        result = max(1.00, round((1 / (1 - normalized)) * 0.99, 2))
+        result = max(1.00, round((1 / (1 - normalized)) * 0.97, 2))
     elif game_type == "wheel":
         result = int(normalized * 50) % 50
     else:

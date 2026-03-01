@@ -22,9 +22,11 @@ const DIFFICULTY_PRESETS = [
 
 const getMultiplier = (lanes: number, row: number): number => {
   if (row === 0) return 1
-  const edge = 0.99
+  const edge = 0.97
+  // Correct formula: payout = (lanes / (lanes - 1)) * edge per row
+  // P(safe) = (lanes-1)/lanes, so fair payout = lanes/(lanes-1)
   let mult = 1
-  for (let i = 0; i < row; i++) mult *= lanes * edge
+  for (let i = 0; i < row; i++) mult *= (lanes / (lanes - 1)) * edge
   return parseFloat(mult.toFixed(2))
 }
 

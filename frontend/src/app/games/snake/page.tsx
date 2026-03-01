@@ -44,8 +44,8 @@ const DIR_DELTA: Record<Dir, Pos> = {
 const OPPOSITE: Record<Dir, Dir> = { UP: 'DOWN', DOWN: 'UP', LEFT: 'RIGHT', RIGHT: 'LEFT' }
 
 const MULTIPLIER_TABLE = [
-  0, 0, 0, 1.05, 1.15, 1.3, 1.5, 1.8, 2.2, 2.8, 3.5,
-  4.5, 6, 8, 11, 15, 20, 28, 40, 55, 75, 100,
+  0, 0, 0, 1.02, 1.12, 1.26, 1.45, 1.74, 2.13, 2.71, 3.39,
+  4.36, 5.81, 7.75, 10.65, 14.53, 19.37, 27.12, 38.76, 53.27, 72.63, 96.84,
 ]
 
 const getSnakeMultiplier = (gems: number): number => {
@@ -83,11 +83,13 @@ export default function SnakePage() {
   const [snake, setSnake] = useState<Pos[]>([{ r: 7, c: 7 }])
   const [dir, setDir] = useState<Dir>('RIGHT')
   const [gem, setGem] = useState<Pos>({ r: 3, c: 10 })
+  const [bombs, setBombs] = useState<Pos[]>([])
   const [history, setHistory] = useState<number[]>([])
 
   const dirRef = useRef<Dir>('RIGHT')
   const snakeRef = useRef<Pos[]>([{ r: 7, c: 7 }])
   const gemRef = useRef<Pos>({ r: 3, c: 10 })
+  const bombsRef = useRef<Pos[]>([])
   const scoreRef = useRef(0)
   const gameActiveRef = useRef(false)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -148,6 +150,26 @@ export default function SnakePage() {
     ctx.closePath()
     ctx.fill()
     ctx.shadowBlur = 0
+
+    // Bombs (skulls)
+    const bs = bombsRef.current
+    bs.forEach(b => {
+      const bx = b.c * CELL_SIZE + CELL_SIZE / 2
+      const by = b.r * CELL_SIZE + CELL_SIZE / 2
+      const bombGlow = ctx.createRadialGradient(bx, by, 0, bx, by, CELL_SIZE)
+      bombGlow.addColorStop(0, 'rgba(248, 113, 113, 0.2)')
+      bombGlow.addColorStop(1, 'rgba(248, 113, 113, 0)')
+      ctx.fillStyle = bombGlow
+      ctx.fillRect(b.c * CELL_SIZE - CELL_SIZE / 2, b.r * CELL_SIZE - CELL_SIZE / 2, CELL_SIZE * 2, CELL_SIZE * 2)
+      ctx.shadowColor = '#F87171'
+      ctx.shadowBlur = 10
+      ctx.fillStyle = '#F87171'
+      ctx.font = `${CELL_SIZE * 0.6}px sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('X', bx, by + 1)
+      ctx.shadowBlur = 0
+    })
 
     // Snake
     const s = snakeRef.current
@@ -220,6 +242,13 @@ export default function SnakePage() {
       toast.error('Hit yourself! Game over.'); return
     }
 
+    // Bomb collision
+    if (bombsRef.current.some(b => b.r === newHead.r && b.c === newHead.c)) {
+      gameActiveRef.current = false; setGameActive(false); setGameOver(true); draw()
+      sessionStats.recordBet(false, parseFloat(betAmount), -parseFloat(betAmount), 0)
+      toast.error('Hit a bomb! Game over.'); return
+    }
+
     s.unshift(newHead)
     const g = gemRef.current
     if (newHead.r === g.r && newHead.c === g.c) {
@@ -229,6 +258,23 @@ export default function SnakePage() {
       const rv = idx < randoms.length ? randoms[idx] : Math.random()
       gemRandomIdxRef.current = idx + 1
       const newGem = placeGemFromFloat(s, null, rv); gemRef.current = newGem; setGem(newGem)
+
+      // Spawn bombs after score >= 3 for house edge (more bombs as score increases)
+      if (scoreRef.current >= 3) {
+        const numBombs = scoreRef.current >= 10 ? 2 : 1
+        const newBombs: Pos[] = [...bombsRef.current]
+        for (let b = 0; b < numBombs; b++) {
+          const bidx = gemRandomIdxRef.current
+          const brv = bidx < randoms.length ? randoms[bidx] : Math.random()
+          gemRandomIdxRef.current = bidx + 1
+          const occupied = new Set([...s.map(seg => `${seg.r},${seg.c}`), `${newGem.r},${newGem.c}`, ...newBombs.map(bb => `${bb.r},${bb.c}`)])
+          const avail: Pos[] = []
+          for (let r = 0; r < GRID_ROWS; r++) for (let c = 0; c < GRID_COLS; c++) if (!occupied.has(`${r},${c}`)) avail.push({ r, c })
+          if (avail.length > 0) newBombs.push(avail[Math.floor(brv * avail.length)])
+        }
+        // Keep max 8 bombs, remove oldest if exceeding
+        bombsRef.current = newBombs.slice(-8); setBombs([...bombsRef.current])
+      }
     } else { s.pop() }
 
     snakeRef.current = s; setSnake([...s]); draw()
@@ -270,8 +316,8 @@ export default function SnakePage() {
 
       const startSnake: Pos[] = [{ r: 7, c: 7 }]
       const startGem = placeGemFromFloat(startSnake, null, randoms[0])
-      snakeRef.current = startSnake; gemRef.current = startGem; dirRef.current = 'RIGHT'; scoreRef.current = 0; gameActiveRef.current = true
-      setSnake(startSnake); setGem(startGem); setDir('RIGHT'); setScore(0)
+      snakeRef.current = startSnake; gemRef.current = startGem; dirRef.current = 'RIGHT'; scoreRef.current = 0; gameActiveRef.current = true; bombsRef.current = []
+      setSnake(startSnake); setGem(startGem); setDir('RIGHT'); setScore(0); setBombs([])
       setGameOver(false); setCashedOut(false); setGameActive(true); draw()
     } catch (err: any) { toast.error(err?.message || 'Error starting game') }
   }

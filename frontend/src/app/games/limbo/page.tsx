@@ -49,8 +49,8 @@ export default function LimboPage() {
   const [history, setHistory] = useState<{ value: number; won: boolean }[]>([])
   const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
 
-  const winChance = new Decimal(99).div(limboTarget).toDecimalPlaces(2).toNumber()
-  const multiplier = new Decimal(99).div(100).mul(limboTarget).toDecimalPlaces(4).toNumber()
+  const winChance = new Decimal(97).div(limboTarget).toDecimalPlaces(2).toNumber()
+  const multiplier = new Decimal(97).div(100).mul(limboTarget).toDecimalPlaces(4).toNumber()
   const potentialProfit = parseFloat(betAmount) * multiplier - parseFloat(betAmount)
 
   const handlePlay = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {

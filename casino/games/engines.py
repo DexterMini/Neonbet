@@ -34,7 +34,7 @@ class BaseGame(ABC):
     """Base class for all games"""
     
     game_type: str
-    house_edge: Decimal = Decimal("0.01")  # 1% default
+    house_edge: Decimal = Decimal("0.03")  # 3% default
     min_bet: Decimal = Decimal("0.10")
     max_bet: Decimal = Decimal("10000")
     

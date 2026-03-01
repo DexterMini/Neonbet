@@ -169,7 +169,7 @@ export default function KenoPage() {
         drawnResult = result as number[]
         hits = selectedNumbers.filter(n => drawnResult.includes(n)).length
         const payoutTable = payoutTables[riskLevel][selectedNumbers.length] || []
-        multiplier = payoutTable[hits] || 0
+        multiplier = parseFloat(((payoutTable[hits] || 0) * 0.98).toFixed(2)) // 3% house edge
       }
 
       for (let i = 0; i < drawnResult.length; i++) {

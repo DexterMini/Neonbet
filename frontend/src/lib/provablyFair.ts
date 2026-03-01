@@ -113,8 +113,8 @@ export async function generateCrashResult(
   const h = parseInt(hash.substring(0, 13), 16)
   const e = Math.pow(2, 52)
   
-  // House edge of 1%
-  const houseEdge = 0.99
+  // House edge of 3%
+  const houseEdge = 0.97
   
   // Calculate crash point
   const result = Math.floor((houseEdge * e) / (e - h))

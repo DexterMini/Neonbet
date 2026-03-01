@@ -55,7 +55,7 @@ export default function DicePage() {
   const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
 
   const winChance = rollOver ? 100 - target : target
-  const multiplier = parseFloat((99 / winChance).toFixed(4))
+    const multiplier = parseFloat((97 / winChance).toFixed(4))
   const potentialProfit = parseFloat(betAmount) * multiplier - parseFloat(betAmount)
   const isWin = rollResult !== null && showResult && (rollOver ? rollResult > target : rollResult < target)
 

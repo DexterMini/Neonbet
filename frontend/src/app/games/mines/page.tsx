@@ -19,7 +19,7 @@ const calcMultiplier = (numMines: number, revealed: number): number => {
   if (revealed === 0) return 1
   let prob = 1
   for (let i = 0; i < revealed; i++) prob *= (GRID_SIZE - numMines - i) / (GRID_SIZE - i)
-  return parseFloat((0.99 / prob).toFixed(4))
+  return parseFloat((0.97 / prob).toFixed(4))
 }
 
 /* ── Floating sparkle particles ───────────────────── */
