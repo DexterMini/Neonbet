@@ -7,7 +7,7 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useDemoBalance, formatDemoBalance } from '@/stores/demoBalanceStore'
 import { toast } from 'sonner'
 import { Bomb, Diamond, Sparkles, RotateCcw, RefreshCw, Shuffle } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
@@ -198,15 +198,13 @@ export default function MinesPage() {
             >
               {/* Demo Balance */}
               {!isAuthenticated && (
-                <div className="flex items-center justify-between bg-surface rounded-xl p-2.5 border border-border">
-                  <div>
-                    <div className="text-[10px] text-muted uppercase tracking-wider">Demo Balance</div>
-                    <div className="text-base font-bold text-white font-mono">${demoBalance.toFixed(2)}</div>
-                  </div>
+                <div className="flex items-center justify-between bg-surface/80 rounded-lg px-2.5 py-1.5 border border-border">
+                  <span className="text-[10px] text-muted uppercase tracking-wider">Demo</span>
+                  <span className="text-[12px] font-bold text-white font-mono">{formatDemoBalance(demoBalance)}</span>
                   {demoBalance < 1 && (
                     <button onClick={refill}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-brand/10 border border-brand/30 rounded-lg text-brand text-[11px] font-bold hover:bg-brand/20 transition-all">
-                      <RefreshCw className="w-3 h-3" />Refill
+                      className="flex items-center gap-1 px-2 py-1 bg-brand/10 border border-brand/30 rounded text-brand text-[10px] font-bold hover:bg-brand/20 transition-all">
+                      <RefreshCw className="w-2.5 h-2.5" />Refill
                     </button>
                   )}
                 </div>

@@ -12,6 +12,7 @@ import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/us
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { toast } from 'sonner'
 import { Dice1, ArrowLeftRight, TrendingUp, TrendingDown, RefreshCw, Percent } from 'lucide-react'
+import { useDemoBalance } from '@/stores/demoBalanceStore'
 
 /* ── Floating dice particles ──────────────────────── */
 const DICE_PARTICLE_COLORS = ['#a78bfa', '#8b5cf6', '#c4b5fd', '#7c3aed', '#6d28d9', '#ddd6fe']
@@ -43,6 +44,7 @@ export default function DicePage() {
   const { isAuthenticated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
+  const { balance: demoBalance, deduct, credit } = useDemoBalance()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [target, setTarget] = useState(50)
@@ -62,6 +64,8 @@ export default function DicePage() {
   const doRoll = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
     if (bet <= 0 || isNaN(bet) || !initialized) return { won: false, profit: -bet }
+    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return { won: false, profit: 0 } }
+    if (!isAuthenticated) deduct(bet)
     setIsRolling(true)
     setShowResult(false)
     try {
@@ -83,10 +87,13 @@ export default function DicePage() {
       const profit = won ? bet * multiplier - bet : -bet
       setHistory(prev => [{ value: generatedValue, won }, ...prev.slice(0, 19)])
       sessionStats.recordBet(won, bet, profit, won ? multiplier : 0)
-      if (won) toast.success(`Rolled ${generatedValue.toFixed(2)}! Won $${(bet * multiplier - bet).toFixed(2)}`)
-      else toast.error(`Rolled ${generatedValue.toFixed(2)} — Better luck next time!`)
+      if (won) {
+        if (!isAuthenticated) credit(bet * multiplier)
+        toast.success(`Rolled ${generatedValue.toFixed(2)}! Won $${(bet * multiplier - bet).toFixed(2)}`)
+      } else toast.error(`Rolled ${generatedValue.toFixed(2)} — Better luck next time!`)
       return { won, profit }
     } catch (err: any) {
+      if (!isAuthenticated) credit(bet)
       toast.error(err?.message || 'Error placing bet')
       return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
     } finally { setIsRolling(false) }

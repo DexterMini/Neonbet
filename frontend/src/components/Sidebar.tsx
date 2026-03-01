@@ -242,6 +242,10 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           <MessageCircle className="w-[18px] h-[18px] text-muted" />
           <span className="text-[13px] font-medium">Live Support</span>
         </a>
+        <div className="mt-2 px-3 py-2 text-center">
+          <span className="text-[10px] font-black tracking-[0.15em] text-brand/40 uppercase select-none">ONLyATneonBET</span>
+          <div className="text-[8px] text-white/10 font-mono mt-0.5">v1.0.0 &bull; demo</div>
+        </div>
       </div>
     </>
   )

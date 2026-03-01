@@ -10,6 +10,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { Shield, Sparkles, RotateCcw, ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Gem, Skull } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { toast } from 'sonner'
+import { useDemoBalance } from '@/stores/demoBalanceStore'
 
 /* ── Floating particles ───────────────────────────── */
 const SNAKE_PARTICLE_COLORS = ['#00E87B', '#34d399', '#22c55e', '#4ade80', '#059669', '#86efac']
@@ -71,6 +72,7 @@ export default function SnakePage() {
   const { isAuthenticated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
+  const { balance: demoBalance, deduct, credit } = useDemoBalance()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [mode, setMode] = useState<'manual' | 'auto'>('manual')
@@ -303,6 +305,9 @@ export default function SnakePage() {
 
   const startGame = async () => {
     if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
+    const bet = parseFloat(betAmount)
+    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return }
+    if (!isAuthenticated) deduct(bet)
     try {
       // Pre-generate provably fair random values for gem placements
       const PF_GEM_COUNT = 50
@@ -319,7 +324,7 @@ export default function SnakePage() {
       snakeRef.current = startSnake; gemRef.current = startGem; dirRef.current = 'RIGHT'; scoreRef.current = 0; gameActiveRef.current = true; bombsRef.current = []
       setSnake(startSnake); setGem(startGem); setDir('RIGHT'); setScore(0); setBombs([])
       setGameOver(false); setCashedOut(false); setGameActive(true); draw()
-    } catch (err: any) { toast.error(err?.message || 'Error starting game') }
+    } catch (err: any) { if (!isAuthenticated) credit(parseFloat(betAmount)); toast.error(err?.message || 'Error starting game') }
   }
 
   const cashout = () => {
@@ -329,6 +334,7 @@ export default function SnakePage() {
     setCashedOut(true); setGameActive(false)
     const mult = getSnakeMultiplier(score)
     const winAmount = (parseFloat(betAmount) * mult).toFixed(2)
+    if (!isAuthenticated) credit(parseFloat(betAmount) * mult)
     setHistory(prev => [mult, ...prev.slice(0, 9)])
     sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * mult - parseFloat(betAmount), mult)
     toast.success(`Cashed out $${winAmount}!`)

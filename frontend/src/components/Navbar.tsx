@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Search, Menu, Bell, User, LogOut, Settings, X, Wallet, ChevronDown, Zap, MessageCircle } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui'
@@ -29,6 +29,7 @@ const USD_PRICES: Record<string, number> = {
 
 export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter()
+  const pathname = usePathname()
   const { user, token, isAuthenticated, isHydrated, logout } = useAuthStore()
   const { toggle: toggleChat, isOpen: chatOpen, onlineCount } = useChatStore()
   const [wallet, setWallet] = useState<string | null>(null)
@@ -95,7 +96,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
 
   const displayName = user?.username || (wallet ? formatWallet(wallet) : null)
   const initials = user?.username?.slice(0, 2).toUpperCase() || wallet?.slice(2, 4).toUpperCase() || '??'
-  const isLoggedIn = isHydrated && (isAuthenticated || !!wallet)
+  const isLoggedIn = isHydrated && (isAuthenticated || !!wallet || !!user)
 
   return (
     <header className="sticky top-0 z-40 bg-background/90 backdrop-blur-xl border-b border-border/60">
@@ -119,12 +120,14 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
 
           {/* Desktop nav tabs */}
           <div className="hidden md:flex items-center gap-1 ml-1">
-            <button className="px-4 py-1.5 text-[13px] font-semibold text-brand bg-brand/10 rounded-lg border border-brand/20 transition-colors">
+            <Link href="/" className={cn(
+              'px-4 py-1.5 text-[13px] font-semibold rounded-lg border transition-colors',
+              pathname === '/' || pathname.startsWith('/games')
+                ? 'text-brand bg-brand/10 border-brand/20'
+                : 'text-muted-light hover:text-white border-transparent hover:bg-white/[0.04]'
+            )}>
               Casino
-            </button>
-            <button className="px-4 py-1.5 text-[13px] font-medium text-muted-light hover:text-white rounded-lg hover:bg-white/[0.04] transition-colors">
-              Sports
-            </button>
+            </Link>
           </div>
         </div>
 

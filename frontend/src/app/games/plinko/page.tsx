@@ -12,6 +12,7 @@ import { Circle, RotateCcw, TrendingUp, ChevronDown, Sparkles } from 'lucide-rea
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
+import { useDemoBalance } from '@/stores/demoBalanceStore'
 
 interface Ball { id: number; x: number; y: number; path: number[]; finalSlot: number; multiplier: number; done?: boolean }
 interface BetHistory { id: number; multiplier: number; payout: number; bet: number; risk: string; rows: number; timestamp: Date }
@@ -79,6 +80,7 @@ export default function PlinkoPage() {
   const { isAuthenticated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
+  const { balance: demoBalance, deduct, credit } = useDemoBalance()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [plinkoRows, setPlinkoRows] = useState<number>(12)
@@ -216,6 +218,8 @@ export default function PlinkoPage() {
   const dropBall = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
     if (!initialized || isPlacing || bet <= 0 || isNaN(bet)) return { won: false, profit: -bet }
+    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return { won: false, profit: 0 } }
+    if (!isAuthenticated) deduct(bet)
     setIsDropping(true); setLastResult(null)
 
     const canvas = canvasRef.current
@@ -233,7 +237,7 @@ export default function PlinkoPage() {
         const { result: pathResult } = await generateBet('plinko', { rows: plinkoRows })
         path = pathResult as number[]
       }
-    } catch (err: any) { toast.error(err?.message || 'Error placing bet'); setIsDropping(false); return { won: false, profit: -bet } }
+    } catch (err: any) { toast.error(err?.message || 'Error placing bet'); if (!isAuthenticated) credit(bet); setIsDropping(false); return { won: false, profit: -bet } }
 
     let position = 0
     path.forEach(dir => { position += dir === 0 ? -1 : 1 })
@@ -281,6 +285,7 @@ export default function PlinkoPage() {
 
     const payout = bet * multiplier
     const profit = payout - bet
+    if (!isAuthenticated) credit(payout)
     setLastResult({ multiplier, payout })
     setTotalProfit(prev => prev + profit)
     sessionStats.recordBet(multiplier >= 1, bet, profit, multiplier)

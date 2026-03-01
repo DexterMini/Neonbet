@@ -12,6 +12,7 @@ import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/us
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { toast } from 'sonner'
 import { Target, RefreshCw, TrendingUp, TrendingDown, Zap, Percent } from 'lucide-react'
+import { useDemoBalance } from '@/stores/demoBalanceStore'
 import Decimal from 'decimal.js'
 
 /* ── Floating particles ───────────────────────────── */
@@ -38,6 +39,7 @@ export default function LimboPage() {
   const { isAuthenticated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
+  const { balance: demoBalance, deduct, credit } = useDemoBalance()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [limboTarget, setLimboTarget] = useState(2)
@@ -56,6 +58,8 @@ export default function LimboPage() {
   const handlePlay = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
     if (bet <= 0 || isNaN(bet) || !initialized) return { won: false, profit: -bet }
+    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return { won: false, profit: 0 } }
+    if (!isAuthenticated) deduct(bet)
     setIsPlaying(true); setShowResult(false)
     try {
       let generatedMultiplier: number
@@ -71,12 +75,18 @@ export default function LimboPage() {
       const isWin = generatedMultiplier >= limboTarget
       setLastWin(isWin)
       const profit = isWin ? bet * multiplier - bet : -bet
+      if (isWin) credit(bet * multiplier)
       setHistory(prev => [{ value: generatedMultiplier, won: isWin }, ...prev.slice(0, 19)])
       sessionStats.recordBet(isWin, bet, profit, isWin ? generatedMultiplier : 0)
-      if (isWin) toast.success(`${generatedMultiplier.toFixed(2)}x! Won $${(bet * multiplier - bet).toFixed(2)}`)
-      else toast.error(`${generatedMultiplier.toFixed(2)}x — Try again!`)
+      if (isWin) {
+        toast.success(`${generatedMultiplier.toFixed(2)}x! Won $${(bet * multiplier - bet).toFixed(2)}`)
+      } else toast.error(`${generatedMultiplier.toFixed(2)}x — Try again!`)
       return { won: isWin, profit }
-    } catch (err: any) { toast.error(err?.message || 'Error placing bet'); return { won: false, profit: -(amount ?? parseFloat(betAmount)) } }
+    } catch (err: any) {
+      if (!isAuthenticated) credit(bet)
+      toast.error(err?.message || 'Error placing bet')
+      return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
+    }
     finally { setIsPlaying(false) }
   }, [betAmount, limboTarget, initialized, isAuthenticated, placeBet, generateBet, multiplier, sessionStats])
 

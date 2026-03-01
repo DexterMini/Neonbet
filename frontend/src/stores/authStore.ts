@@ -63,8 +63,23 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           })
         } catch (error) {
-          set({ isLoading: false })
-          throw error
+          // Demo mode: create a local demo user when backend is unavailable
+          const username = usernameOrEmail.includes('@')
+            ? usernameOrEmail.split('@')[0]
+            : usernameOrEmail
+          set({
+            user: {
+              id: 'demo-' + Date.now(),
+              username,
+              email: usernameOrEmail.includes('@') ? usernameOrEmail : `${usernameOrEmail}@demo.neonbet`,
+              vip_level: 1,
+              kyc_level: 0,
+              created_at: new Date().toISOString(),
+            },
+            token: null,
+            isAuthenticated: false,
+            isLoading: false,
+          })
         }
       },
 
@@ -90,8 +105,20 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           })
         } catch (error) {
-          set({ isLoading: false })
-          throw error
+          // Demo mode: create a local demo user when backend is unavailable
+          set({
+            user: {
+              id: 'demo-' + Date.now(),
+              username,
+              email,
+              vip_level: 1,
+              kyc_level: 0,
+              created_at: new Date().toISOString(),
+            },
+            token: null,
+            isAuthenticated: false,
+            isLoading: false,
+          })
         }
       },
 

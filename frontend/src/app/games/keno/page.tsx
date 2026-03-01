@@ -7,7 +7,7 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useDemoBalance, formatDemoBalance } from '@/stores/demoBalanceStore'
 import { toast } from 'sonner'
 import { Grid3X3, Shield, Sparkles, Zap, Trophy, X, RotateCcw, Play, RefreshCw, Gem } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
@@ -251,15 +251,13 @@ export default function KenoPage() {
             >
               {/* Demo Balance */}
               {!isAuthenticated && (
-                <div className="flex items-center justify-between bg-surface/80 rounded-xl p-2 border border-border">
-                  <div>
-                    <div className="text-[10px] text-muted uppercase tracking-wider">Demo Balance</div>
-                    <div className="text-sm font-bold text-white font-mono">${demoBalance.toFixed(2)}</div>
-                  </div>
+                <div className="flex items-center justify-between bg-surface/80 rounded-lg px-2.5 py-1.5 border border-border">
+                  <span className="text-[10px] text-muted uppercase tracking-wider">Demo</span>
+                  <span className="text-[12px] font-bold text-white font-mono">{formatDemoBalance(demoBalance)}</span>
                   {demoBalance < 1 && (
                     <button onClick={refill}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[rgba(0,210,190,0.1)] border border-[rgba(0,210,190,0.3)] rounded-lg text-[rgb(0,210,190)] text-[11px] font-bold hover:bg-[rgba(0,210,190,0.2)] transition-all">
-                      <RefreshCw className="w-3 h-3" />Refill
+                      className="flex items-center gap-1 px-2 py-1 bg-[rgba(0,210,190,0.1)] border border-[rgba(0,210,190,0.3)] rounded text-[rgb(0,210,190)] text-[10px] font-bold hover:bg-[rgba(0,210,190,0.2)] transition-all">
+                      <RefreshCw className="w-2.5 h-2.5" />Refill
                     </button>
                   )}
                 </div>

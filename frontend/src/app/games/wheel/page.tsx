@@ -12,6 +12,7 @@ import { CircleDot, RefreshCw, Shield, Zap, TrendingUp, Sparkles } from 'lucide-
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
+import { useDemoBalance } from '@/stores/demoBalanceStore'
 
 interface WheelSegment {
   value: number
@@ -540,11 +541,11 @@ export default function WheelPage() {
   const { isAuthenticated } = useAuthStore()
   const { placeBet, isPlacing, fetchBalances, balances, balancesLoaded } = useGameStore()
   const sessionStats = useSessionStats()
+  const { balance: demoBalance, deduct, credit } = useDemoBalance()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [wheelSegments, setWheelSegments] = useState(10)
   const [riskLevel, setRiskLevel] = useState<RiskLevel>('medium')
-  const [demoBalance, setDemoBalance] = useState(1000.00)
   const [isSpinning, setIsSpinning] = useState(false)
   const [rotation, setRotation] = useState(0)
   const [result, setResult] = useState<WheelSegment | null>(null)
@@ -695,7 +696,7 @@ export default function WheelPage() {
 
     setIsSpinning(true)
     setShowResult(false)
-    if (!isAuthenticated) setDemoBalance(prev => prev - bet)
+    if (!isAuthenticated) deduct(bet)
 
     let resultSegment: WheelSegment
     let resultIdx: number
@@ -712,7 +713,7 @@ export default function WheelPage() {
       }
     } catch (err: any) {
       toast.error(err?.message || 'Error placing bet')
-      if (!isAuthenticated) setDemoBalance(prev => prev + bet)
+      if (!isAuthenticated) credit(bet)
       setIsSpinning(false)
       return { won: false, profit: -bet }
     }
@@ -741,15 +742,13 @@ export default function WheelPage() {
           setShowResult(true)
           setIsSpinning(false)
 
-          // Apply 3% house edge (segment tables were designed for ~1%)
-          const effectiveValue = parseFloat((resultSegment.value * 0.98).toFixed(2))
-          const payout = bet * effectiveValue
-          const won = effectiveValue > 0
+          const payout = bet * resultSegment.value
+          const won = resultSegment.value > 0
           const profit = won ? payout - bet : -bet
           if (won) {
-            if (!isAuthenticated) setDemoBalance(prev => prev + payout)
-            sessionStats.recordBet(true, bet, payout - bet, effectiveValue)
-            toast.success(`${effectiveValue}x! Won $${payout.toFixed(2)}`)
+            if (!isAuthenticated) credit(payout)
+            sessionStats.recordBet(true, bet, payout - bet, resultSegment.value)
+            toast.success(`${resultSegment.value}x! Won $${payout.toFixed(2)}`)
           } else {
             sessionStats.recordBet(false, bet, -bet, 0)
             toast.error(`0x - Lost $${bet.toFixed(2)}`)

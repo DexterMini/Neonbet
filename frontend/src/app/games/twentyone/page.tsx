@@ -12,6 +12,7 @@ import { Shield, Sparkles, RotateCcw, Spade } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
+import { useDemoBalance } from '@/stores/demoBalanceStore'
 
 /* ── Floating particles ───────────────────────────── */
 const CARD_PARTICLE_COLORS = ['#ef4444', '#f87171', '#fca5a5', '#dc2626', '#b91c1c', '#fecaca']
@@ -97,6 +98,7 @@ export default function TwentyOnePage() {
   const { isAuthenticated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
+  const { balance: demoBalance, deduct, credit } = useDemoBalance()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [numCards, setNumCards] = useState(2)
@@ -138,6 +140,8 @@ export default function TwentyOnePage() {
     const bet = amount ?? parseFloat(betAmount)
     if (bet <= 0) { toast.error('Enter a valid bet'); return { won: false, profit: 0 } }
     if (!initialized && !isAuthenticated) { toast.error('Not initialized'); return { won: false, profit: 0 } }
+    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return { won: false, profit: 0 } }
+    if (!isAuthenticated) deduct(bet)
 
     setCards([]); setTotal(0); setWinMultiplier(0); setGameState('revealing')
 
@@ -157,6 +161,7 @@ export default function TwentyOnePage() {
           setGameState('finished')
           const profit = won ? bet * mult - bet : -bet
           if (won) {
+            if (!isAuthenticated) credit(bet * mult)
             sessionStats.recordBet(true, bet, bet * mult - bet, mult)
             toast.success(`${handTotal}! Won $${(bet * mult - bet).toFixed(2)} (${fmtMult(mult)})`)
           } else if (handTotal > 21) {
@@ -171,6 +176,7 @@ export default function TwentyOnePage() {
       })
     } catch {
       toast.error('Failed to place bet')
+      if (!isAuthenticated) credit(bet)
       setGameState('betting')
       return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
     }
