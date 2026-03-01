@@ -229,68 +229,90 @@ export default function KenoPage() {
               onAutoBetStop={autoBetStop}
               actionButton={
                 <button onClick={() => handlePlay()} disabled={isPlaying || selectedNumbers.length === 0 || !initialized}
-                  className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2
-                    ${isPlaying || selectedNumbers.length === 0
-                      ? 'bg-surface cursor-not-allowed text-muted'
-                      : 'bg-gradient-to-r from-cyan-500 to-teal-400 text-background-deep shadow-lg shadow-cyan-500/30 hover:brightness-110'}`}>
+                  className="w-full py-3.5 rounded-xl font-bold text-[14px] transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed"
+                  style={isPlaying || selectedNumbers.length === 0 ? {
+                    background: 'rgba(255,255,255,0.04)',
+                    color: 'rgba(255,255,255,0.3)',
+                  } : {
+                    background: 'linear-gradient(135deg, rgb(0,210,190) 0%, rgb(0,180,160) 100%)',
+                    color: '#0A0B0F',
+                    boxShadow: '0 4px 20px rgba(0,210,190,0.3), 0 0 0 1px rgba(0,210,190,0.1)',
+                  }}>
                   {isPlaying ? <><RotateCcw className="w-4 h-4 animate-spin" />Drawing...</> : <><Play className="w-4 h-4" />Play Keno</>}
                 </button>
               }
             >
               {/* Risk Level */}
               <div>
-                <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">Risk Level</span>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {(['low', 'classic', 'medium', 'high'] as RiskLevel[]).map(risk => (
-                    <button key={risk} onClick={() => setRiskLevel(risk)} disabled={isPlaying}
-                      className={`py-2 rounded-xl text-[12px] font-bold capitalize transition-all border disabled:opacity-50
-                        ${riskLevel === risk
-                          ? risk === 'low' ? 'bg-brand/15 border-brand/40 text-brand'
-                            : risk === 'classic' ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-400'
-                            : risk === 'medium' ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
-                            : 'bg-red-500/15 border-red-500/40 text-red-400'
-                          : 'bg-surface border-border text-muted hover:text-white'}`}>
-                      {risk}
-                    </button>
-                  ))}
+                <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-2">Risk Level</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['low', 'classic', 'medium', 'high'] as RiskLevel[]).map(risk => {
+                    const isActive = riskLevel === risk
+                    return (
+                      <button key={risk} onClick={() => setRiskLevel(risk)} disabled={isPlaying}
+                        className={`relative py-2.5 rounded-xl text-[13px] font-bold capitalize transition-all duration-200 disabled:opacity-40
+                          ${isActive
+                            ? 'text-white shadow-lg'
+                            : 'bg-surface/80 text-muted-light hover:text-white border border-border hover:border-white/15'
+                          }`}
+                        style={isActive ? {
+                          background: 'linear-gradient(135deg, rgba(0,210,190,0.25) 0%, rgba(0,180,160,0.15) 100%)',
+                          border: '1.5px solid rgba(0,210,190,0.5)',
+                          boxShadow: '0 0 20px rgba(0,210,190,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
+                        } : {}}>
+                        {risk}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
               {/* Quick Actions */}
-              <div className="flex gap-1.5">
+              <div className="flex gap-2">
                 <button onClick={handleQuickPick} disabled={isPlaying}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-surface border border-border rounded-xl text-[11px] font-semibold text-muted hover:text-white hover:border-cyan-400/40 transition-all disabled:opacity-50">
-                  <Sparkles className="w-3 h-3" />Quick Pick
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-surface/80 border border-border rounded-xl text-[12px] font-semibold text-muted-light hover:text-white hover:border-white/15 transition-all duration-200 disabled:opacity-40 group">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-400/70 group-hover:text-cyan-400 transition-colors" />Quick Pick
                 </button>
                 <button onClick={handleClearSelection} disabled={isPlaying || selectedNumbers.length === 0}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-surface border border-border rounded-xl text-[11px] font-semibold text-muted hover:text-white hover:border-red-400/40 transition-all disabled:opacity-50">
-                  <X className="w-3 h-3" />Clear
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-surface/80 border border-border rounded-xl text-[12px] font-semibold text-muted-light hover:text-white hover:border-red-400/30 transition-all duration-200 disabled:opacity-40 group">
+                  <X className="w-3.5 h-3.5 text-muted group-hover:text-red-400 transition-colors" />Clear
                 </button>
               </div>
 
-              {/* Picks info */}
+              {/* Picks / Hits */}
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-surface rounded-xl p-2.5 border border-border">
-                  <div className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Picks</div>
-                  <div className="text-base font-bold text-cyan-400 font-mono">{selectedNumbers.length}/{MAX_PICKS}</div>
+                <div className="bg-surface/80 rounded-xl p-3 border border-border">
+                  <div className="text-[10px] text-muted uppercase tracking-wider font-semibold mb-1">Picks</div>
+                  <div className="text-xl font-black font-mono tracking-tight" style={{ color: 'rgb(0,210,190)' }}>
+                    {selectedNumbers.length}<span className="text-muted text-sm font-semibold">/{MAX_PICKS}</span>
+                  </div>
                 </div>
-                <div className="bg-surface rounded-xl p-2.5 border border-border">
-                  <div className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Hits</div>
-                  <div className="text-base font-bold text-amber-400 font-mono">{gameEnded ? matches : '-'}</div>
+                <div className="bg-surface/80 rounded-xl p-3 border border-border">
+                  <div className="text-[10px] text-muted uppercase tracking-wider font-semibold mb-1">Hits</div>
+                  <div className="text-xl font-black font-mono tracking-tight text-amber-400">
+                    {gameEnded ? matches : <span className="text-muted">-</span>}
+                  </div>
                 </div>
               </div>
 
               {/* Payout Table */}
               {selectedNumbers.length > 0 && (
                 <div>
-                  <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">Payouts ({selectedNumbers.length} picks)</span>
-                  <div className="bg-surface rounded-xl border border-border p-2 max-h-32 overflow-y-auto scrollbar-thin">
-                    <div className="space-y-0.5">
+                  <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-2">Payouts ({selectedNumbers.length} picks)</span>
+                  <div className="bg-surface/80 rounded-xl border border-border overflow-hidden">
+                    <div className="max-h-36 overflow-y-auto scrollbar-thin">
                       {potentialPayouts.map(({ hits, multiplier, payout }) => (
-                        <div key={hits} className={`flex items-center justify-between px-2 py-1 rounded-lg text-[11px]
-                          ${gameEnded && matches === hits ? 'bg-cyan-400/15 text-cyan-400' : ''}`}>
-                          <span className="text-muted">{hits} hit{hits !== 1 ? 's' : ''}</span>
-                          <span className={`font-mono font-bold ${multiplier > 0 ? 'text-cyan-400' : 'text-muted/50'}`}>{multiplier}×</span>
+                        <div key={hits} className={`flex items-center justify-between px-3 py-1.5 text-[12px] border-b border-border/30 last:border-0 transition-colors
+                          ${gameEnded && matches === hits ? 'bg-[rgba(0,210,190,0.1)]' : 'hover:bg-white/[0.02]'}`}>
+                          <span className={`${gameEnded && matches === hits ? 'text-white font-semibold' : 'text-muted-light'}`}>
+                            {hits} hit{hits !== 1 ? 's' : ''}
+                          </span>
+                          <span className={`font-mono font-bold ${
+                            gameEnded && matches === hits ? 'text-white' :
+                            multiplier > 0 ? 'text-[rgb(0,210,190)]' : 'text-muted/40'
+                          }`}>
+                            {multiplier > 0 ? `${multiplier}×` : '—'}
+                          </span>
                         </div>
                       ))}
                     </div>
