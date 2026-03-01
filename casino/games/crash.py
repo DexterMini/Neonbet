@@ -59,7 +59,7 @@ class CrashEngine:
     - Players must cash out before crash to win
     """
     
-    house_edge: Decimal = Decimal("0.03")  # 3% house edge
+    house_edge: Decimal = Decimal("0.01")  # 1% house edge
     min_crash: Decimal = Decimal("1.01")
     max_crash: Decimal = Decimal("1000000")
     tick_rate: float = 0.1  # Multiplier update rate in seconds

@@ -22,7 +22,7 @@ const DIFFICULTY_PRESETS = [
 
 const getMultiplier = (lanes: number, row: number): number => {
   if (row === 0) return 1
-  const edge = 0.97
+  const edge = 0.99
   let mult = 1
   for (let i = 0; i < row; i++) mult *= lanes * edge
   return parseFloat(mult.toFixed(2))

@@ -48,12 +48,12 @@ export async function hmacSha256(key: string, message: string): Promise<string> 
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-// Convert hex to a float between 0 and 1
+// Convert hex to a float between 0 (inclusive) and 1 (exclusive)
 export function hexToFloat(hex: string): number {
   // Use first 8 characters (32 bits) of hex
   const int = parseInt(hex.substring(0, 8), 16)
-  // Divide by max 32-bit value to get float 0-1
-  return int / 0xFFFFFFFF
+  // Divide by 2^32 to get float [0, 1)
+  return int / 0x100000000
 }
 
 // Generate a provably fair result
@@ -170,11 +170,9 @@ export async function generateLimboResult(
 ): Promise<number> {
   const { float } = await generateResult(serverSeed, clientSeed, nonce)
   
-  // House edge 1%
-  const houseEdge = 0.99
-  
   // Generate multiplier with exponential distribution
-  const result = houseEdge / (1 - float)
+  // The 1% edge is applied in the display multiplier (0.99 * target), not here
+  const result = 1 / (1 - float)
   return Math.max(1, parseFloat(result.toFixed(2)))
 }
 
