@@ -22,27 +22,37 @@ import {
 } from 'lucide-react'
 
 /* ------------------------------------------------------------------ */
-/* Premium Game Card Visuals (CSS-only game art)                       */
+/* Premium Game Card Visuals — BOLD, eye-catching game art             */
 /* ------------------------------------------------------------------ */
 
 function CrashVisual() {
   return (
     <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute bottom-[20%] left-[15%] w-[70%] h-[2px] bg-gradient-to-r from-transparent via-white/40 to-white/80 rounded-full rotate-[-35deg] origin-left" />
-      <div className="absolute bottom-[22%] left-[16%] w-[60%] h-[1px] bg-gradient-to-r from-transparent via-emerald-400/30 to-emerald-400/60 rounded-full rotate-[-35deg] origin-left" />
-      <div className="absolute top-[22%] right-[18%]">
-        <div className="w-10 h-10 relative">
-          <div className="absolute inset-0 bg-white/90 rounded-full shadow-[0_0_30px_rgba(255,255,255,0.4)]" style={{clipPath: 'polygon(50% 0%, 85% 70%, 50% 55%, 15% 70%)'}} />
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-6 bg-gradient-to-b from-orange-400 to-transparent rounded-b-full opacity-80" />
-        </div>
+      {/* Large graph line shooting up */}
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 260" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="crashLine" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0%" stopColor="#10b981" stopOpacity="0" />
+            <stop offset="30%" stopColor="#10b981" stopOpacity="0.6" />
+            <stop offset="100%" stopColor="#ffffff" stopOpacity="1" />
+          </linearGradient>
+          <linearGradient id="crashFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10b981" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d="M 0 220 Q 40 210 80 180 Q 120 140 140 80 Q 155 30 170 15" fill="none" stroke="url(#crashLine)" strokeWidth="3.5" strokeLinecap="round" />
+        <path d="M 0 220 Q 40 210 80 180 Q 120 140 140 80 Q 155 30 170 15 L 170 260 L 0 260 Z" fill="url(#crashFill)" />
+      </svg>
+      {/* Rocket at tip */}
+      <div className="absolute top-[8%] right-[12%] text-4xl drop-shadow-[0_0_20px_rgba(255,255,255,0.6)]">🚀</div>
+      {/* Big multiplier */}
+      <div className="absolute bottom-[30%] left-1/2 -translate-x-1/2">
+        <span className="text-4xl sm:text-5xl font-black text-white/25 font-mono tracking-tighter select-none">2.4x</span>
       </div>
-      <div className="absolute bottom-[28%] left-1/2 -translate-x-1/2">
-        <span className="text-3xl font-black text-white/20 font-mono tracking-tighter">1.00x</span>
-      </div>
-      {[...Array(5)].map((_, i) => (
-        <div key={i} className="absolute w-1 h-1 bg-white/30 rounded-full" style={{
-          top: `${15 + i * 15}%`, left: `${10 + i * 18}%`,
-        }} />
+      {/* Stars */}
+      {[{t:15,l:12},{t:30,l:75},{t:50,l:20},{t:10,l:55}].map((s,i) => (
+        <div key={i} className="absolute w-1.5 h-1.5 bg-white/50 rounded-full" style={{top:`${s.t}%`,left:`${s.l}%`}} />
       ))}
     </div>
   )
@@ -50,22 +60,25 @@ function CrashVisual() {
 
 function MinesVisual() {
   return (
-    <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 grid grid-cols-3 gap-1.5 rotate-[8deg] scale-110">
-        {[0,1,2,3,4,5,6,7,8].map(i => (
-          <div key={i} className={cn(
-            "w-8 h-8 rounded-md",
-            i === 4 ? "bg-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.4)]" :
-            i === 1 || i === 6 || i === 8 ? "bg-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.2)]" :
-            "bg-white/10"
-          )}>
-            {i === 4 && <div className="w-full h-full flex items-center justify-center text-red-300 text-lg font-bold">*</div>}
-            {(i === 1 || i === 6 || i === 8) && <div className="w-full h-full flex items-center justify-center text-emerald-300 text-xs">&#9670;</div>}
-          </div>
-        ))}
-      </div>
-      <div className="absolute top-[15%] right-[15%] w-6 h-6">
-        <div className="w-full h-full bg-gradient-to-br from-cyan-300/40 to-cyan-500/20 rotate-45 rounded-sm" />
+    <div className="absolute inset-0 overflow-hidden flex items-center justify-center">
+      {/* Large 3x3 mine field */}
+      <div className="grid grid-cols-3 gap-2 rotate-[6deg] scale-[1.3]">
+        {[0,1,2,3,4,5,6,7,8].map(i => {
+          const isBomb = i === 4
+          const isGem = [1, 5, 7].includes(i)
+          const isRevealed = isBomb || isGem
+          return (
+            <div key={i} className={cn(
+              "w-10 h-10 rounded-lg flex items-center justify-center text-xl",
+              isBomb ? "bg-red-500/50 shadow-[0_0_25px_rgba(239,68,68,0.5)] border border-red-400/40" :
+              isGem ? "bg-emerald-500/40 shadow-[0_0_20px_rgba(16,185,129,0.4)] border border-emerald-400/30" :
+              "bg-white/10 border border-white/10"
+            )}>
+              {isBomb && <span className="drop-shadow-lg">💣</span>}
+              {isGem && <span className="drop-shadow-lg">💎</span>}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -73,22 +86,28 @@ function MinesVisual() {
 
 function DiceVisual() {
   return (
-    <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%]">
-        <div className="w-16 h-16 bg-white/15 rounded-xl rotate-[15deg] shadow-[0_0_40px_rgba(255,255,255,0.1)] backdrop-blur-sm border border-white/20">
-          <div className="grid grid-cols-3 grid-rows-3 gap-1 p-2.5 h-full">
-            {[0,1,0,1,0,1,0,1,0].map((dot, i) => (
-              <div key={i} className={cn("rounded-full", dot ? "bg-white/80" : "")} />
+    <div className="absolute inset-0 overflow-hidden flex items-center justify-center">
+      {/* Large 3D dice */}
+      <div className="relative">
+        <div className="w-20 h-20 bg-white/20 rounded-2xl rotate-[18deg] shadow-[0_8px_40px_rgba(255,255,255,0.15)] border-2 border-white/30 backdrop-blur-sm">
+          <div className="grid grid-cols-3 grid-rows-3 gap-1.5 p-3 h-full">
+            {[1,0,0,0,1,0,0,0,1].map((dot, i) => (
+              <div key={i} className={cn("rounded-full transition-all", dot ? "bg-white/90 shadow-[0_0_8px_rgba(255,255,255,0.5)]" : "")} />
+            ))}
+          </div>
+        </div>
+        {/* Second dice behind */}
+        <div className="absolute -top-4 -right-6 w-14 h-14 bg-white/10 rounded-xl rotate-[-15deg] border border-white/15">
+          <div className="grid grid-cols-2 gap-1.5 p-2.5 h-full">
+            {[1,0,0,1].map((dot, i) => (
+              <div key={i} className={cn("rounded-full", dot ? "bg-white/60" : "")} />
             ))}
           </div>
         </div>
       </div>
-      <div className="absolute top-[25%] right-[20%] w-10 h-10 bg-white/8 rounded-lg rotate-[-20deg] border border-white/10">
-        <div className="grid grid-cols-2 gap-1 p-1.5 h-full">
-          {[1,0,0,1].map((dot, i) => (
-            <div key={i} className={cn("rounded-full", dot ? "bg-white/50" : "")} />
-          ))}
-        </div>
+      {/* Slider bar */}
+      <div className="absolute bottom-[18%] left-[10%] right-[10%] h-2 bg-white/10 rounded-full overflow-hidden">
+        <div className="h-full w-[65%] bg-gradient-to-r from-red-500 via-yellow-500 to-emerald-500 rounded-full" />
       </div>
     </div>
   )
@@ -97,17 +116,20 @@ function DiceVisual() {
 function PlinkoVisual() {
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {[0,1,2,3,4].map(row => (
-        <div key={row} className="absolute flex justify-center gap-3" style={{ top: `${20 + row * 15}%`, left: '50%', transform: 'translateX(-50%)' }}>
+      {/* Peg rows */}
+      {[0,1,2,3,4,5].map(row => (
+        <div key={row} className="absolute flex justify-center" style={{ top: `${15 + row * 13}%`, left: '50%', transform: 'translateX(-50%)', gap: row < 3 ? '14px' : '10px' }}>
           {Array.from({ length: row + 3 }, (_, i) => (
-            <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/25" />
+            <div key={i} className="w-2 h-2 rounded-full bg-white/40 shadow-[0_0_6px_rgba(255,255,255,0.2)]" />
           ))}
         </div>
       ))}
-      <div className="absolute top-[30%] left-[48%] w-3 h-3 rounded-full bg-brand/80 shadow-[0_0_15px_rgba(0,232,123,0.5)]" />
-      <div className="absolute bottom-[12%] left-1/2 -translate-x-1/2 flex gap-1">
-        {['#ef4444','#f97316','#eab308','#22c55e','#eab308','#f97316','#ef4444'].map((c, i) => (
-          <div key={i} className="w-4 h-3 rounded-t-sm opacity-40" style={{ background: c }} />
+      {/* Bouncing ball */}
+      <div className="absolute top-[28%] left-[52%] w-4 h-4 rounded-full bg-brand shadow-[0_0_20px_rgba(0,232,123,0.7)] border border-white/40" />
+      {/* Color buckets at bottom */}
+      <div className="absolute bottom-[6%] left-1/2 -translate-x-1/2 flex gap-[3px]">
+        {['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#22c55e','#eab308','#f97316','#ef4444'].map((c, i) => (
+          <div key={i} className="w-5 h-6 rounded-t-md" style={{ background: c, opacity: 0.7 }} />
         ))}
       </div>
     </div>
@@ -117,12 +139,16 @@ function PlinkoVisual() {
 function LimboVisual() {
   return (
     <div className="absolute inset-0 overflow-hidden flex items-center justify-center">
+      {/* Giant multiplier number */}
       <div className="relative">
-        <span className="text-5xl font-black text-white/15 font-mono tracking-tighter">1.5x</span>
-        <div className="absolute inset-0 bg-gradient-to-t from-amber-500/20 to-transparent blur-xl" />
+        <span className="text-6xl sm:text-7xl font-black text-white/30 font-mono tracking-tighter select-none">1M</span>
+        <div className="absolute -inset-4 bg-gradient-to-t from-amber-500/30 to-transparent blur-2xl -z-10" />
       </div>
-      <div className="absolute top-[40%] left-[10%] right-[10%] h-[1px] bg-amber-400/30 border-dashed" />
-      <div className="absolute top-[40%] right-[12%] w-2 h-2 rounded-full bg-amber-400/50" />
+      {/* Target line */}
+      <div className="absolute top-[38%] left-[8%] right-[8%] h-[2px] border-t-2 border-dashed border-amber-400/50" />
+      <div className="absolute top-[36%] right-[10%] px-2 py-0.5 bg-amber-500/30 rounded text-[10px] font-bold text-amber-300 border border-amber-500/30">TARGET</div>
+      {/* Glow orb */}
+      <div className="absolute top-[20%] left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-amber-400/20 shadow-[0_0_40px_rgba(251,191,36,0.4)] blur-sm" />
     </div>
   )
 }
@@ -130,8 +156,9 @@ function LimboVisual() {
 function WheelVisual() {
   return (
     <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24">
-        <svg viewBox="0 0 100 100" className="w-full h-full rotate-[20deg]">
+      {/* Large wheel filling most of the card */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[45%] w-[85%] aspect-square">
+        <svg viewBox="0 0 100 100" className="w-full h-full rotate-[25deg] drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
           {[0,1,2,3,4,5,6,7].map(i => {
             const colors = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#06b6d4']
             const angle = i * 45
@@ -139,33 +166,42 @@ function WheelVisual() {
             const rad2 = ((angle + 45) * Math.PI) / 180
             return (
               <path key={i}
-                d={`M50,50 L${50 + 45 * Math.cos(rad)},${50 + 45 * Math.sin(rad)} A45,45 0 0,1 ${50 + 45 * Math.cos(rad2)},${50 + 45 * Math.sin(rad2)} Z`}
-                fill={colors[i]} opacity={0.4} />
+                d={`M50,50 L${50 + 48 * Math.cos(rad)},${50 + 48 * Math.sin(rad)} A48,48 0 0,1 ${50 + 48 * Math.cos(rad2)},${50 + 48 * Math.sin(rad2)} Z`}
+                fill={colors[i]} opacity={0.7} stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
             )
           })}
-          <circle cx="50" cy="50" r="8" fill="white" opacity={0.2} />
+          <circle cx="50" cy="50" r="10" fill="rgba(0,0,0,0.5)" stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
+          <circle cx="50" cy="50" r="4" fill="white" opacity={0.6} />
         </svg>
       </div>
-      <div className="absolute top-[14%] left-1/2 -translate-x-1/2 w-3 h-4 bg-white/50" style={{clipPath: 'polygon(50% 100%, 0 0, 100% 0)'}} />
+      {/* Pointer triangle */}
+      <div className="absolute top-[8%] left-1/2 -translate-x-1/2 w-4 h-5 bg-white/80 shadow-[0_4px_15px_rgba(255,255,255,0.4)]" style={{clipPath: 'polygon(50% 100%, 0 0, 100% 0)'}} />
     </div>
   )
 }
 
 function KenoVisual() {
   return (
-    <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 grid grid-cols-5 gap-1 rotate-[5deg] scale-90">
+    <div className="absolute inset-0 overflow-hidden flex items-center justify-center">
+      {/* Large keno grid */}
+      <div className="grid grid-cols-5 gap-[3px] rotate-[3deg] scale-[1.15]">
         {Array.from({ length: 25 }, (_, i) => {
           const hit = [2, 7, 11, 13, 18, 22].includes(i)
           return (
             <div key={i} className={cn(
-              "w-5 h-5 rounded text-[8px] font-bold flex items-center justify-center",
-              hit ? "bg-brand/40 text-brand shadow-[0_0_8px_rgba(0,232,123,0.3)]" : "bg-white/8 text-white/20"
+              "w-6 h-6 rounded-md text-[8px] font-extrabold flex items-center justify-center",
+              hit
+                ? "bg-brand/60 text-white shadow-[0_0_12px_rgba(0,232,123,0.5)] border border-brand/50"
+                : "bg-white/8 text-white/25 border border-white/5"
             )}>
               {i + 1}
             </div>
           )
         })}
+      </div>
+      {/* Hit count badge */}
+      <div className="absolute bottom-[12%] left-1/2 -translate-x-1/2 px-3 py-1 bg-brand/20 rounded-full border border-brand/30">
+        <span className="text-[11px] font-extrabold text-brand">6 HITS</span>
       </div>
     </div>
   )
@@ -173,17 +209,21 @@ function KenoVisual() {
 
 function TwentyOneVisual() {
   return (
-    <div className="absolute inset-0 overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[55%]">
-        <div className="absolute -left-5 -rotate-[12deg] w-12 h-16 bg-white/15 rounded-lg border border-white/20 flex items-center justify-center">
-          <span className="text-xl font-black text-red-400/80">A</span>
+    <div className="absolute inset-0 overflow-hidden flex items-center justify-center">
+      {/* Large playing cards */}
+      <div className="relative scale-[1.2]">
+        <div className="-rotate-[15deg] w-14 h-20 bg-white/20 rounded-xl border-2 border-white/25 flex flex-col items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.3)] backdrop-blur-sm">
+          <span className="text-2xl font-black text-red-400">A</span>
+          <span className="text-red-400 text-lg -mt-1">♥</span>
         </div>
-        <div className="absolute left-3 rotate-[8deg] w-12 h-16 bg-white/15 rounded-lg border border-white/20 flex items-center justify-center">
-          <span className="text-xl font-black text-white/60">K</span>
+        <div className="absolute top-2 left-10 rotate-[12deg] w-14 h-20 bg-white/20 rounded-xl border-2 border-white/25 flex flex-col items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.3)] backdrop-blur-sm">
+          <span className="text-2xl font-black text-white/80">K</span>
+          <span className="text-white/60 text-lg -mt-1">♠</span>
         </div>
       </div>
-      <div className="absolute bottom-[22%] left-1/2 -translate-x-1/2 px-3 py-1 bg-amber-500/20 rounded-full border border-amber-500/30">
-        <span className="text-sm font-black text-amber-400/70">21</span>
+      {/* 21 badge */}
+      <div className="absolute bottom-[14%] left-1/2 -translate-x-1/2 px-4 py-1.5 bg-amber-500/40 rounded-full border-2 border-amber-400/50 shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+        <span className="text-xl font-black text-amber-300 drop-shadow-lg">21</span>
       </div>
     </div>
   )
@@ -192,19 +232,26 @@ function TwentyOneVisual() {
 function CoinClimberVisual() {
   return (
     <div className="absolute inset-0 overflow-hidden">
-      {[0,1,2,3,4].map(i => (
-        <div key={i} className="absolute flex items-center gap-1" style={{
-          bottom: `${18 + i * 15}%`, left: `${20 + i * 8}%`
+      {/* Climbing staircase */}
+      {[0,1,2,3,4,5].map(i => (
+        <div key={i} className="absolute" style={{
+          bottom: `${12 + i * 14}%`, left: `${15 + i * 10}%`
         }}>
           <div className={cn(
-            "w-10 h-4 rounded",
-            i < 3 ? "bg-brand/20 border border-brand/30" : "bg-amber-500/15 border border-amber-500/20"
+            "h-5 rounded-md border",
+            i >= 4 ? "w-14 bg-amber-500/40 border-amber-400/50 shadow-[0_0_15px_rgba(245,158,11,0.3)]" :
+            i >= 2 ? "w-12 bg-brand/30 border-brand/40" :
+            "w-10 bg-brand/20 border-brand/30"
           )} />
-          {i === 2 && <div className="w-3 h-3 rounded-full bg-amber-400/50 shadow-[0_0_8px_rgba(251,191,36,0.3)]" />}
         </div>
       ))}
-      <div className="absolute top-[15%] right-[12%] text-xs font-bold text-white/15 font-mono">782x</div>
-      <div className="absolute top-[35%] right-[15%] text-[10px] font-bold text-white/10 font-mono">250x</div>
+      {/* Coins */}
+      <div className="absolute top-[18%] right-[15%] text-2xl">🪙</div>
+      <div className="absolute top-[35%] right-[25%] text-lg opacity-70">🪙</div>
+      {/* Multiplier */}
+      <div className="absolute top-[10%] right-[8%]">
+        <span className="text-lg font-black text-amber-400/60 font-mono">782x</span>
+      </div>
     </div>
   )
 }
@@ -212,15 +259,29 @@ function CoinClimberVisual() {
 function SnakeVisual() {
   return (
     <div className="absolute inset-0 overflow-hidden">
-      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100">
-        <path d="M 20 70 Q 35 55 50 65 Q 65 75 75 55 Q 82 40 70 30"
-          stroke="rgba(0,232,123,0.4)" strokeWidth="4" fill="none" strokeLinecap="round" />
-        <circle cx="70" cy="30" r="4" fill="rgba(0,232,123,0.5)" />
-        <circle cx="69" cy="28.5" r="1" fill="white" opacity="0.6" />
-        <circle cx="72" cy="28.5" r="1" fill="white" opacity="0.6" />
+      {/* Large snake body */}
+      <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 130">
+        <defs>
+          <linearGradient id="snakeGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#22c55e" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0.8" />
+          </linearGradient>
+        </defs>
+        <path d="M 15 100 Q 30 80 50 90 Q 70 100 80 75 Q 88 55 72 40 Q 60 30 65 18"
+          stroke="url(#snakeGrad)" strokeWidth="8" fill="none" strokeLinecap="round" />
+        {/* Snake head */}
+        <circle cx="65" cy="18" r="7" fill="#22c55e" opacity="0.7" />
+        <circle cx="63" cy="16" r="2" fill="white" opacity="0.9" />
+        <circle cx="68" cy="16" r="2" fill="white" opacity="0.9" />
+        <circle cx="63" cy="16.5" r="1" fill="#111" />
+        <circle cx="68" cy="16.5" r="1" fill="#111" />
+        {/* Tongue */}
+        <path d="M 65 12 L 65 8 M 64 7 L 65 8 L 66 7" stroke="#ef4444" strokeWidth="1" fill="none" opacity="0.7" />
       </svg>
-      <div className="absolute top-[25%] left-[25%] w-3 h-3 bg-emerald-400/40 rotate-45 rounded-sm shadow-[0_0_10px_rgba(52,211,153,0.3)]" />
-      <div className="absolute top-[55%] right-[30%] w-2 h-2 bg-emerald-400/30 rotate-45 rounded-sm" />
+      {/* Gems to collect */}
+      <div className="absolute top-[40%] left-[20%] text-xl">💎</div>
+      <div className="absolute top-[25%] right-[25%] text-sm opacity-60">💎</div>
+      <div className="absolute top-[60%] right-[20%] w-3 h-3 bg-red-500/60 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.5)]" />
     </div>
   )
 }
@@ -228,17 +289,27 @@ function SnakeVisual() {
 function ChickenVisual() {
   return (
     <div className="absolute inset-0 overflow-hidden">
+      {/* Road lanes */}
       {[0,1,2,3].map(i => (
-        <div key={i} className="absolute left-[10%] right-[10%] h-[1px] bg-white/10" style={{ top: `${30 + i * 15}%` }} />
-      ))}
-      <div className="absolute top-[42%] left-[25%] w-8 h-4 bg-red-500/30 rounded-sm border border-red-500/20" />
-      <div className="absolute top-[35%] right-[30%]">
-        <div className="w-7 h-7 bg-amber-400/30 rounded-full border border-amber-400/20 flex items-center justify-center">
-          <span className="text-amber-300/60 text-[10px] font-bold">B</span>
+        <div key={i} className="absolute left-[8%] right-[8%]" style={{ top: `${28 + i * 16}%` }}>
+          <div className="h-[1px] bg-white/20" />
+          {i < 3 && (
+            <div className="flex justify-between px-4 mt-1">
+              {[0,1,2].map(j => (
+                <div key={j} className="w-4 h-[2px] bg-yellow-500/40" />
+              ))}
+            </div>
+          )}
         </div>
-      </div>
-      <div className="absolute bottom-[25%] left-[40%] text-brand/30 text-lg">&#10003;</div>
-      <div className="absolute bottom-[25%] right-[25%] text-brand/30 text-lg">&#10003;</div>
+      ))}
+      {/* Car */}
+      <div className="absolute top-[50%] left-[18%] text-2xl">🚗</div>
+      {/* Chicken */}
+      <div className="absolute top-[32%] right-[22%] text-3xl drop-shadow-[0_0_15px_rgba(255,200,0,0.4)]">🐔</div>
+      {/* Checkmarks for crossed lanes */}
+      <div className="absolute bottom-[18%] left-[30%] text-brand text-xl font-bold">✓</div>
+      <div className="absolute bottom-[18%] left-[50%] text-brand text-xl font-bold">✓</div>
+      <div className="absolute bottom-[18%] left-[70%] text-brand/40 text-xl font-bold">?</div>
     </div>
   )
 }
@@ -254,6 +325,7 @@ interface GameCardData {
   glow: string
   visual: React.FC
   tag?: 'HOT' | 'NEW' | 'POPULAR'
+  maxMult?: string
   playing: [number, number]
 }
 
@@ -264,6 +336,7 @@ const GAMES: GameCardData[] = [
     glow: 'rgba(139,92,246,0.3)',
     visual: CrashVisual,
     tag: 'HOT',
+    maxMult: '∞',
     playing: [700, 1200],
   },
   {
@@ -272,14 +345,15 @@ const GAMES: GameCardData[] = [
     glow: 'rgba(244,63,94,0.3)',
     visual: MinesVisual,
     tag: 'HOT',
+    maxMult: '24x',
     playing: [1800, 2500],
   },
   {
     id: 'dice', name: 'Dice', href: '/games/dice',
-    gradient: 'from-emerald-400 via-green-600 to-teal-800',
-    glow: 'rgba(52,211,153,0.3)',
+    gradient: 'from-red-500 via-red-600 to-red-900',
+    glow: 'rgba(239,68,68,0.3)',
     visual: DiceVisual,
-    tag: 'POPULAR',
+    maxMult: '99x',
     playing: [1400, 2000],
   },
   {
@@ -287,21 +361,23 @@ const GAMES: GameCardData[] = [
     gradient: 'from-fuchsia-500 via-purple-600 to-violet-900',
     glow: 'rgba(217,70,239,0.3)',
     visual: PlinkoVisual,
-    tag: 'POPULAR',
+    maxMult: '1000x',
     playing: [1500, 2200],
   },
   {
     id: 'limbo', name: 'Limbo', href: '/games/limbo',
-    gradient: 'from-amber-400 via-orange-500 to-amber-800',
-    glow: 'rgba(251,191,36,0.3)',
+    gradient: 'from-blue-500 via-indigo-600 to-blue-900',
+    glow: 'rgba(99,102,241,0.3)',
     visual: LimboVisual,
+    maxMult: '1Mx',
     playing: [900, 1500],
   },
   {
     id: 'wheel', name: 'Wheel', href: '/games/wheel',
-    gradient: 'from-sky-400 via-blue-600 to-indigo-800',
-    glow: 'rgba(56,189,248,0.3)',
+    gradient: 'from-emerald-500 via-teal-600 to-emerald-900',
+    glow: 'rgba(20,184,166,0.3)',
     visual: WheelVisual,
+    maxMult: '50x',
     playing: [600, 1000],
   },
   {
@@ -309,21 +385,24 @@ const GAMES: GameCardData[] = [
     gradient: 'from-teal-400 via-cyan-600 to-teal-900',
     glow: 'rgba(45,212,191,0.3)',
     visual: KenoVisual,
+    maxMult: '40000x',
     playing: [400, 800],
   },
   {
-    id: 'twentyone', name: 'Twenty\nOne', href: '/games/twentyone',
-    gradient: 'from-red-500 via-red-700 to-rose-900',
-    glow: 'rgba(239,68,68,0.3)',
+    id: 'twentyone', name: 'Twenty One', href: '/games/twentyone',
+    gradient: 'from-amber-500 via-orange-600 to-amber-900',
+    glow: 'rgba(245,158,11,0.3)',
     visual: TwentyOneVisual,
+    maxMult: '1500x',
     playing: [300, 600],
   },
   {
-    id: 'coinclimber', name: 'Coin\nClimber', href: '/games/coinclimber',
-    gradient: 'from-yellow-400 via-amber-500 to-yellow-800',
-    glow: 'rgba(234,179,8,0.3)',
+    id: 'coinclimber', name: 'Coin Climber', href: '/games/coinclimber',
+    gradient: 'from-purple-500 via-violet-600 to-purple-900',
+    glow: 'rgba(168,85,247,0.3)',
     visual: CoinClimberVisual,
     tag: 'NEW',
+    maxMult: '782x',
     playing: [500, 900],
   },
   {
@@ -469,8 +548,8 @@ function GameCardGrid({ game }: { game: GameCardData }) {
           </div>
         </div>
 
-        {game.tag && (
-          <div className="absolute top-2 right-2 z-10">
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+          {game.tag && (
             <div className={cn(
               "px-1.5 py-[2px] rounded text-[7px] sm:text-[8px] font-extrabold uppercase tracking-wide",
               game.tag === 'HOT' ? 'bg-red-500 text-white shadow-[0_2px_10px_rgba(239,68,68,0.5)]' :
@@ -479,11 +558,16 @@ function GameCardGrid({ game }: { game: GameCardData }) {
             )}>
               {game.tag}
             </div>
-          </div>
-        )}
+          )}
+          {game.maxMult && (
+            <div className="px-1.5 py-[2px] rounded bg-black/50 backdrop-blur-md border border-white/15 text-[7px] sm:text-[8px] font-extrabold text-white/90 tracking-wide">
+              {game.maxMult}
+            </div>
+          )}
+        </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-2.5 sm:p-3 bg-gradient-to-t from-black/70 via-black/30 to-transparent z-10">
-          <h3 className="text-base sm:text-lg font-extrabold text-white uppercase tracking-wide leading-tight whitespace-pre-line drop-shadow-lg">
+          <h3 className="text-sm sm:text-base font-extrabold text-white tracking-wide leading-tight drop-shadow-lg">
             {game.name}
           </h3>
         </div>
@@ -613,7 +697,8 @@ export default function HomePage() {
                   { key: 'originals', label: 'Originals', icon: Zap, color: 'text-brand' },
                   { key: 'slots', label: 'Slots', icon: Flame, color: 'text-purple-400' },
                   { key: 'live', label: 'Live Casino', icon: Star, color: 'text-red-400' },
-                  { key: 'table', label: 'Table Games', icon: Gift, color: 'text-amber-400' },
+                  { key: 'shows', label: 'Game Shows', icon: Gift, color: 'text-pink-400' },
+                  { key: 'table', label: 'Table Games', icon: Crown, color: 'text-amber-400' },
                 ].map(tab => {
                   const Icon = tab.icon
                   const isActive = activeTab === tab.key
