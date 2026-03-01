@@ -70,7 +70,7 @@ export function useProvablyFair() {
           pf.clientSeed, 
           currentNonce,
           params?.gridSize || 25,
-          params?.mineCount || 3
+          params?.mines || params?.mineCount || 3
         )
         break
       case 'plinko':
