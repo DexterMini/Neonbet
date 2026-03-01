@@ -11,8 +11,26 @@ import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { toast } from 'sonner'
-import { Target, RefreshCw, TrendingUp, TrendingDown, Shield, Zap, Percent } from 'lucide-react'
+import { Target, RefreshCw, TrendingUp, TrendingDown, Zap, Percent } from 'lucide-react'
 import Decimal from 'decimal.js'
+
+/* ── Floating particles ───────────────────────────── */
+function FloatingStars({ active }: { active: boolean }) {
+  if (!active) return null
+  const items = ['🎯', '⚡', '💥', '✨', '🔥', '⭐']
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {items.map((e, i) => (
+        <motion.div key={i}
+          initial={{ opacity: 0, y: '110%', x: `${8 + i * 15}%` }}
+          animate={{ opacity: [0, 0.35, 0], y: '-10%', x: `${8 + i * 15 + (Math.random() - 0.5) * 12}%` }}
+          transition={{ duration: 4 + Math.random() * 3, repeat: Infinity, delay: i * 0.7, ease: 'easeOut' }}
+          className="absolute text-sm select-none"
+        >{e}</motion.div>
+      ))}
+    </div>
+  )
+}
 
 export default function LimboPage() {
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
@@ -37,8 +55,7 @@ export default function LimboPage() {
   const handlePlay = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
     if (bet <= 0 || isNaN(bet) || !initialized) return { won: false, profit: -bet }
-    setIsPlaying(true)
-    setShowResult(false)
+    setIsPlaying(true); setShowResult(false)
     try {
       let generatedMultiplier: number
       if (isAuthenticated) {
@@ -48,12 +65,8 @@ export default function LimboPage() {
         const { result: gameResult } = await generateBet('limbo')
         generatedMultiplier = gameResult as number
       }
-      for (let i = 0; i < 15; i++) {
-        setResult(Math.random() * limboTarget * 2)
-        await new Promise(r => setTimeout(r, 30))
-      }
-      setResult(generatedMultiplier)
-      setShowResult(true)
+      for (let i = 0; i < 15; i++) { setResult(Math.random() * limboTarget * 2); await new Promise(r => setTimeout(r, 30)) }
+      setResult(generatedMultiplier); setShowResult(true)
       const isWin = generatedMultiplier >= limboTarget
       setLastWin(isWin)
       const profit = isWin ? bet * multiplier - bet : -bet
@@ -62,22 +75,13 @@ export default function LimboPage() {
       if (isWin) toast.success(`${generatedMultiplier.toFixed(2)}x! Won $${(bet * multiplier - bet).toFixed(2)}`)
       else toast.error(`${generatedMultiplier.toFixed(2)}x — Try again!`)
       return { won: isWin, profit }
-    } catch (err: any) {
-      toast.error(err?.message || 'Error placing bet')
-      return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
-    } finally {
-      setIsPlaying(false)
-    }
+    } catch (err: any) { toast.error(err?.message || 'Error placing bet'); return { won: false, profit: -(amount ?? parseFloat(betAmount)) } }
+    finally { setIsPlaying(false) }
   }, [betAmount, limboTarget, initialized, isAuthenticated, placeBet, generateBet, multiplier, sessionStats])
 
   const autoBetHandler = useCallback(async (amount: number) => handlePlay(amount), [handlePlay])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)
-
-  useHotkeys(
-    () => { if (!isPlaying && !autoBetState.running) handlePlay() },
-    () => autoBetStop(),
-    !isPlaying
-  )
+  useHotkeys(() => { if (!isPlaying && !autoBetState.running) handlePlay() }, () => autoBetStop(), !isPlaying)
 
   const handleTargetChange = (value: number) => setLimboTarget(Math.max(1.01, Math.min(1000000, value)))
   const quickTargets = [1.5, 2, 3, 5, 10, 100]
@@ -101,22 +105,14 @@ export default function LimboPage() {
           )}
 
           <div className="flex flex-col lg:flex-row gap-4">
-            <BetControls
-              betAmount={betAmount}
-              onBetAmountChange={setBetAmount}
-              disabled={isPlaying}
-              serverSeedHash={serverSeedHash}
-              nonce={nonce}
-              onShowFairness={() => setShowFairness(true)}
-              autoBetConfig={autoBetConfig}
-              onAutoBetConfigChange={setAutoBetConfig}
-              autoBetState={autoBetState}
-              onAutoBetStart={autoBetStart}
-              onAutoBetStop={autoBetStop}
+            <BetControls betAmount={betAmount} onBetAmountChange={setBetAmount} disabled={isPlaying}
+              serverSeedHash={serverSeedHash} nonce={nonce} onShowFairness={() => setShowFairness(true)}
+              autoBetConfig={autoBetConfig} onAutoBetConfigChange={setAutoBetConfig}
+              autoBetState={autoBetState} onAutoBetStart={autoBetStart} onAutoBetStop={autoBetStop}
               actionButton={
                 <button onClick={() => handlePlay()} disabled={isPlaying || isPlacing || !initialized}
                   className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2 ${
-                    isPlaying || isPlacing ? 'bg-surface text-muted cursor-not-allowed' : 'bg-brand text-background-deep shadow-glow-brand-sm hover:brightness-110'
+                    isPlaying || isPlacing ? 'bg-surface text-muted cursor-not-allowed' : 'bg-gradient-to-r from-orange-500 to-amber-400 text-background-deep shadow-lg shadow-orange-500/30 hover:brightness-110'
                   }`}>
                   {isPlaying ? <><RefreshCw className="w-4 h-4 animate-spin" />Playing...</> : <><Zap className="w-4 h-4" />Play</>}
                 </button>
@@ -137,7 +133,6 @@ export default function LimboPage() {
                   ))}
                 </div>
               </div>
-
               {/* Stats */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-surface rounded-xl p-2.5 border border-border">
@@ -149,7 +144,6 @@ export default function LimboPage() {
                   <div className="text-base font-bold text-brand font-mono">{multiplier.toFixed(4)}x</div>
                 </div>
               </div>
-
               {/* Profit */}
               <div>
                 <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">Profit on Win</span>
@@ -158,54 +152,91 @@ export default function LimboPage() {
             </BetControls>
 
             <div className="flex-1 min-w-0 space-y-4">
-              <div className="bg-background-secondary rounded-2xl border border-border/60 overflow-hidden">
-                <div className="relative h-64 sm:h-72 flex items-center justify-center">
-                  <div className="absolute inset-0 overflow-hidden">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-brand/[0.03] rounded-full blur-3xl" />
-                    {showResult && lastWin && <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 0.08 }} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-brand rounded-full blur-3xl" />}
-                    {showResult && lastWin === false && <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 0.08 }} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-accent-red rounded-full blur-3xl" />}
-                  </div>
+              {/* ── Premium Scene Container ────────── */}
+              <div className="relative rounded-2xl overflow-hidden border border-white/[0.06]"
+                style={{ background: 'linear-gradient(165deg, #1a1008 0%, #14100a 40%, #0d0f1a 100%)' }}>
+                <FloatingStars active />
 
-                  <div className="absolute top-4 right-4 bg-surface/80 backdrop-blur-sm rounded-xl px-3 py-1.5 border border-border">
-                    <div className="text-[10px] text-muted">Target</div>
-                    <div className="text-sm font-mono text-brand font-bold">{limboTarget.toFixed(2)}x</div>
+                {/* ambient glow */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none"
+                  style={{ background: 'radial-gradient(circle, rgba(249,115,22,0.07) 0%, transparent 70%)' }} />
+
+                {/* Header */}
+                <div className="relative z-10 flex items-center justify-between px-5 pt-4 pb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center ring-1 ring-orange-400/20"
+                      style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.25) 0%, rgba(249,115,22,0.08) 100%)' }}>
+                      <Target className="w-4 h-4 text-orange-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-white font-bold text-base leading-none">Limbo</h2>
+                      <p className="text-orange-300/30 text-[10px] mt-0.5">Target {limboTarget.toFixed(2)}x</p>
+                    </div>
                   </div>
+                  <div className="px-3 py-1 rounded-full text-[11px] font-bold bg-orange-500/10 text-orange-400 ring-1 ring-orange-400/20 font-mono">
+                    {limboTarget.toFixed(2)}x
+                  </div>
+                </div>
+
+                {/* Result display */}
+                <div className="relative z-10 h-64 sm:h-72 flex items-center justify-center">
+                  {showResult && lastWin && (
+                    <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 0.12 }}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-brand rounded-full blur-[100px]" />
+                  )}
+                  {showResult && lastWin === false && (
+                    <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 0.12 }}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-accent-red rounded-full blur-[100px]" />
+                  )}
 
                   <AnimatePresence mode="wait">
                     {result !== null ? (
-                      <motion.div key={result} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center z-10">
-                        <div className={`text-6xl sm:text-7xl font-black font-mono tabular-nums ${showResult ? (lastWin ? 'text-brand' : 'text-accent-red') : 'text-white'}`}
-                          style={{ textShadow: showResult ? (lastWin ? '0 0 50px rgba(0,232,123,0.5)' : '0 0 50px rgba(255,71,87,0.5)') : 'none' }}>
+                      <motion.div key={result} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                        className="text-center z-10">
+                        <motion.div
+                          animate={showResult ? { scale: [1, 1.08, 1] } : {}}
+                          transition={{ duration: 0.4 }}
+                          className={`text-7xl sm:text-8xl font-black font-mono tabular-nums ${showResult ? (lastWin ? 'text-brand' : 'text-accent-red') : 'text-white'}`}
+                          style={{ textShadow: showResult ? (lastWin ? '0 0 60px rgba(0,232,123,0.6), 0 0 120px rgba(0,232,123,0.2)' : '0 0 60px rgba(255,71,87,0.6), 0 0 120px rgba(255,71,87,0.2)') : '0 0 30px rgba(255,255,255,0.1)' }}>
                           {result.toFixed(2)}x
-                        </div>
+                        </motion.div>
                         {showResult && (
-                          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-                            className={`mt-3 flex items-center justify-center gap-2 text-sm font-bold ${lastWin ? 'text-brand' : 'text-accent-red'}`}>
-                            {lastWin ? <><TrendingUp className="w-4 h-4" />Target reached!</> : <><TrendingDown className="w-4 h-4" />Below target</>}
+                          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, type: 'spring' }}
+                            className="mt-4">
+                            <span className={`inline-flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-full ${
+                              lastWin ? 'bg-brand/15 text-brand ring-1 ring-brand/20' : 'bg-accent-red/15 text-accent-red ring-1 ring-accent-red/20'
+                            }`}>
+                              {lastWin ? <><TrendingUp className="w-4 h-4" />Target reached!</> : <><TrendingDown className="w-4 h-4" />Below target</>}
+                            </span>
                           </motion.div>
                         )}
                       </motion.div>
                     ) : (
                       <div className="text-center z-10">
-                        <Target className="w-16 h-16 text-muted/30 mx-auto mb-2" />
-                        <div className="text-muted text-sm">Press <kbd className="bg-surface px-1.5 py-0.5 rounded text-[11px] font-mono border border-border">Space</kbd> to play</div>
+                        <div className="w-20 h-20 rounded-2xl mx-auto mb-3 flex items-center justify-center ring-1 ring-white/[0.06]"
+                          style={{ background: 'linear-gradient(145deg, rgba(249,115,22,0.12) 0%, rgba(249,115,22,0.04) 100%)' }}>
+                          <Target className="w-10 h-10 text-orange-400/30" />
+                        </div>
+                        <div className="text-white/25 text-sm">Press <kbd className="bg-white/[0.06] px-2 py-0.5 rounded-md text-[11px] font-mono border border-white/[0.08]">Space</kbd> to play</div>
                       </div>
                     )}
                   </AnimatePresence>
                 </div>
 
-                <div className="p-5 border-t border-border/60">
+                {/* Slider */}
+                <div className="relative z-10 p-5 border-t border-white/[0.04]">
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-muted text-[11px] uppercase tracking-wider font-semibold">Target Slider</span>
-                    <span className="text-brand font-mono font-bold text-sm">{limboTarget.toFixed(2)}x</span>
+                    <span className="text-white/25 text-[11px] uppercase tracking-wider font-semibold">Target Slider</span>
+                    <span className="text-orange-400 font-mono font-bold text-sm">{limboTarget.toFixed(2)}x</span>
                   </div>
                   <div className="relative">
                     <input type="range" min={1.01} max={100} step={0.01} value={Math.min(limboTarget, 100)}
                       onChange={e => handleTargetChange(parseFloat(e.target.value))}
-                      className="w-full h-1.5 bg-surface rounded-full appearance-none cursor-pointer accent-brand"
-                      style={{ background: `linear-gradient(to right, #00E87B 0%, #00E87B ${((Math.min(limboTarget, 100) - 1.01) / 98.99) * 100}%, #1A1D28 ${((Math.min(limboTarget, 100) - 1.01) / 98.99) * 100}%, #1A1D28 100%)` }} />
+                      className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                      style={{ background: `linear-gradient(to right, #f97316 0%, #f97316 ${((Math.min(limboTarget, 100) - 1.01) / 98.99) * 100}%, rgba(255,255,255,0.06) ${((Math.min(limboTarget, 100) - 1.01) / 98.99) * 100}%, rgba(255,255,255,0.06) 100%)` }} />
                   </div>
-                  <div className="flex justify-between text-[10px] text-muted mt-1.5 font-mono"><span>1.01x</span><span>50x</span><span>100x</span></div>
+                  <div className="flex justify-between text-[10px] text-white/15 mt-1.5 font-mono"><span>1.01x</span><span>50x</span><span>100x</span></div>
                 </div>
               </div>
 
@@ -213,7 +244,9 @@ export default function LimboPage() {
             </div>
           </div>
 
-          <FairnessModal isOpen={showFairness} onClose={() => setShowFairness(false)} game="limbo" serverSeedHash={serverSeedHash} clientSeed={clientSeed} nonce={nonce} previousServerSeed={previousServerSeed} onClientSeedChange={setClientSeed} onRotateSeed={rotateSeed} />
+          <FairnessModal isOpen={showFairness} onClose={() => setShowFairness(false)} game="limbo"
+            serverSeedHash={serverSeedHash} clientSeed={clientSeed} nonce={nonce}
+            previousServerSeed={previousServerSeed} onClientSeedChange={setClientSeed} onRotateSeed={rotateSeed} />
         </div>
       </div>
     </GameLayout>

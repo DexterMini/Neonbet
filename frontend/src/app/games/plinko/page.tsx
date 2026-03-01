@@ -8,27 +8,11 @@ import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
-import { Circle, RotateCcw, Shield, TrendingUp, Zap, ChevronDown, Hash, Lock, Volume2, Sparkles } from 'lucide-react'
+import { Circle, RotateCcw, TrendingUp, ChevronDown, Sparkles } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
 
-interface Ball {
-  id: number
-  x: number
-  y: number
-  path: number[]
-  finalSlot: number
-  multiplier: number
-}
-
-interface BetHistory {
-  id: number
-  multiplier: number
-  payout: number
-  bet: number
-  risk: string
-  rows: number
-  timestamp: Date
-}
+interface Ball { id: number; x: number; y: number; path: number[]; finalSlot: number; multiplier: number }
+interface BetHistory { id: number; multiplier: number; payout: number; bet: number; risk: string; rows: number; timestamp: Date }
 
 const PLINKO_MULTIPLIERS: Record<string, Record<number, number[]>> = {
   low: {
@@ -68,18 +52,27 @@ const PLINKO_MULTIPLIERS: Record<string, Record<number, number[]>> = {
 
 const ROW_OPTIONS = [8, 9, 10, 11, 12, 13, 14, 15, 16]
 
+/* ── Floating particles ───────────────────────────── */
+function FloatingBalls({ active }: { active: boolean }) {
+  if (!active) return null
+  const items = ['⚪', '🟢', '⭕', '✨', '🔵', '💚']
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {items.map((e, i) => (
+        <motion.div key={i}
+          initial={{ opacity: 0, y: '110%', x: `${8 + i * 15}%` }}
+          animate={{ opacity: [0, 0.3, 0], y: '-10%', x: `${8 + i * 15 + (Math.random() - 0.5) * 12}%` }}
+          transition={{ duration: 5 + Math.random() * 3, repeat: Infinity, delay: i * 0.8, ease: 'easeOut' }}
+          className="absolute text-xs select-none"
+        >{e}</motion.div>
+      ))}
+    </div>
+  )
+}
+
 export default function PlinkoPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const {
-    initialized,
-    serverSeedHash,
-    clientSeed,
-    nonce,
-    previousServerSeed,
-    generateBet,
-    rotateSeed,
-    setClientSeed,
-  } = useProvablyFair()
+  const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
   const { isAuthenticated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
@@ -93,31 +86,35 @@ export default function PlinkoPage() {
   const [showFairness, setShowFairness] = useState(false)
   const [betHistory, setBetHistory] = useState<BetHistory[]>([])
   const [showRowsDropdown, setShowRowsDropdown] = useState(false)
-  const [soundEnabled, setSoundEnabled] = useState(true)
-  const [autoBet, setAutoBet] = useState(false)
   const [totalProfit, setTotalProfit] = useState(0)
 
   const multipliers = PLINKO_MULTIPLIERS[plinkoRisk][plinkoRows] || PLINKO_MULTIPLIERS.medium[12]
 
-  // Draw Plinko board with modern styling
+  // Draw Plinko board
   const drawBoard = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
     const { width, height } = canvas
     ctx.clearRect(0, 0, width, height)
 
-    // Create gradient background
+    // Background gradient
     const bgGradient = ctx.createLinearGradient(0, 0, 0, height)
-    bgGradient.addColorStop(0, '#0A0B0F')
-    bgGradient.addColorStop(1, '#12141A')
+    bgGradient.addColorStop(0, '#0c1118')
+    bgGradient.addColorStop(0.5, '#0a0f16')
+    bgGradient.addColorStop(1, '#0d1120')
     ctx.fillStyle = bgGradient
     ctx.fillRect(0, 0, width, height)
 
-    // Draw pegs with glow effect
+    // Subtle radial glow
+    const glowGrad = ctx.createRadialGradient(width / 2, height / 3, 0, width / 2, height / 3, 300)
+    glowGrad.addColorStop(0, 'rgba(0, 232, 123, 0.04)')
+    glowGrad.addColorStop(1, 'transparent')
+    ctx.fillStyle = glowGrad
+    ctx.fillRect(0, 0, width, height)
+
+    // Draw pegs
     const pegRadius = 5
     const startY = 50
     const endY = height - 80
@@ -131,26 +128,29 @@ export default function PlinkoPage() {
 
       for (let col = 0; col < pegsInRow; col++) {
         const x = startX + col * pegSpacing
-        
-        // Glow effect
-        const gradient = ctx.createRadialGradient(x, y, 0, x, y, pegRadius * 3)
-        gradient.addColorStop(0, 'rgba(0, 232, 123, 0.15)')
+
+        // Glow
+        const gradient = ctx.createRadialGradient(x, y, 0, x, y, pegRadius * 3.5)
+        gradient.addColorStop(0, 'rgba(0, 232, 123, 0.12)')
         gradient.addColorStop(1, 'rgba(0, 232, 123, 0)')
         ctx.fillStyle = gradient
         ctx.beginPath()
-        ctx.arc(x, y, pegRadius * 3, 0, Math.PI * 2)
+        ctx.arc(x, y, pegRadius * 3.5, 0, Math.PI * 2)
         ctx.fill()
 
-        // Peg
+        // Peg body
+        const pegGrad = ctx.createRadialGradient(x - 1, y - 1, 0, x, y, pegRadius)
+        pegGrad.addColorStop(0, '#3A3F50')
+        pegGrad.addColorStop(1, '#22252F')
         ctx.beginPath()
         ctx.arc(x, y, pegRadius, 0, Math.PI * 2)
-        ctx.fillStyle = '#2A2D38'
+        ctx.fillStyle = pegGrad
         ctx.fill()
-        
+
         // Highlight
         ctx.beginPath()
-        ctx.arc(x - 1, y - 1, pegRadius * 0.5, 0, Math.PI * 2)
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'
+        ctx.arc(x - 1.5, y - 1.5, pegRadius * 0.4, 0, Math.PI * 2)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.25)'
         ctx.fill()
       }
     }
@@ -163,39 +163,20 @@ export default function PlinkoPage() {
 
     multipliers.forEach((mult, i) => {
       const x = 10 + i * slotWidth
-      
-      // Color based on multiplier value
-      let color: string
-      let bgColor: string
-      if (mult >= 100) {
-        color = '#fbbf24'
-        bgColor = 'rgba(251, 191, 36, 0.2)'
-      } else if (mult >= 10) {
-        color = '#f97316'
-        bgColor = 'rgba(249, 115, 22, 0.15)'
-      } else if (mult >= 2) {
-        color = '#a78bfa'
-        bgColor = 'rgba(167, 139, 250, 0.15)'
-      } else if (mult >= 1) {
-        color = '#34d399'
-        bgColor = 'rgba(52, 211, 153, 0.15)'
-      } else {
-        color = '#f87171'
-        bgColor = 'rgba(248, 113, 113, 0.1)'
-      }
-      
-      // Slot background
+      let color: string, bgColor: string
+      if (mult >= 100) { color = '#fbbf24'; bgColor = 'rgba(251,191,36,0.18)' }
+      else if (mult >= 10) { color = '#f97316'; bgColor = 'rgba(249,115,22,0.14)' }
+      else if (mult >= 2) { color = '#a78bfa'; bgColor = 'rgba(167,139,250,0.14)' }
+      else if (mult >= 1) { color = '#34d399'; bgColor = 'rgba(52,211,153,0.14)' }
+      else { color = '#f87171'; bgColor = 'rgba(248,113,113,0.10)' }
+
       ctx.fillStyle = bgColor
       ctx.beginPath()
-      ctx.roundRect(x + 2, slotY, slotWidth - 4, slotHeight - 5, 6)
+      ctx.roundRect(x + 2, slotY, slotWidth - 4, slotHeight - 5, 8)
       ctx.fill()
-      
-      // Slot border
-      ctx.strokeStyle = color + '40'
+      ctx.strokeStyle = color + '30'
       ctx.lineWidth = 1
       ctx.stroke()
-      
-      // Multiplier text
       ctx.fillStyle = color
       ctx.font = 'bold 11px ui-monospace, monospace'
       ctx.textAlign = 'center'
@@ -203,18 +184,16 @@ export default function PlinkoPage() {
       ctx.fillText(`${mult}×`, x + slotWidth / 2, slotY + slotHeight / 2 - 2)
     })
 
-    // Draw balls with trail effect
+    // Draw balls
     balls.forEach(ball => {
-      // Glow
-      const ballGradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, 20)
-      ballGradient.addColorStop(0, 'rgba(0, 232, 123, 0.4)')
+      const ballGradient = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, 22)
+      ballGradient.addColorStop(0, 'rgba(0, 232, 123, 0.45)')
       ballGradient.addColorStop(1, 'rgba(0, 232, 123, 0)')
       ctx.fillStyle = ballGradient
       ctx.beginPath()
-      ctx.arc(ball.x, ball.y, 20, 0, Math.PI * 2)
+      ctx.arc(ball.x, ball.y, 22, 0, Math.PI * 2)
       ctx.fill()
 
-      // Ball
       const gradient = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 0, ball.x, ball.y, 10)
       gradient.addColorStop(0, '#7DFBB3')
       gradient.addColorStop(0.5, '#00E87B')
@@ -226,62 +205,38 @@ export default function PlinkoPage() {
     })
   }, [plinkoRows, multipliers, balls])
 
-  useEffect(() => {
-    drawBoard()
-  }, [drawBoard])
+  useEffect(() => { drawBoard() }, [drawBoard])
 
-  // Animate ball drop
+  // Drop ball
   const dropBall = async () => {
     if (!initialized || isPlacing) return
-
     const bet = parseFloat(betAmount)
-    if (bet <= 0 || isNaN(bet)) {
-      toast.error('Invalid bet amount')
-      return
-    }
-
-    setIsDropping(true)
-    setLastResult(null)
+    if (bet <= 0 || isNaN(bet)) { toast.error('Invalid bet amount'); return }
+    setIsDropping(true); setLastResult(null)
 
     const canvas = canvasRef.current
     if (!canvas) return
-
     const { width, height } = canvas
-    const startY = 35
-    const endY = height - 80
-    const rowHeight = (endY - startY) / plinkoRows
+    const startY = 35; const endY = height - 80; const rowHeight = (endY - startY) / plinkoRows
 
-    // Generate path — backend or local
     let path: number[]
     try {
       if (isAuthenticated) {
-        const data = await placeBet('plinko', betAmount, 'usdt', {
-          rows: plinkoRows,
-          risk: plinkoRisk,
-        })
-        // Backend returns path as string[] ("L"/"R"), convert to 0/1
+        const data = await placeBet('plinko', betAmount, 'usdt', { rows: plinkoRows, risk: plinkoRisk })
         const rawPath: string[] = data.result_data?.path ?? []
         path = rawPath.map(d => (d === 'R' ? 1 : 0))
       } else {
         const { result: pathResult } = await generateBet('plinko', { rows: plinkoRows })
         path = pathResult as number[]
       }
-    } catch (err: any) {
-      toast.error(err?.message || 'Error placing bet')
-      setIsDropping(false)
-      return
-    }
+    } catch (err: any) { toast.error(err?.message || 'Error placing bet'); setIsDropping(false); return }
 
-    // Calculate final slot based on path
     let position = 0
-    path.forEach(dir => {
-      position += dir === 0 ? -1 : 1
-    })
+    path.forEach(dir => { position += dir === 0 ? -1 : 1 })
     const finalSlot = Math.round((position + plinkoRows) / 2)
     const clampedSlot = Math.max(0, Math.min(finalSlot, multipliers.length - 1))
     const multiplier = multipliers[clampedSlot]
 
-    // Animate ball
     const ballId = Date.now()
     let currentX = width / 2
     let currentY = startY
@@ -290,27 +245,18 @@ export default function PlinkoPage() {
       const pegsInRow = row + 3
       const pegSpacing = Math.min(35, (width - 60) / (pegsInRow - 1))
       const moveAmount = pegSpacing / 2
-      
       const targetX = currentX + (path[row] === 0 ? -moveAmount : moveAmount)
       const targetY = startY + (row + 1) * rowHeight
-
-      // Smooth animation with physics-like bounce
       for (let frame = 0; frame < 8; frame++) {
-        const t = frame / 8
-        const easeT = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2
-        
         currentX += (targetX - currentX) * 0.35
         currentY += (targetY - currentY) * 0.35
-        
         setBalls([{ id: ballId, x: currentX, y: currentY, path, finalSlot: clampedSlot, multiplier }])
         await new Promise(r => setTimeout(r, 25))
       }
     }
 
-    // Final position in slot
     const slotWidth = (width - 20) / multipliers.length
     const finalX = 10 + clampedSlot * slotWidth + slotWidth / 2
-    
     for (let frame = 0; frame < 12; frame++) {
       currentX += (finalX - currentX) * 0.25
       currentY += (height - 45 - currentY) * 0.25
@@ -318,61 +264,22 @@ export default function PlinkoPage() {
       await new Promise(r => setTimeout(r, 25))
     }
 
-    // Calculate payout
     const payout = bet * multiplier
     const profit = payout - bet
-    
     setLastResult({ multiplier, payout })
     setTotalProfit(prev => prev + profit)
     sessionStats.recordBet(multiplier >= 1, bet, profit, multiplier)
-    
-    // Add to history
-    setBetHistory(prev => [{
-      id: ballId,
-      multiplier,
-      payout,
-      bet,
-      risk: plinkoRisk,
-      rows: plinkoRows,
-      timestamp: new Date()
-    }, ...prev].slice(0, 20))
-    
-    if (multiplier >= 1) {
-      toast.success(`${multiplier}x multiplier! Won $${payout.toFixed(2)}`)
-    } else {
-      toast.error(`${multiplier}x - Lost $${(bet - payout).toFixed(2)}`)
-    }
-
-    // Clear ball after delay
-    setTimeout(() => {
-      setBalls([])
-      setIsDropping(false)
-    }, 800)
-  }
-
-  const handleQuickBet = (action: string) => {
-    const current = parseFloat(betAmount) || 0
-    switch (action) {
-      case 'half':
-        setBetAmount(Math.max(0.00000001, current / 2).toFixed(8))
-        break
-      case 'double':
-        setBetAmount((current * 2).toFixed(8))
-        break
-      case 'min':
-        setBetAmount('0.00000001')
-        break
-      case 'max':
-        setBetAmount('0.01')
-        break
-    }
+    setBetHistory(prev => [{ id: ballId, multiplier, payout, bet, risk: plinkoRisk, rows: plinkoRows, timestamp: new Date() }, ...prev].slice(0, 20))
+    if (multiplier >= 1) toast.success(`${multiplier}x multiplier! Won $${payout.toFixed(2)}`)
+    else toast.error(`${multiplier}x - Lost $${(bet - payout).toFixed(2)}`)
+    setTimeout(() => { setBalls([]); setIsDropping(false) }, 800)
   }
 
   const getMultiplierColor = (mult: number) => {
-    if (mult >= 100) return 'text-accent-amber'
+    if (mult >= 100) return 'text-amber-400'
     if (mult >= 10) return 'text-orange-400'
     if (mult >= 2) return 'text-brand'
-    if (mult >= 1) return 'text-accent-green'
+    if (mult >= 1) return 'text-emerald-400'
     return 'text-accent-red'
   }
 
@@ -383,7 +290,6 @@ export default function PlinkoPage() {
           <SessionStatsBar />
 
           <div className="flex flex-col lg:flex-row gap-4">
-            {/* Left: Controls */}
             <BetControls
               betAmount={betAmount}
               onBetAmountChange={setBetAmount}
@@ -395,12 +301,12 @@ export default function PlinkoPage() {
               actionButton={
                 <button onClick={dropBall} disabled={isDropping || !initialized}
                   className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2
-                    ${isDropping || !initialized ? 'bg-surface cursor-not-allowed text-muted' : 'bg-brand text-background-deep shadow-glow-brand-sm hover:brightness-110'}`}>
+                    ${isDropping || !initialized ? 'bg-surface cursor-not-allowed text-muted' : 'bg-gradient-to-r from-brand to-emerald-400 text-background-deep shadow-lg shadow-brand/30 hover:brightness-110'}`}>
                   {isDropping ? <><RotateCcw className="w-4 h-4 animate-spin" />Dropping...</> : <><Sparkles className="w-4 h-4" />Drop Ball</>}
                 </button>
               }
             >
-              {/* Risk Level */}
+              {/* Risk */}
               <div>
                 <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">Risk Level</span>
                 <div className="flex gap-1.5">
@@ -417,8 +323,7 @@ export default function PlinkoPage() {
                   ))}
                 </div>
               </div>
-
-              {/* Rows Selector */}
+              {/* Rows */}
               <div>
                 <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">Rows</span>
                 <div className="relative">
@@ -443,7 +348,6 @@ export default function PlinkoPage() {
                   </AnimatePresence>
                 </div>
               </div>
-
               {/* Last result */}
               <AnimatePresence>
                 {lastResult && (
@@ -456,20 +360,33 @@ export default function PlinkoPage() {
               </AnimatePresence>
             </BetControls>
 
-            {/* Right: Game Board */}
+            {/* Right: Game Board — Premium Scene */}
             <div className="flex-1 min-w-0">
-              <div className="bg-background-secondary rounded-2xl border border-border/60 overflow-hidden p-4 lg:p-6">
+              <div className="relative rounded-2xl overflow-hidden border border-white/[0.06]"
+                style={{ background: 'linear-gradient(165deg, #0c1225 0%, #0a0f1a 40%, #0e1028 100%)' }}>
+                <FloatingBalls active />
+
+                {/* ambient glow */}
+                <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[400px] rounded-full pointer-events-none"
+                  style={{ background: 'radial-gradient(circle, rgba(167,139,250,0.06) 0%, transparent 70%)' }} />
+
                 {/* Header */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Circle className="w-5 h-5 text-brand" />
-                    <span className="text-white font-bold text-lg">Plinko</span>
+                <div className="relative z-10 flex items-center justify-between px-5 pt-4 pb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center ring-1 ring-violet-400/20"
+                      style={{ background: 'linear-gradient(135deg, rgba(167,139,250,0.2) 0%, rgba(167,139,250,0.06) 100%)' }}>
+                      <Circle className="w-4 h-4 text-violet-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-white font-bold text-base leading-none">Plinko</h2>
+                      <p className="text-violet-300/30 text-[10px] mt-0.5">{plinkoRows} rows • {plinkoRisk} risk</p>
+                    </div>
                   </div>
                   {betHistory.length > 0 && (
                     <div className="flex gap-1.5">
                       {betHistory.slice(0, 6).map(h => (
-                        <span key={h.id} className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold
-                          ${h.multiplier >= 2 ? 'bg-brand/15 text-brand' : h.multiplier >= 1 ? 'bg-accent-amber/15 text-accent-amber' : 'bg-accent-red/15 text-accent-red'}`}>
+                        <span key={h.id} className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-bold ring-1 ring-white/[0.06]
+                          ${h.multiplier >= 2 ? 'bg-brand/10 text-brand' : h.multiplier >= 1 ? 'bg-amber-400/10 text-amber-400' : 'bg-accent-red/10 text-accent-red'}`}>
                           {h.multiplier}×
                         </span>
                       ))}
@@ -477,16 +394,17 @@ export default function PlinkoPage() {
                   )}
                 </div>
 
-                <canvas ref={canvasRef} width={600} height={500}
-                  className="w-full rounded-xl" style={{ maxHeight: '500px' }} />
+                <div className="relative z-10 px-4 pb-4">
+                  <canvas ref={canvasRef} width={600} height={500} className="w-full rounded-xl" style={{ maxHeight: '500px' }} />
+                </div>
 
-                {/* Multiplier legend */}
-                <div className="mt-3 flex items-center justify-center gap-4 text-[10px] text-muted">
-                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400"></span>100×+</div>
-                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400"></span>10×+</div>
-                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-400"></span>2×+</div>
-                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span>1×+</div>
-                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400"></span>&lt;1×</div>
+                {/* Legend */}
+                <div className="relative z-10 flex items-center justify-center gap-4 px-5 pb-4 text-[10px] text-white/25">
+                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />100×+</div>
+                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400" />10×+</div>
+                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-400" />2×+</div>
+                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" />1×+</div>
+                  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" />&lt;1×</div>
                 </div>
               </div>
 
@@ -494,17 +412,9 @@ export default function PlinkoPage() {
             </div>
           </div>
 
-          <FairnessModal
-            isOpen={showFairness}
-            onClose={() => setShowFairness(false)}
-            game="plinko"
-            serverSeedHash={serverSeedHash}
-            clientSeed={clientSeed}
-            nonce={nonce}
-            previousServerSeed={previousServerSeed}
-            onClientSeedChange={setClientSeed}
-            onRotateSeed={rotateSeed}
-          />
+          <FairnessModal isOpen={showFairness} onClose={() => setShowFairness(false)} game="plinko"
+            serverSeedHash={serverSeedHash} clientSeed={clientSeed} nonce={nonce}
+            previousServerSeed={previousServerSeed} onClientSeedChange={setClientSeed} onRotateSeed={rotateSeed} />
         </div>
       </div>
     </GameLayout>

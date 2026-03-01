@@ -19,6 +19,23 @@ interface WheelSegment {
 
 type RiskLevel = 'low' | 'medium' | 'high'
 
+/* ── Floating particles ───────────────────────────── */
+function FloatingSparkles() {
+  const items = ['🎡', '✨', '💎', '⭐', '🎯', '🌟']
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {items.map((e, i) => (
+        <motion.div key={i}
+          initial={{ opacity: 0, y: '110%', x: `${5 + i * 16}%` }}
+          animate={{ opacity: [0, 0.3, 0], y: '-10%', x: `${5 + i * 16 + (Math.random() - 0.5) * 10}%` }}
+          transition={{ duration: 5 + Math.random() * 4, repeat: Infinity, delay: i * 0.9, ease: 'easeOut' }}
+          className="absolute text-sm select-none"
+        >{e}</motion.div>
+      ))}
+    </div>
+  )
+}
+
 const WHEEL_CONFIGS: Record<number, Record<RiskLevel, WheelSegment[]>> = {
   10: {
     low: [
@@ -227,14 +244,8 @@ const WHEEL_CONFIGS: Record<number, Record<RiskLevel, WheelSegment[]>> = {
 export default function WheelPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const {
-    initialized,
-    serverSeedHash,
-    clientSeed,
-    nonce,
-    previousServerSeed,
-    generateBet,
-    rotateSeed,
-    setClientSeed,
+    initialized, serverSeedHash, clientSeed, nonce, previousServerSeed,
+    generateBet, rotateSeed, setClientSeed,
   } = useProvablyFair()
   const { isAuthenticated } = useAuthStore()
   const { placeBet, isPlacing, fetchBalances, balances, balancesLoaded } = useGameStore()
@@ -252,12 +263,10 @@ export default function WheelPage() {
 
   const segments = WHEEL_CONFIGS[wheelSegments]?.[riskLevel] || WHEEL_CONFIGS[10].medium
 
-  // Fetch real balances when authenticated
   useEffect(() => {
     if (isAuthenticated) fetchBalances()
   }, [isAuthenticated, fetchBalances])
 
-  // Derive display balance
   const displayBalance = isAuthenticated
     ? (balances['btc']?.available ?? 0)
     : demoBalance
@@ -266,7 +275,6 @@ export default function WheelPage() {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
@@ -277,29 +285,33 @@ export default function WheelPage() {
 
     ctx.clearRect(0, 0, width, height)
 
-    // Save state for rotation
     ctx.save()
     ctx.translate(centerX, centerY)
     ctx.rotate((rotation * Math.PI) / 180)
     ctx.translate(-centerX, -centerY)
 
-    // Draw outer glow
+    // Outer glow
     const gradient = ctx.createRadialGradient(centerX, centerY, radius - 10, centerX, centerY, radius + 30)
-    gradient.addColorStop(0, 'rgba(0, 232, 123, 0.2)')
-    gradient.addColorStop(1, 'rgba(0, 232, 123, 0)')
+    gradient.addColorStop(0, 'rgba(167, 139, 250, 0.25)')
+    gradient.addColorStop(1, 'rgba(167, 139, 250, 0)')
     ctx.beginPath()
     ctx.arc(centerX, centerY, radius + 30, 0, Math.PI * 2)
     ctx.fillStyle = gradient
     ctx.fill()
 
+    // Outer ring
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, radius + 4, 0, Math.PI * 2)
+    ctx.strokeStyle = 'rgba(167, 139, 250, 0.3)'
+    ctx.lineWidth = 3
+    ctx.stroke()
+
     // Draw segments
     const segmentAngle = (2 * Math.PI) / segments.length
-    
     segments.forEach((segment, i) => {
       const startAngle = i * segmentAngle - Math.PI / 2
       const endAngle = startAngle + segmentAngle
 
-      // Draw segment
       ctx.beginPath()
       ctx.moveTo(centerX, centerY)
       ctx.arc(centerX, centerY, radius, startAngle, endAngle)
@@ -310,7 +322,18 @@ export default function WheelPage() {
       ctx.lineWidth = 2
       ctx.stroke()
 
-      // Draw text
+      // Inner highlight
+      ctx.beginPath()
+      ctx.moveTo(centerX, centerY)
+      ctx.arc(centerX, centerY, radius, startAngle, endAngle)
+      ctx.closePath()
+      const segGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius)
+      segGrad.addColorStop(0, 'rgba(255,255,255,0.06)')
+      segGrad.addColorStop(1, 'rgba(255,255,255,0)')
+      ctx.fillStyle = segGrad
+      ctx.fill()
+
+      // Text
       ctx.save()
       ctx.translate(centerX, centerY)
       ctx.rotate(startAngle + segmentAngle / 2)
@@ -321,20 +344,19 @@ export default function WheelPage() {
       ctx.restore()
     })
 
-    // Draw center circle with gradient
+    // Center circle
     const centerGradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 35)
-    centerGradient.addColorStop(0, '#12141A')
-    centerGradient.addColorStop(1, '#0A0B0F')
+    centerGradient.addColorStop(0, '#1a1530')
+    centerGradient.addColorStop(1, '#0e0a1a')
     ctx.beginPath()
     ctx.arc(centerX, centerY, 35, 0, Math.PI * 2)
     ctx.fillStyle = centerGradient
     ctx.fill()
-    ctx.strokeStyle = '#00E87B'
+    ctx.strokeStyle = '#a78bfa'
     ctx.lineWidth = 3
     ctx.stroke()
 
-    // Draw inner logo/icon
-    ctx.fillStyle = '#00E87B'
+    ctx.fillStyle = '#a78bfa'
     ctx.font = 'bold 20px sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
@@ -342,21 +364,18 @@ export default function WheelPage() {
 
     ctx.restore()
 
-    // Draw pointer (fixed, not rotating)
+    // Pointer
     ctx.beginPath()
     ctx.moveTo(centerX + radius + 15, centerY)
     ctx.lineTo(centerX + radius - 15, centerY - 18)
     ctx.lineTo(centerX + radius - 15, centerY + 18)
     ctx.closePath()
-    
     const pointerGradient = ctx.createLinearGradient(centerX + radius - 15, centerY, centerX + radius + 15, centerY)
-    pointerGradient.addColorStop(0, '#00E87B')
-    pointerGradient.addColorStop(1, '#00C466')
+    pointerGradient.addColorStop(0, '#a78bfa')
+    pointerGradient.addColorStop(1, '#8b5cf6')
     ctx.fillStyle = pointerGradient
     ctx.fill()
-    
-    // Pointer glow
-    ctx.shadowColor = '#00E87B'
+    ctx.shadowColor = '#a78bfa'
     ctx.shadowBlur = 15
     ctx.fill()
     ctx.shadowBlur = 0
@@ -366,16 +385,9 @@ export default function WheelPage() {
   // Spin the wheel
   const handleSpin = async () => {
     if (isSpinning || isPlacing) return
-    if (!initialized) {
-      toast.error('Initializing provably fair system...')
-      return
-    }
-
+    if (!initialized) { toast.error('Initializing provably fair system...'); return }
     const bet = parseFloat(betAmount)
-    if (bet <= 0 || bet > displayBalance) {
-      toast.error('Invalid bet amount')
-      return
-    }
+    if (bet <= 0 || bet > displayBalance) { toast.error('Invalid bet amount'); return }
 
     setIsSpinning(true)
     setShowResult(false)
@@ -388,7 +400,6 @@ export default function WheelPage() {
       if (isAuthenticated) {
         const data = await placeBet('wheel', betAmount, 'usdt', {})
         resultIdx = data.result_data?.segment_index ?? 0
-        // Map backend segment to local segment — use the multiplier from result_data if available
         resultSegment = segments[resultIdx % segments.length]
       } else {
         const { result: ri } = await generateBet('wheel', { segments: segments.length })
@@ -402,31 +413,25 @@ export default function WheelPage() {
       return
     }
 
-    // Calculate final rotation
     const segmentAngle = 360 / segments.length
     const targetAngle = 360 - (resultIdx * segmentAngle + segmentAngle / 2)
-    const spins = 5 + Math.floor(Math.random() * 3) // 5-7 full spins
+    const spins = 5 + Math.floor(Math.random() * 3)
     const finalRotation = spins * 360 + targetAngle
 
-    // Animate spin
-    const duration = 5000 // 5 seconds
+    const duration = 5000
     const startTime = Date.now()
     const startRotation = rotation
 
     const animate = () => {
       const elapsed = Date.now() - startTime
       const progress = Math.min(elapsed / duration, 1)
-      
-      // Easing: ease-out cubic
       const eased = 1 - Math.pow(1 - progress, 3)
-      
       const currentRotation = startRotation + (finalRotation * eased)
       setRotation(currentRotation % 360)
 
       if (progress < 1) {
         requestAnimationFrame(animate)
       } else {
-        // Spin complete
         setResult(resultSegment)
         setShowResult(true)
         setIsSpinning(false)
@@ -442,41 +447,16 @@ export default function WheelPage() {
         }
       }
     }
-
     requestAnimationFrame(animate)
   }
 
   return (
     <GameLayout>
-      <div className="p-4 sm:p-6">
-        <div className="max-w-6xl mx-auto">
+      <div className="p-3 sm:p-5">
+        <div className="max-w-6xl mx-auto space-y-4">
           <SessionStatsBar />
 
-          {/* Game Header */}
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-between mb-6"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-brand/15 flex items-center justify-center">
-                <CircleDot className="w-5 h-5 text-brand" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white">Wheel</h1>
-                <p className="text-sm text-muted">Spin to win up to 100x</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowFairness(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-surface/50 border border-border rounded-xl text-text-secondary hover:text-text-primary hover:border-brand/50 transition-all duration-200"
-            >
-              <Shield className="w-4 h-4" />
-              <span className="text-sm font-medium">Fairness</span>
-            </button>
-          </motion.div>
-
-          <div className="flex flex-col lg:flex-row gap-6">
+          <div className="flex flex-col lg:flex-row gap-4">
             {/* Left: Bet Controls */}
             <BetControls
               betAmount={betAmount}
@@ -486,48 +466,26 @@ export default function WheelPage() {
               nonce={nonce}
               onShowFairness={() => setShowFairness(true)}
               actionButton={
-                <motion.button
-                  onClick={handleSpin}
-                  disabled={isSpinning}
-                  whileHover={{ scale: isSpinning ? 1 : 1.02 }}
-                  whileTap={{ scale: isSpinning ? 1 : 0.98 }}
-                  className={`w-full py-4 rounded-xl font-bold text-lg transition-all duration-200 ${
-                    isSpinning
-                      ? 'bg-surface-light text-text-muted cursor-not-allowed'
-                      : 'bg-brand text-background-deep shadow-glow-brand-sm hover:brightness-110'
-                  }`}
-                >
-                  {isSpinning ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                      Spinning...
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center gap-2">
-                      <Sparkles className="w-5 h-5" />
-                      Spin Wheel
-                    </span>
-                  )}
-                </motion.button>
+                <button onClick={handleSpin} disabled={isSpinning}
+                  className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2 ${
+                    isSpinning ? 'bg-surface text-muted cursor-not-allowed' :
+                    'bg-gradient-to-r from-violet-500 to-purple-400 text-white shadow-lg shadow-violet-500/30 hover:brightness-110'
+                  }`}>
+                  {isSpinning ? <><RefreshCw className="w-4 h-4 animate-spin" />Spinning...</> : <><Sparkles className="w-4 h-4" />Spin Wheel</>}
+                </button>
               }
             >
               {/* Segments */}
               <div>
-                <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2 block">
-                  Segments
-                </label>
+                <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">Segments</span>
                 <div className="grid grid-cols-5 gap-1.5">
-                  {[10, 20, 30, 40, 50].map((count) => (
-                    <button
-                      key={count}
-                      onClick={() => setWheelSegments(count)}
-                      disabled={isSpinning}
-                      className={`py-2 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                  {[10, 20, 30, 40, 50].map(count => (
+                    <button key={count} onClick={() => setWheelSegments(count)} disabled={isSpinning}
+                      className={`py-2 rounded-lg font-semibold text-sm transition-all ${
                         wheelSegments === count
-                          ? 'bg-brand text-background-deep shadow-glow-brand-sm'
-                          : 'bg-surface border border-border text-muted-light hover:text-white hover:border-brand/40'
-                      } disabled:opacity-50`}
-                    >
+                          ? 'bg-violet-500/20 border border-violet-500/50 text-violet-300 shadow-sm shadow-violet-500/20'
+                          : 'bg-surface border border-border text-muted hover:text-white hover:border-violet-500/30'
+                      } disabled:opacity-50`}>
                       {count}
                     </button>
                   ))}
@@ -536,26 +494,19 @@ export default function WheelPage() {
 
               {/* Risk Level */}
               <div>
-                <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5 text-brand" />
-                  Risk Level
-                </label>
+                <span className="text-[11px] font-semibold text-muted uppercase tracking-wider flex items-center gap-2 mb-1.5">
+                  <Zap className="w-3.5 h-3.5 text-violet-400" />Risk Level
+                </span>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {(['low', 'medium', 'high'] as RiskLevel[]).map((level) => (
-                    <button
-                      key={level}
-                      onClick={() => setRiskLevel(level)}
-                      disabled={isSpinning}
-                      className={`py-2 rounded-lg font-semibold text-sm capitalize transition-all duration-200 ${
+                  {(['low', 'medium', 'high'] as RiskLevel[]).map(level => (
+                    <button key={level} onClick={() => setRiskLevel(level)} disabled={isSpinning}
+                      className={`py-2 rounded-lg font-semibold text-sm capitalize transition-all ${
                         riskLevel === level
-                          ? level === 'low'
-                            ? 'bg-accent-green/20 border border-emerald-500/50 text-accent-green'
-                            : level === 'medium'
-                              ? 'bg-amber-500/20 border border-amber-500/50 text-accent-amber'
-                              : 'bg-accent-red/20 border border-red-500/50 text-accent-red'
-                          : 'bg-surface-light/50 border border-border-light text-text-secondary hover:bg-surface-lighter/50 hover:text-text-primary'
-                      } disabled:opacity-50`}
-                    >
+                          ? level === 'low' ? 'bg-emerald-500/20 border border-emerald-500/50 text-emerald-400'
+                            : level === 'medium' ? 'bg-amber-500/20 border border-amber-500/50 text-amber-400'
+                            : 'bg-red-500/20 border border-red-500/50 text-red-400'
+                          : 'bg-surface border border-border text-muted hover:text-white'
+                      } disabled:opacity-50`}>
                       {level}
                     </button>
                   ))}
@@ -564,138 +515,121 @@ export default function WheelPage() {
 
               {/* Multipliers Preview */}
               <div>
-                <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-2 flex items-center gap-2">
-                  <TrendingUp className="w-3.5 h-3.5 text-brand" />
-                  Possible Wins
-                </label>
-                <div className="bg-surface-light/30 rounded-xl p-2 max-h-40 overflow-y-auto border border-border-light/50 custom-scrollbar">
+                <span className="text-[11px] font-semibold text-muted uppercase tracking-wider flex items-center gap-2 mb-1.5">
+                  <TrendingUp className="w-3.5 h-3.5 text-violet-400" />Possible Wins
+                </span>
+                <div className="bg-surface rounded-xl p-2 max-h-40 overflow-y-auto border border-border scrollbar-thin">
                   {segments.map((seg, i) => (
-                    <div key={i} className="flex justify-between items-center py-1 px-1 border-b border-border-light/20 last:border-0">
+                    <div key={i} className="flex justify-between items-center py-1 px-1.5 border-b border-white/[0.03] last:border-0">
                       <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded"
-                          style={{ backgroundColor: seg.color }}
-                        />
+                        <div className="w-3 h-3 rounded-sm ring-1 ring-white/10" style={{ backgroundColor: seg.color }} />
                         <span className={`font-mono tabular-nums text-xs ${
-                          seg.value >= 10 ? 'text-accent-amber' :
-                          seg.value >= 5 ? 'text-brand' :
-                          seg.value > 0 ? 'text-text-primary' : 'text-text-muted'
-                        }`}>
-                          {seg.value}x
-                        </span>
+                          seg.value >= 10 ? 'text-amber-400' : seg.value >= 5 ? 'text-violet-400' : seg.value > 0 ? 'text-white' : 'text-muted'
+                        }`}>{seg.value}x</span>
                       </div>
-                      <span className="text-[10px] text-text-muted font-mono">
-                        {(seg.probability * 100).toFixed(1)}%
-                      </span>
+                      <span className="text-[10px] text-muted font-mono">{(seg.probability * 100).toFixed(1)}%</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Last Result */}
+              {/* Last Result in sidebar */}
               <AnimatePresence>
                 {showResult && result && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0 }}
-                    className={`p-3 rounded-xl text-center ${
-                      result.value > 0
-                        ? 'bg-accent-green/10 border border-emerald-500/30'
-                        : 'bg-accent-red/10 border border-red-500/30'
-                    }`}
-                  >
-                    <div className={`text-2xl font-bold font-mono ${
-                      result.value >= 10 ? 'text-accent-amber' :
-                      result.value > 0 ? 'text-accent-green' : 'text-accent-red'
+                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
+                    className={`p-3 rounded-xl text-center ring-1 ${
+                      result.value > 0 ? 'bg-brand/[0.06] ring-brand/20' : 'bg-accent-red/10 ring-accent-red/20'
                     }`}>
-                      {result.value}x
-                    </div>
-                    <div className="text-xs text-text-secondary mt-1">
+                    <div className={`text-2xl font-bold font-mono ${
+                      result.value >= 10 ? 'text-amber-400' : result.value > 0 ? 'text-brand' : 'text-accent-red'
+                    }`}>{result.value}x</div>
+                    <div className="text-xs text-muted mt-1">
                       {result.value > 0
-                        ? <span className="text-accent-green">+${(parseFloat(betAmount) * result.value).toFixed(2)}</span>
-                        : 'Better luck next time!'
-                      }
+                        ? <span className="text-brand">+${(parseFloat(betAmount) * result.value).toFixed(2)}</span>
+                        : 'Better luck next time!'}
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
             </BetControls>
 
-            {/* Right: Game Area */}
+            {/* Right: Game Area — Premium Scene */}
             <div className="flex-1 min-w-0 space-y-4">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.1 }}
-                className="bg-surface/50 rounded-2xl p-6 border border-border"
-              >
-                <div className="flex justify-center relative">
+              <div className="relative rounded-2xl overflow-hidden border border-white/[0.06]"
+                style={{ background: 'linear-gradient(165deg, #0e0a1a 0%, #0d0e16 40%, #0a0f12 100%)' }}>
+                <FloatingSparkles />
+
+                {/* Ambient glow */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none"
+                  style={{ background: 'radial-gradient(circle, rgba(167,139,250,0.08) 0%, transparent 70%)' }} />
+
+                {/* Header */}
+                <div className="relative z-10 flex items-center justify-between px-5 pt-4 pb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center ring-1 ring-violet-400/20"
+                      style={{ background: 'linear-gradient(135deg, rgba(167,139,250,0.25) 0%, rgba(167,139,250,0.08) 100%)' }}>
+                      <CircleDot className="w-4 h-4 text-violet-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-white font-bold text-base leading-none">Wheel</h2>
+                      <p className="text-violet-300/30 text-[10px] mt-0.5">Spin to win up to 100x</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowFairness(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold bg-white/[0.04] text-muted hover:text-white ring-1 ring-white/[0.06] transition-all">
+                    <Shield className="w-3 h-3" />Fairness
+                  </button>
+                </div>
+
+                {/* Wheel Canvas */}
+                <div className="relative z-10 p-6 flex justify-center">
                   {isSpinning && (
-                    <motion.div
-                      animate={{ opacity: [0.3, 0.6, 0.3] }}
-                      transition={{ duration: 1, repeat: Infinity }}
-                      className="absolute inset-0 bg-gradient-radial from-brand/20 to-transparent rounded-full"
-                    />
+                    <motion.div animate={{ opacity: [0.3, 0.6, 0.3] }} transition={{ duration: 1, repeat: Infinity }}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-violet-500/10 rounded-full blur-[80px]" />
                   )}
-                  <canvas
-                    ref={canvasRef}
-                    width={400}
-                    height={400}
-                    className="rounded-full max-w-full"
-                  />
+                  <canvas ref={canvasRef} width={400} height={400} className="rounded-full max-w-full relative z-10" />
                 </div>
 
                 {/* Result Display */}
                 <AnimatePresence>
                   {showResult && result && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20, scale: 0.9 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      className={`mt-6 p-6 rounded-2xl text-center backdrop-blur-sm ${
-                        result.value > 0
-                          ? 'bg-accent-green/10 border border-emerald-500/30'
-                          : 'bg-accent-red/10 border border-red-500/30'
-                      }`}
-                    >
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: "spring", stiffness: 200, delay: 0.1 }}
-                        className={`text-6xl font-bold font-mono tabular-nums ${
-                          result.value >= 10 ? 'text-accent-amber' :
-                          result.value > 0 ? 'text-accent-green' : 'text-accent-red'
-                        }`}
-                      >
-                        {result.value}x
-                      </motion.div>
-                      <div className="text-lg text-text-secondary mt-3 font-mono">
-                        {result.value > 0
-                          ? <span className="text-accent-green">+${(parseFloat(betAmount) * result.value).toFixed(2)}</span>
-                          : 'Better luck next time!'
-                        }
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+                      className="relative z-10 mx-5 mb-5">
+                      <div className={`p-5 rounded-2xl text-center backdrop-blur-sm ring-1 ${
+                        result.value > 0 ? 'bg-brand/[0.06] ring-brand/20' : 'bg-accent-red/[0.06] ring-accent-red/20'
+                      }`}>
+                        {result.value > 0 && (
+                          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full pointer-events-none"
+                            style={{ background: `radial-gradient(circle, ${result.value >= 10 ? 'rgba(251,191,36,0.12)' : 'rgba(0,232,123,0.12)'} 0%, transparent 70%)` }} />
+                        )}
+                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+                          transition={{ type: 'spring', stiffness: 200, delay: 0.1 }}
+                          className={`text-5xl sm:text-6xl font-black font-mono tabular-nums relative z-10 ${
+                            result.value >= 10 ? 'text-amber-400' : result.value > 0 ? 'text-brand' : 'text-accent-red'
+                          }`}
+                          style={{ textShadow: result.value > 0
+                            ? (result.value >= 10 ? '0 0 60px rgba(251,191,36,0.5)' : '0 0 60px rgba(0,232,123,0.5)')
+                            : '0 0 40px rgba(255,71,87,0.4)' }}>
+                          {result.value}x
+                        </motion.div>
+                        <div className="text-base text-muted mt-2 font-mono relative z-10">
+                          {result.value > 0
+                            ? <span className="text-brand font-bold">+${(parseFloat(betAmount) * result.value).toFixed(2)}</span>
+                            : 'Better luck next time!'}
+                        </div>
                       </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
-              </motion.div>
+              </div>
 
               <LiveBetsTable game="wheel" />
             </div>
           </div>
 
-          <FairnessModal
-            isOpen={showFairness}
-            onClose={() => setShowFairness(false)}
-            game="wheel"
-            serverSeedHash={serverSeedHash}
-            clientSeed={clientSeed}
-            nonce={nonce}
-            previousServerSeed={previousServerSeed}
-            onClientSeedChange={setClientSeed}
-            onRotateSeed={rotateSeed}
-          />
+          <FairnessModal isOpen={showFairness} onClose={() => setShowFairness(false)} game="wheel"
+            serverSeedHash={serverSeedHash} clientSeed={clientSeed} nonce={nonce}
+            previousServerSeed={previousServerSeed} onClientSeedChange={setClientSeed} onRotateSeed={rotateSeed} />
         </div>
       </div>
     </GameLayout>

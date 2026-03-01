@@ -32,8 +32,8 @@ export function useProvablyFair() {
     const init = async () => {
       const pf = getProvablyFair()
       
-      // If no server seed hash, initialize
-      if (!pf.serverSeedHash) {
+      // If no server seed or hash, initialize fresh
+      if (!pf.serverSeedHash || !pf.serverSeed) {
         await pf.initialize()
       }
       

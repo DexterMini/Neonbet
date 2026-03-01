@@ -11,7 +11,33 @@ import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { toast } from 'sonner'
-import { Dice1, RefreshCw, ArrowLeftRight, TrendingUp, TrendingDown, Percent, Zap } from 'lucide-react'
+import { Dice1, ArrowLeftRight, TrendingUp, TrendingDown, RefreshCw, Percent } from 'lucide-react'
+
+/* ── Floating dice particles ──────────────────────── */
+function FloatingDice({ active }: { active: boolean }) {
+  if (!active) return null
+  const emojis = ['🎲', '⚄', '⚅', '⚃', '⚁', '⚂']
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {emojis.map((e, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, y: '110%', x: `${10 + i * 14}%`, rotate: 0 }}
+          animate={{
+            opacity: [0, 0.4, 0],
+            y: '-10%',
+            x: `${10 + i * 14 + (Math.random() - 0.5) * 12}%`,
+            rotate: [0, 180, 360],
+          }}
+          transition={{ duration: 4 + Math.random() * 3, repeat: Infinity, delay: i * 0.7, ease: 'easeOut' }}
+          className="absolute text-sm select-none"
+        >
+          {e}
+        </motion.div>
+      ))}
+    </div>
+  )
+}
 
 export default function DicePage() {
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
@@ -21,20 +47,18 @@ export default function DicePage() {
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [target, setTarget] = useState(50)
-  const [rollOver, setRollOver] = useState(false)
+  const [rollOver, setRollOver] = useState(true)
   const [isRolling, setIsRolling] = useState(false)
   const [rollResult, setRollResult] = useState<number | null>(null)
   const [showResult, setShowResult] = useState(false)
-  const [isWin, setIsWin] = useState(false)
   const [showFairness, setShowFairness] = useState(false)
   const [history, setHistory] = useState<{ value: number; won: boolean }[]>([])
-
   const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
 
-  const houseEdge = 0.01
-  const winChance = rollOver ? 99 - target : target
-  const multiplier = ((100 - houseEdge * 100) / winChance)
+  const winChance = rollOver ? 100 - target : target
+  const multiplier = parseFloat((99 / winChance).toFixed(4))
   const potentialProfit = parseFloat(betAmount) * multiplier - parseFloat(betAmount)
+  const isWin = rollResult !== null && showResult && (rollOver ? rollResult > target : rollResult < target)
 
   const doRoll = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
@@ -42,44 +66,36 @@ export default function DicePage() {
     setIsRolling(true)
     setShowResult(false)
     try {
-      let rollValue: number
+      let generatedValue: number
       if (isAuthenticated) {
-        const data = await placeBet('dice', String(bet), 'usdt', { target, direction: rollOver ? 'over' : 'under' })
-        rollValue = data.result_data?.roll ?? 0
+        const data = await placeBet('dice', String(bet), 'usdt', { target, roll_over: rollOver })
+        generatedValue = data.result_data?.roll_value ?? 50
       } else {
         const { result } = await generateBet('dice')
-        rollValue = result as number
+        generatedValue = result as number
       }
-      for (let i = 0; i < 10; i++) {
-        setRollResult(Math.random() * 100)
-        await new Promise(r => setTimeout(r, 30 + i * 8))
+      for (let i = 0; i < 12; i++) {
+        setRollResult(parseFloat((Math.random() * 100).toFixed(2)))
+        await new Promise(r => setTimeout(r, 35))
       }
-      setRollResult(rollValue)
+      setRollResult(generatedValue)
       setShowResult(true)
-      const won = rollOver ? rollValue > target : rollValue < target
-      setIsWin(won)
+      const won = rollOver ? generatedValue > target : generatedValue < target
       const profit = won ? bet * multiplier - bet : -bet
-      setHistory(prev => [{ value: rollValue, won }, ...prev.slice(0, 19)])
+      setHistory(prev => [{ value: generatedValue, won }, ...prev.slice(0, 19)])
       sessionStats.recordBet(won, bet, profit, won ? multiplier : 0)
-      if (won) toast.success(`Won $${(bet * multiplier - bet).toFixed(2)}!`)
-      else toast.error(`Roll: ${rollValue.toFixed(2)} — Try again!`)
+      if (won) toast.success(`Rolled ${generatedValue.toFixed(2)}! Won $${(bet * multiplier - bet).toFixed(2)}`)
+      else toast.error(`Rolled ${generatedValue.toFixed(2)} — Better luck next time!`)
       return { won, profit }
     } catch (err: any) {
       toast.error(err?.message || 'Error placing bet')
       return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
-    } finally {
-      setIsRolling(false)
-    }
+    } finally { setIsRolling(false) }
   }, [betAmount, target, rollOver, initialized, isAuthenticated, placeBet, generateBet, multiplier, sessionStats])
 
   const autoBetHandler = useCallback(async (amount: number) => doRoll(amount), [doRoll])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)
-
-  useHotkeys(
-    () => { if (!isRolling && !autoBetState.running) doRoll() },
-    () => autoBetStop(),
-    !isRolling
-  )
+  useHotkeys(() => { if (!isRolling && !autoBetState.running) doRoll() }, () => autoBetStop(), !isRolling)
 
   return (
     <GameLayout>
@@ -115,7 +131,7 @@ export default function DicePage() {
               actionButton={
                 <button onClick={() => doRoll()} disabled={isRolling || isPlacing || !initialized}
                   className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all flex items-center justify-center gap-2 ${
-                    isRolling || isPlacing ? 'bg-surface text-muted cursor-not-allowed' : 'bg-brand text-background-deep shadow-glow-brand-sm hover:brightness-110'
+                    isRolling || isPlacing ? 'bg-surface text-muted cursor-not-allowed' : 'bg-gradient-to-r from-brand to-emerald-400 text-background-deep shadow-lg shadow-brand/30 hover:brightness-110'
                   }`}>
                   {isRolling ? <><RefreshCw className="w-4 h-4 animate-spin" />Rolling...</> : <><Dice1 className="w-4 h-4" />Roll Dice</>}
                 </button>
@@ -126,7 +142,6 @@ export default function DicePage() {
                 <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">Profit on Win</span>
                 <div className="bg-surface border border-border rounded-xl px-3 py-2.5 font-mono text-brand text-[13px] font-bold">+${potentialProfit.toFixed(2)}</div>
               </div>
-
               {/* Stats row */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="bg-surface rounded-xl p-2.5 border border-border text-center">
@@ -148,51 +163,99 @@ export default function DicePage() {
             </BetControls>
 
             <div className="flex-1 min-w-0 space-y-4">
-              <div className="bg-background-secondary rounded-2xl border border-border/60 overflow-hidden">
-                <div className="h-56 sm:h-64 flex items-center justify-center relative">
-                  <div className="absolute inset-0 overflow-hidden">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-brand/[0.03] rounded-full blur-3xl" />
-                    {showResult && isWin && <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 0.08 }} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-brand rounded-full blur-3xl" />}
-                    {showResult && !isWin && <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 0.08 }} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-accent-red rounded-full blur-3xl" />}
+              {/* ── Premium Scene Container ────────── */}
+              <div
+                className="relative rounded-2xl overflow-hidden border border-white/[0.06]"
+                style={{ background: 'linear-gradient(165deg, #0e1628 0%, #0b1020 40%, #0d0f1a 100%)' }}
+              >
+                <FloatingDice active />
+
+                {/* ambient glow */}
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none"
+                  style={{ background: 'radial-gradient(circle, rgba(56,100,220,0.08) 0%, transparent 70%)' }} />
+
+                {/* Header bar */}
+                <div className="relative z-10 flex items-center justify-between px-5 pt-4 pb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center ring-1 ring-blue-400/20"
+                      style={{ background: 'linear-gradient(135deg, rgba(56,100,220,0.25) 0%, rgba(56,100,220,0.08) 100%)' }}>
+                      <Dice1 className="w-4 h-4 text-blue-400" />
+                    </div>
+                    <div>
+                      <h2 className="text-white font-bold text-base leading-none">Dice</h2>
+                      <p className="text-blue-300/40 text-[10px] mt-0.5">Roll {rollOver ? 'Over' : 'Under'} {target}</p>
+                    </div>
                   </div>
+                  <div className="flex items-center gap-2 text-[11px] text-muted font-mono">
+                    <span className={`px-2 py-0.5 rounded-md font-bold ${rollOver ? 'bg-brand/10 text-brand' : 'bg-blue-400/10 text-blue-400'}`}>
+                      {rollOver ? '▲ Over' : '▼ Under'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Result display */}
+                <div className="relative z-10 h-56 sm:h-64 flex items-center justify-center">
+                  {showResult && isWin && (
+                    <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 0.12 }}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-brand rounded-full blur-[100px]" />
+                  )}
+                  {showResult && !isWin && (
+                    <motion.div initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 0.12 }}
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-accent-red rounded-full blur-[100px]" />
+                  )}
+
                   <AnimatePresence mode="wait">
                     {rollResult !== null ? (
-                      <motion.div key={rollResult} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center z-10">
-                        <div className={`text-6xl sm:text-7xl font-black font-mono tabular-nums ${showResult ? (isWin ? 'text-brand' : 'text-accent-red') : 'text-white'}`}
-                          style={{ textShadow: showResult ? (isWin ? '0 0 50px rgba(0,232,123,0.5)' : '0 0 50px rgba(255,71,87,0.5)') : 'none' }}>
+                      <motion.div key={rollResult} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                        className="text-center z-10">
+                        <motion.div
+                          animate={showResult ? { scale: [1, 1.06, 1] } : {}}
+                          transition={{ duration: 0.4 }}
+                          className={`text-7xl sm:text-8xl font-black font-mono tabular-nums ${showResult ? (isWin ? 'text-brand' : 'text-accent-red') : 'text-white'}`}
+                          style={{ textShadow: showResult ? (isWin ? '0 0 60px rgba(0,232,123,0.6), 0 0 120px rgba(0,232,123,0.2)' : '0 0 60px rgba(255,71,87,0.6), 0 0 120px rgba(255,71,87,0.2)') : '0 0 40px rgba(255,255,255,0.15)' }}>
                           {rollResult.toFixed(2)}
-                        </div>
+                        </motion.div>
                         {showResult && (
-                          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-                            className={`mt-3 flex items-center justify-center gap-2 text-sm font-bold ${isWin ? 'text-brand' : 'text-accent-red'}`}>
-                            {isWin ? <><TrendingUp className="w-4 h-4" />WIN +${potentialProfit.toFixed(2)}</> : <><TrendingDown className="w-4 h-4" />LOSS</>}
+                          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, type: 'spring' }}
+                            className="mt-4">
+                            <span className={`inline-flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-full ${
+                              isWin ? 'bg-brand/15 text-brand ring-1 ring-brand/20' : 'bg-accent-red/15 text-accent-red ring-1 ring-accent-red/20'
+                            }`}>
+                              {isWin ? <><TrendingUp className="w-4 h-4" />WIN +${potentialProfit.toFixed(2)}</> : <><TrendingDown className="w-4 h-4" />LOSS</>}
+                            </span>
                           </motion.div>
                         )}
                       </motion.div>
                     ) : (
                       <div className="text-center z-10">
-                        <Dice1 className="w-16 h-16 text-muted/30 mx-auto mb-2" />
-                        <div className="text-muted text-sm">Press <kbd className="bg-surface px-1.5 py-0.5 rounded text-[11px] font-mono border border-border">Space</kbd> to roll</div>
+                        <div className="w-20 h-20 rounded-2xl mx-auto mb-3 flex items-center justify-center ring-1 ring-white/[0.06]"
+                          style={{ background: 'linear-gradient(145deg, rgba(56,100,220,0.12) 0%, rgba(56,100,220,0.04) 100%)' }}>
+                          <Dice1 className="w-10 h-10 text-blue-400/30" />
+                        </div>
+                        <div className="text-muted text-sm">Press <kbd className="bg-white/[0.06] px-2 py-0.5 rounded-md text-[11px] font-mono border border-white/[0.08]">Space</kbd> to roll</div>
                       </div>
                     )}
                   </AnimatePresence>
                 </div>
 
-                <div className="px-5 pb-5">
+                {/* Slider section */}
+                <div className="relative z-10 px-5 pb-5">
                   <div className="relative mb-2">
-                    <div className="h-2.5 bg-surface rounded-full overflow-hidden relative">
-                      <div className={`absolute inset-y-0 left-0 transition-all ${rollOver ? 'bg-surface-lighter' : 'bg-accent-red/60'}`} style={{ width: `${target}%` }} />
-                      <div className={`absolute inset-y-0 right-0 transition-all ${rollOver ? 'bg-brand/60' : 'bg-surface-lighter'}`} style={{ width: `${100 - target}%` }} />
-                      <div className="absolute top-1/2 -translate-y-1/2 w-1 h-4 bg-white rounded-full shadow-lg" style={{ left: `${target}%`, transform: 'translate(-50%, -50%)' }} />
+                    <div className="h-3 rounded-full overflow-hidden relative ring-1 ring-white/[0.06]"
+                      style={{ background: 'linear-gradient(90deg, rgba(15,15,25,0.8) 0%, rgba(15,15,25,0.8) 100%)' }}>
+                      <div className={`absolute inset-y-0 left-0 transition-all ${rollOver ? '' : 'bg-gradient-to-r from-accent-red/50 to-accent-red/30'}`} style={{ width: `${target}%`, background: rollOver ? 'rgba(30,35,50,0.6)' : undefined }} />
+                      <div className={`absolute inset-y-0 right-0 transition-all ${rollOver ? 'bg-gradient-to-r from-brand/30 to-brand/50' : ''}`} style={{ width: `${100 - target}%`, background: !rollOver ? 'rgba(30,35,50,0.6)' : undefined }} />
+                      <div className="absolute top-1/2 -translate-y-1/2 w-1.5 h-5 bg-white rounded-full shadow-lg shadow-white/30" style={{ left: `${target}%`, transform: 'translate(-50%, -50%)' }} />
                     </div>
                     <input type="range" min={1} max={98} value={target} onChange={e => setTarget(parseInt(e.target.value))}
                       className="absolute inset-0 w-full opacity-0 cursor-pointer" />
                     {rollResult !== null && showResult && (
-                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
-                        className={`absolute top-1/2 w-3.5 h-3.5 -translate-y-1/2 rounded-full border-2 border-white shadow-lg ${isWin ? 'bg-brand' : 'bg-accent-red'}`}
+                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 400 }}
+                        className={`absolute top-1/2 w-4 h-4 -translate-y-1/2 rounded-full border-2 border-white shadow-lg ${isWin ? 'bg-brand shadow-brand/40' : 'bg-accent-red shadow-accent-red/40'}`}
                         style={{ left: `${rollResult}%`, transform: 'translate(-50%, -50%)' }} />
                     )}
-                    <div className="flex justify-between mt-2 text-[10px] text-muted font-mono"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+                    <div className="flex justify-between mt-2.5 text-[10px] text-white/20 font-mono"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
                   </div>
                 </div>
               </div>
