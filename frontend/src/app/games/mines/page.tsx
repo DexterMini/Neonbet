@@ -144,11 +144,11 @@ export default function MinesPage() {
 
   const randomPick = () => {
     if (!gameActive || hitMine !== null) return
-    // Find all unrevealed safe tiles
-    const safeTiles = Array.from({ length: gridSize }, (_, i) => i)
-      .filter(i => !revealed.includes(i) && !minePositions.includes(i))
-    if (safeTiles.length === 0) return
-    const pick = safeTiles[Math.floor(Math.random() * safeTiles.length)]
+    // Find all unrevealed tiles (includes mines — player takes the risk)
+    const unrevealed = Array.from({ length: gridSize }, (_, i) => i)
+      .filter(i => !revealed.includes(i))
+    if (unrevealed.length === 0) return
+    const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)]
     revealTile(pick)
   }
 
