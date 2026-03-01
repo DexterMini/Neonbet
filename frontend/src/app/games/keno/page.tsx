@@ -106,6 +106,7 @@ export default function KenoPage() {
   const [showFairness, setShowFairness] = useState(false)
   const [lastBetInfo, setLastBetInfo] = useState<{ nonce: number; clientSeed: string; serverSeedHash: string } | null>(null)
   const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
+  const [pickerCount, setPickerCount] = useState(5)
 
   const matches = useMemo(() => selectedNumbers.filter(n => drawnNumbers.includes(n)).length, [selectedNumbers, drawnNumbers])
 
@@ -129,12 +130,13 @@ export default function KenoPage() {
     if (gameEnded) { setDrawnNumbers([]); setGameEnded(false) }
   }
 
-  const handleQuickPick = () => {
+  const handleQuickPick = (count?: number) => {
     if (isPlaying) return
-    const count = selectedNumbers.length || 5
+    const pickCount = count ?? pickerCount
+    if (pickCount <= 0) return
     const available = Array.from({ length: TOTAL_NUMBERS }, (_, i) => i + 1)
     const picks: number[] = []
-    while (picks.length < count) { const idx = Math.floor(Math.random() * available.length); picks.push(available.splice(idx, 1)[0]) }
+    while (picks.length < Math.min(pickCount, MAX_PICKS)) { const idx = Math.floor(Math.random() * available.length); picks.push(available.splice(idx, 1)[0]) }
     setSelectedNumbers(picks.sort((a, b) => a - b))
     setDrawnNumbers([]); setGameEnded(false)
   }
@@ -242,24 +244,24 @@ export default function KenoPage() {
                 </button>
               }
             >
-              {/* Risk Level */}
+              {/* Risk Level — horizontal row like Thrill */}
               <div>
-                <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-2">Risk Level</span>
-                <div className="grid grid-cols-2 gap-2">
-                  {(['low', 'classic', 'medium', 'high'] as RiskLevel[]).map(risk => {
+                <span className="text-[11px] font-bold text-muted uppercase tracking-wider block mb-2">Risk Level</span>
+                <div className="flex bg-surface/80 rounded-xl border border-border p-1">
+                  {(['classic', 'low', 'medium', 'high'] as RiskLevel[]).map(risk => {
                     const isActive = riskLevel === risk
                     return (
                       <button key={risk} onClick={() => setRiskLevel(risk)} disabled={isPlaying}
-                        className={`relative py-2.5 rounded-xl text-[13px] font-bold capitalize transition-all duration-200 disabled:opacity-40
+                        className={`flex-1 py-2 rounded-lg text-[12px] font-bold capitalize transition-all duration-200 disabled:opacity-40
                           ${isActive
-                            ? 'text-white shadow-lg'
-                            : 'bg-surface/80 text-muted-light hover:text-white border border-border hover:border-white/15'
+                            ? 'text-white'
+                            : 'text-muted hover:text-muted-light'
                           }`}
                         style={isActive ? {
-                          background: 'linear-gradient(135deg, rgba(0,210,190,0.25) 0%, rgba(0,180,160,0.15) 100%)',
-                          border: '1.5px solid rgba(0,210,190,0.5)',
-                          boxShadow: '0 0 20px rgba(0,210,190,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
-                        } : {}}>
+                          background: 'linear-gradient(135deg, rgba(0,210,190,0.3) 0%, rgba(0,180,160,0.15) 100%)',
+                          boxShadow: '0 0 12px rgba(0,210,190,0.15), inset 0 1px 0 rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(0,210,190,0.4)',
+                        } : { border: '1px solid transparent' }}>
                         {risk}
                       </button>
                     )
@@ -267,30 +269,58 @@ export default function KenoPage() {
                 </div>
               </div>
 
-              {/* Quick Actions */}
-              <div className="flex gap-2">
-                <button onClick={handleQuickPick} disabled={isPlaying}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-surface/80 border border-border rounded-xl text-[12px] font-semibold text-muted-light hover:text-white hover:border-white/15 transition-all duration-200 disabled:opacity-40 group">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-400/70 group-hover:text-cyan-400 transition-colors" />Quick Pick
-                </button>
-                <button onClick={handleClearSelection} disabled={isPlaying || selectedNumbers.length === 0}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-surface/80 border border-border rounded-xl text-[12px] font-semibold text-muted-light hover:text-white hover:border-red-400/30 transition-all duration-200 disabled:opacity-40 group">
-                  <X className="w-3.5 h-3.5 text-muted group-hover:text-red-400 transition-colors" />Clear
-                </button>
+              {/* Number Picker — slider + pick button */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold text-muted uppercase tracking-wider">Number Picker</span>
+                  <button onClick={handleClearSelection} disabled={isPlaying || selectedNumbers.length === 0}
+                    className="text-[11px] font-semibold text-muted-light hover:text-white underline underline-offset-2 transition-colors disabled:opacity-40 disabled:no-underline">
+                    Clear Picks
+                  </button>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-white font-bold font-mono text-lg w-6 text-center">{pickerCount}</span>
+                  <div className="flex-1 relative">
+                    <input
+                      type="range"
+                      min={1}
+                      max={MAX_PICKS}
+                      value={pickerCount}
+                      onChange={(e) => setPickerCount(parseInt(e.target.value))}
+                      disabled={isPlaying}
+                      className="w-full h-2 rounded-full appearance-none cursor-pointer disabled:opacity-40
+                        [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full
+                        [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-[rgb(0,210,190)] [&::-webkit-slider-thumb]:shadow-[0_0_10px_rgba(0,210,190,0.4)]
+                        [&::-webkit-slider-thumb]:bg-[rgb(0,210,190)]
+                        [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full
+                        [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-[rgb(0,210,190)] [&::-moz-range-thumb]:bg-[rgb(0,210,190)]"
+                      style={{ background: `linear-gradient(to right, rgb(0,210,190) 0%, rgb(0,210,190) ${((pickerCount - 1) / (MAX_PICKS - 1)) * 100}%, rgba(255,255,255,0.1) ${((pickerCount - 1) / (MAX_PICKS - 1)) * 100}%, rgba(255,255,255,0.1) 100%)` }}
+                    />
+                  </div>
+                  <button onClick={() => handleQuickPick(pickerCount)} disabled={isPlaying}
+                    className="px-4 py-2 rounded-xl text-[12px] font-bold uppercase tracking-wider transition-all duration-200 disabled:opacity-40"
+                    style={{
+                      background: 'linear-gradient(135deg, rgba(0,210,190,0.2) 0%, rgba(0,180,160,0.1) 100%)',
+                      border: '1px solid rgba(0,210,190,0.35)',
+                      color: 'rgb(0,210,190)',
+                    }}>
+                    Pick
+                  </button>
+                </div>
               </div>
 
               {/* Picks / Hits */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-surface/80 rounded-xl p-3 border border-border">
-                  <div className="text-[10px] text-muted uppercase tracking-wider font-semibold mb-1">Picks</div>
+                  <div className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1">Picks</div>
                   <div className="text-xl font-black font-mono tracking-tight" style={{ color: 'rgb(0,210,190)' }}>
                     {selectedNumbers.length}<span className="text-muted text-sm font-semibold">/{MAX_PICKS}</span>
                   </div>
                 </div>
                 <div className="bg-surface/80 rounded-xl p-3 border border-border">
-                  <div className="text-[10px] text-muted uppercase tracking-wider font-semibold mb-1">Hits</div>
+                  <div className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1">Hits</div>
                   <div className="text-xl font-black font-mono tracking-tight text-amber-400">
-                    {gameEnded ? matches : <span className="text-muted">-</span>}
+                    {gameEnded ? matches : <span className="text-muted">—</span>}
                   </div>
                 </div>
               </div>
