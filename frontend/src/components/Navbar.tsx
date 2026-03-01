@@ -128,6 +128,14 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
             )}>
               Casino
             </Link>
+            <Link href="/sports" className={cn(
+              'px-4 py-1.5 text-[13px] font-semibold rounded-lg border transition-colors',
+              pathname === '/sports'
+                ? 'text-brand bg-brand/10 border-brand/20'
+                : 'text-muted-light hover:text-white border-transparent hover:bg-white/[0.04]'
+            )}>
+              Sports
+            </Link>
           </div>
         </div>
 
