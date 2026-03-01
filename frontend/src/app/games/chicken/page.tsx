@@ -7,32 +7,46 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { Shield, Sparkles, RotateCcw, Car, Footprints } from 'lucide-react'
+import { Sparkles, RotateCcw, Zap } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats } from '@/components/game'
 import { toast } from 'sonner'
 
-/* ── Game config ───────────────────────────────────── */
+/* ── Config ────────────────────────────────────────── */
 const MAX_ROWS = 10
 
 const DIFFICULTY_PRESETS = [
-  { label: 'Easy',   lanes: 4, color: 'text-brand',       bg: 'bg-brand/15 border-brand/40',           safeLabel: '3 safe' },
-  { label: 'Medium', lanes: 3, color: 'text-accent-amber', bg: 'bg-accent-amber/15 border-accent-amber/40', safeLabel: '2 safe' },
-  { label: 'Hard',   lanes: 2, color: 'text-accent-red',   bg: 'bg-accent-red/15 border-accent-red/40',   safeLabel: '1 safe' },
+  { label: 'Easy',   lanes: 4, color: 'text-brand',     bg: 'bg-brand/15 border-brand/40',         safeLabel: '3 safe', accent: '#00E87B' },
+  { label: 'Medium', lanes: 3, color: 'text-amber-400', bg: 'bg-amber-400/15 border-amber-400/40', safeLabel: '2 safe', accent: '#FBBF24' },
+  { label: 'Hard',   lanes: 2, color: 'text-red-400',   bg: 'bg-red-400/15 border-red-400/40',     safeLabel: '1 safe', accent: '#F87171' },
 ]
 
 const getMultiplier = (lanes: number, row: number): number => {
   if (row === 0) return 1
-  const edge = 0.97 // 3% house edge
+  const edge = 0.97
   let mult = 1
-  for (let i = 0; i < row; i++) {
-    mult *= lanes * edge
-  }
+  for (let i = 0; i < row; i++) mult *= lanes * edge
   return parseFloat(mult.toFixed(2))
 }
 
-/* ── Row type ─────────────────────────────────────── */
-interface Row {
-  carIndex: number // which lane has the car
+interface Row { carIndex: number }
+
+/* ── Floating particles component ──────────────────── */
+function FloatingParticles({ active, color }: { active: boolean; color: string }) {
+  if (!active) return null
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {Array.from({ length: 6 }, (_, i) => (
+        <motion.div
+          key={i}
+          initial={{ opacity: 0, y: '100%', x: `${15 + i * 15}%` }}
+          animate={{ opacity: [0, 0.6, 0], y: '-10%', x: `${15 + i * 15 + (Math.random() - 0.5) * 20}%` }}
+          transition={{ duration: 3 + Math.random() * 2, repeat: Infinity, delay: i * 0.5, ease: 'easeOut' }}
+          className="absolute w-1 h-1 rounded-full"
+          style={{ background: color }}
+        />
+      ))}
+    </div>
+  )
 }
 
 export default function ChickenPage() {
@@ -42,7 +56,7 @@ export default function ChickenPage() {
   const sessionStats = useSessionStats()
 
   const [betAmount, setBetAmount] = useState('10.00')
-  const [difficulty, setDifficulty] = useState(1) // 0=easy, 1=medium, 2=hard
+  const [difficulty, setDifficulty] = useState(1)
   const [showFairness, setShowFairness] = useState(false)
 
   const [gameActive, setGameActive] = useState(false)
@@ -57,83 +71,59 @@ export default function ChickenPage() {
   const lanes = DIFFICULTY_PRESETS[difficulty].lanes
   const currentMult = getMultiplier(lanes, currentRow)
   const nextMult = getMultiplier(lanes, currentRow + 1)
-  const profit = parseFloat(betAmount) * currentMult - parseFloat(betAmount)
 
-  // Auto-scroll to current row
   useEffect(() => {
-    if (scrollRef.current && currentRow > 0) {
-      scrollRef.current.scrollTop = 0
-    }
+    if (scrollRef.current && currentRow > 0) scrollRef.current.scrollTop = 0
   }, [currentRow])
 
   const generateRows = useCallback(async (): Promise<Row[]> => {
-    const newRows: Row[] = []
+    const r: Row[] = []
     for (let i = 0; i < MAX_ROWS; i++) {
       const { result } = await generateBet('chicken', { row: i, lanes })
-      const hashNum = typeof result === 'number' ? result : parseInt(String(result), 16)
-      newRows.push({ carIndex: Math.abs(hashNum) % lanes })
+      const n = typeof result === 'number' ? result : parseInt(String(result), 16)
+      r.push({ carIndex: Math.abs(n) % lanes })
     }
-    return newRows
+    return r
   }, [generateBet, lanes])
 
   const startGame = async () => {
     if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
     try {
-      const newRows = await generateRows()
-      setRows(newRows)
-      setCurrentRow(0)
-      setPicked([])
-      setHitCar(null)
-      setCashedOut(false)
-      setGameActive(true)
-    } catch (err: any) {
-      toast.error(err?.message || 'Error starting game')
-    }
+      const nr = await generateRows()
+      setRows(nr); setCurrentRow(0); setPicked([]); setHitCar(null); setCashedOut(false); setGameActive(true)
+    } catch (err: any) { toast.error(err?.message || 'Error starting game') }
   }
 
   const pickLane = (row: number, lane: number) => {
     if (!gameActive || row !== currentRow || hitCar || cashedOut) return
-
     const isSafe = rows[row].carIndex !== lane
-    const newPicked = [...picked, { row, lane }]
-    setPicked(newPicked)
-
+    setPicked(p => [...p, { row, lane }])
     if (!isSafe) {
-      setHitCar({ row, lane })
-      setGameActive(false)
+      setHitCar({ row, lane }); setGameActive(false)
       sessionStats.recordBet(false, parseFloat(betAmount), -parseFloat(betAmount), 0)
-      toast.error('🚗 Hit by a car! You lost.')
+      toast.error('🚗 Hit by a car!')
     } else if (row + 1 >= MAX_ROWS) {
-      setCurrentRow(row + 1)
-      setGameActive(false)
-      setCashedOut(true)
-      const finalMult = getMultiplier(lanes, row + 1)
-      sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * finalMult - parseFloat(betAmount), finalMult)
-      toast.success(`🐔 Chicken crossed safely! Won $${(parseFloat(betAmount) * finalMult).toFixed(2)}`)
-    } else {
-      setCurrentRow(row + 1)
-    }
+      setCurrentRow(row + 1); setGameActive(false); setCashedOut(true)
+      const fm = getMultiplier(lanes, row + 1)
+      sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * fm - parseFloat(betAmount), fm)
+      toast.success(`🐔 Won $${(parseFloat(betAmount) * fm).toFixed(2)}!`)
+    } else { setCurrentRow(row + 1) }
   }
 
   const cashout = () => {
     if (!gameActive || currentRow === 0) return
-    setCashedOut(true)
-    setGameActive(false)
+    setCashedOut(true); setGameActive(false)
     sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * currentMult - parseFloat(betAmount), currentMult)
-    toast.success(`🐔 Chicken cashed out $${(parseFloat(betAmount) * currentMult).toFixed(2)}!`)
+    toast.success(`🐔 Cashed out $${(parseFloat(betAmount) * currentMult).toFixed(2)}!`)
   }
 
   const resetGame = () => {
-    setGameActive(false)
-    setCurrentRow(0)
-    setRows([])
-    setPicked([])
-    setHitCar(null)
-    setCashedOut(false)
+    setGameActive(false); setCurrentRow(0); setRows([]); setPicked([]); setHitCar(null); setCashedOut(false)
   }
 
-  // Build visual rows (bottom = row 0, top = max)
   const visibleRows = Array.from({ length: MAX_ROWS }, (_, i) => MAX_ROWS - 1 - i)
+  const diffPreset = DIFFICULTY_PRESETS[difficulty]
+  const gameEnded = !!hitCar || cashedOut
 
   return (
     <GameLayout>
@@ -142,7 +132,6 @@ export default function ChickenPage() {
           <SessionStatsBar />
 
           <div className="flex flex-col lg:flex-row gap-4">
-
             {/* ── Left: Controls ─────────────────────── */}
             <BetControls
               betAmount={betAmount}
@@ -153,24 +142,28 @@ export default function ChickenPage() {
               onShowFairness={() => setShowFairness(true)}
               showAutoTab={false}
               actionButton={
-                !gameActive && !cashedOut && !hitCar ? (
+                !gameActive && !gameEnded ? (
                   <button onClick={startGame} disabled={parseFloat(betAmount) <= 0 || !initialized}
-                    className="w-full py-3.5 bg-brand text-background-deep font-bold text-[14px] rounded-xl shadow-glow-brand-sm hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
+                    className="w-full py-3.5 bg-gradient-to-r from-brand to-emerald-400 text-background-deep font-bold text-[14px] rounded-xl shadow-lg shadow-brand/25 hover:shadow-brand/40 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
                     <Sparkles className="w-4 h-4" />Cross the Road
                   </button>
                 ) : gameActive && currentRow > 0 ? (
-                  <button onClick={cashout}
-                    className="w-full py-3.5 bg-brand text-background-deep font-bold text-[14px] rounded-xl shadow-glow-brand-sm hover:brightness-110 transition-all flex items-center justify-center gap-2">
-                    Cash Out ${(parseFloat(betAmount) * currentMult).toFixed(2)}
-                  </button>
+                  <motion.button onClick={cashout}
+                    animate={{ scale: [1, 1.02, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="w-full py-3.5 bg-gradient-to-r from-brand via-emerald-400 to-brand text-background-deep font-bold text-[14px] rounded-xl shadow-lg shadow-brand/30 hover:shadow-brand/50 transition-all flex items-center justify-center gap-2">
+                    <Zap className="w-4 h-4" />Cash Out ${(parseFloat(betAmount) * currentMult).toFixed(2)}
+                  </motion.button>
                 ) : gameActive ? (
-                  <div className="w-full py-3.5 bg-surface border border-brand/30 font-bold text-[14px] text-brand rounded-xl text-center animate-pulse">
-                    🐔 Pick a safe lane!
+                  <div className="w-full py-3.5 bg-surface border border-amber-400/30 font-bold text-[14px] text-amber-400 rounded-xl text-center">
+                    <motion.span animate={{ opacity: [1, 0.5, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}>
+                      🐔 Pick a safe lane!
+                    </motion.span>
                   </div>
                 ) : (
                   <button onClick={resetGame}
                     className={`w-full py-3.5 font-bold text-[14px] rounded-xl transition-all flex items-center justify-center gap-2
-                      ${hitCar ? 'bg-accent-red text-white' : 'bg-brand text-background-deep shadow-glow-brand-sm'}`}>
+                      ${hitCar ? 'bg-gradient-to-r from-red-500 to-red-400 text-white shadow-lg shadow-red-500/25' : 'bg-gradient-to-r from-brand to-emerald-400 text-background-deep shadow-lg shadow-brand/25'}`}>
                     <RotateCcw className="w-4 h-4" />Play Again
                   </button>
                 )
@@ -191,31 +184,33 @@ export default function ChickenPage() {
                 </div>
               </div>
 
-              {/* Stats */}
+              {/* Stats row */}
               <div className="grid grid-cols-2 gap-2">
                 <div className="bg-surface rounded-xl p-2.5 border border-border">
                   <div className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Crossed</div>
                   <div className="text-base font-bold text-brand font-mono">{currentRow}/{MAX_ROWS}</div>
                 </div>
                 <div className="bg-surface rounded-xl p-2.5 border border-border">
-                  <div className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Next Mult</div>
-                  <div className="text-base font-bold text-accent-amber font-mono">{nextMult.toFixed(2)}x</div>
+                  <div className="text-[10px] text-muted uppercase tracking-wider mb-0.5">Next</div>
+                  <div className="text-base font-bold text-amber-400 font-mono">{nextMult.toFixed(2)}x</div>
                 </div>
               </div>
 
-              {/* Active game multiplier */}
+              {/* Active multiplier */}
               <AnimatePresence>
                 {gameActive && currentRow > 0 && (
-                  <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-                    className="bg-brand/[0.06] rounded-xl p-3.5 border border-brand/20">
-                    <div className="flex items-center justify-between">
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                    className="relative overflow-hidden rounded-xl border border-brand/25">
+                    <div className="absolute inset-0 bg-gradient-to-r from-brand/[0.08] via-brand/[0.04] to-brand/[0.08]" />
+                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,232,123,0.1),transparent_70%)]" />
+                    <div className="relative flex items-center justify-between p-3.5">
                       <div>
-                        <div className="text-[10px] text-muted uppercase mb-0.5">Current</div>
-                        <div className="text-xl text-brand font-bold font-mono">{currentMult.toFixed(2)}x</div>
+                        <div className="text-[10px] text-muted uppercase mb-0.5">Multiplier</div>
+                        <div className="text-2xl text-brand font-black font-mono animate-multiplier-glow">{currentMult.toFixed(2)}x</div>
                       </div>
                       <div className="text-right">
                         <div className="text-[10px] text-muted uppercase mb-0.5">Payout</div>
-                        <div className="text-xl text-brand font-bold font-mono">${(parseFloat(betAmount) * currentMult).toFixed(2)}</div>
+                        <div className="text-2xl text-brand font-black font-mono">${(parseFloat(betAmount) * currentMult).toFixed(2)}</div>
                       </div>
                     </div>
                   </motion.div>
@@ -223,129 +218,241 @@ export default function ChickenPage() {
               </AnimatePresence>
             </BetControls>
 
-            {/* ── Right: Road ───────────────────────── */}
-            <div className="flex-1 min-w-0">
-              <div className="bg-background-secondary rounded-2xl border border-border/60 overflow-hidden">
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 py-3 border-b border-border/40">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
-                      <span className="text-lg">🐔</span>
+            {/* ── Right: Road Scene ──────────────────── */}
+            <div className="flex-1 min-w-0 space-y-4">
+              <div className="relative rounded-2xl overflow-hidden border border-white/[0.06]"
+                style={{ background: 'linear-gradient(180deg, #0d1a14 0%, #0a0e0c 30%, #0e1015 100%)' }}>
+
+                {/* Floating particles */}
+                <FloatingParticles active={gameActive} color={diffPreset.accent} />
+
+                {/* Top bar */}
+                <div className="relative z-10 flex items-center justify-between px-4 sm:px-5 py-3 border-b border-white/[0.05]"
+                  style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.3), transparent)' }}>
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500/25 to-orange-600/15 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10">
+                        <span className="text-2xl">🐔</span>
+                      </div>
+                      {gameActive && (
+                        <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.8, 0.3, 0.8] }} transition={{ repeat: Infinity, duration: 2 }}
+                          className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-brand" />
+                      )}
                     </div>
                     <div>
-                      <span className="text-white font-bold text-sm">Chicken Road</span>
-                      <span className="text-muted text-[11px] ml-2">Cross {MAX_ROWS} lanes to win</span>
+                      <div className="text-white font-bold text-[15px] tracking-tight">Chicken Road</div>
+                      <div className="text-[11px] text-white/35">Avoid the cars, claim the prize</div>
                     </div>
                   </div>
+
+                  {/* Progress dots */}
                   <div className="flex items-center gap-2">
-                    <div className="px-3 py-1.5 rounded-lg bg-surface border border-border">
-                      <span className="text-[11px] text-muted">Road </span>
-                      <span className="text-brand font-mono font-bold text-[13px]">{currentRow}</span>
-                      <span className="text-muted text-[11px]">/{MAX_ROWS}</span>
+                    <div className="hidden sm:flex items-center gap-[3px] bg-black/30 px-2.5 py-1.5 rounded-lg border border-white/[0.05]">
+                      {Array.from({ length: MAX_ROWS }, (_, i) => (
+                        <motion.div key={i}
+                          animate={i === currentRow && gameActive ? { scale: [1, 1.3, 1] } : {}}
+                          transition={{ repeat: Infinity, duration: 1 }}
+                          className={`w-[6px] h-[6px] rounded-full transition-all duration-500
+                          ${i < currentRow ? 'bg-brand shadow-sm shadow-brand/60'
+                            : i === currentRow && gameActive ? 'bg-amber-400'
+                            : 'bg-white/[0.08]'}`} />
+                      ))}
+                    </div>
+                    <div className="px-3 py-1.5 rounded-lg bg-black/40 border border-white/[0.08]">
+                      <span className="text-amber-400 font-mono font-bold text-sm">{currentRow}</span>
+                      <span className="text-white/25 text-xs">/{MAX_ROWS}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4">
+                {/* Road scene */}
+                <div className="relative p-3 sm:p-4">
+                  {/* Ambient glow */}
+                  {gameActive && (
+                    <div className="absolute inset-0 pointer-events-none transition-all duration-700" style={{
+                      background: `radial-gradient(ellipse at 50% ${90 - (currentRow / MAX_ROWS) * 75}%, ${diffPreset.accent}0A 0%, transparent 55%)`
+                    }} />
+                  )}
+
                   {/* Finish line */}
-                  <div className="mb-2">
-                    <div className="flex items-center gap-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-brand/10 via-brand/5 to-brand/10 border border-brand/25"
-                      style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 12px, rgba(0,232,123,0.08) 12px, rgba(0,232,123,0.08) 24px)' }}>
-                      <span className="text-lg">🏁</span>
-                      <span className="text-brand text-[13px] font-bold tracking-wide">FINISH LINE</span>
-                      <span className="ml-auto text-accent-amber font-mono font-bold text-[13px]">
-                        {getMultiplier(lanes, MAX_ROWS).toFixed(2)}x
-                      </span>
+                  <div className="relative mb-2 group">
+                    <div className="absolute inset-0 rounded-xl bg-brand/5 blur-xl group-hover:bg-brand/10 transition-colors" />
+                    <div className="relative flex items-center gap-3 py-3 px-4 rounded-xl border border-brand/20 overflow-hidden"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(0,232,123,0.08) 0%, rgba(0,232,123,0.02) 50%, rgba(0,232,123,0.06) 100%)',
+                      }}>
+                      {/* Checkered pattern */}
+                      <div className="absolute inset-0 opacity-[0.04]" style={{
+                        backgroundImage: `repeating-conic-gradient(#fff 0% 25%, transparent 0% 50%)`,
+                        backgroundSize: '16px 16px'
+                      }} />
+                      <div className="relative flex items-center gap-3 flex-1">
+                        <span className="text-xl">🏁</span>
+                        <div>
+                          <div className="text-brand text-[13px] font-bold tracking-wide">FINISH LINE</div>
+                          <div className="text-brand/40 text-[10px]">Safe across all roads</div>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <span className="text-amber-400 font-mono font-black text-lg">{getMultiplier(lanes, MAX_ROWS).toFixed(2)}x</span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Road grid */}
-                  <div ref={scrollRef} className="max-h-[500px] overflow-y-auto scrollbar-thin pr-1">
-                    {visibleRows.map(row => {
+                  <div ref={scrollRef} className="space-y-[3px] max-h-[480px] overflow-y-auto scrollbar-thin pr-1">
+                    {visibleRows.map((row) => {
                       const isCurrentRow = gameActive && row === currentRow
                       const isPastRow = row < currentRow
                       const isFutureRow = row > currentRow
                       const rowPick = picked.find(p => p.row === row)
                       const isHitRow = hitCar?.row === row
                       const multiplier = getMultiplier(lanes, row + 1)
+                      const dangerLevel = (row + 1) / MAX_ROWS
 
                       return (
                         <motion.div
                           key={row}
+                          layout
                           initial={false}
-                          animate={{
-                            opacity: isFutureRow && !hitCar && !cashedOut ? 0.4 : 1,
-                          }}
-                          className={`flex items-center gap-2 py-1 transition-all`}
+                          animate={{ opacity: isFutureRow && !gameEnded ? 0.3 + dangerLevel * 0.15 : 1 }}
                         >
-                          {/* Row number */}
-                          <div className={`w-7 text-right text-[11px] font-mono font-bold shrink-0
-                            ${isCurrentRow ? 'text-amber-400' : isPastRow ? 'text-brand/60' : 'text-muted/40'}`}>
-                            {row + 1}
-                          </div>
+                          <div className={`relative flex items-center gap-2 py-[3px] px-1.5 rounded-xl transition-all duration-300
+                            ${isCurrentRow ? 'z-10' : ''}`}>
 
-                          {/* Road with lanes */}
-                          <div className={`flex-1 flex gap-1.5 p-1.5 rounded-xl transition-all duration-200
-                            ${isCurrentRow 
-                              ? 'bg-amber-500/[0.06] ring-1 ring-amber-500/25' 
-                              : isPastRow 
-                                ? 'bg-brand/[0.03]' 
-                                : ''}`}
-                          >
-                            {Array.from({ length: lanes }, (_, l) => {
-                              const wasPicked = rowPick?.lane === l
-                              const isCarLane = rows[row]?.carIndex === l
-                              const showResult = isPastRow || isHitRow || cashedOut
-                              const isSafeRevealed = showResult && !isCarLane
-                              const isCarRevealed = showResult && isCarLane
-                              const isHitPick = isHitRow && wasPicked && isCarLane
+                            {/* Row indicator */}
+                            <div className={`relative w-8 h-8 rounded-lg flex items-center justify-center text-[11px] font-bold font-mono shrink-0 transition-all duration-300 overflow-hidden
+                              ${isCurrentRow
+                                ? 'text-amber-400'
+                                : isPastRow
+                                ? 'text-brand'
+                                : 'text-white/20'
+                              }`}>
+                              {/* BG */}
+                              <div className={`absolute inset-0 rounded-lg transition-all duration-300
+                                ${isCurrentRow
+                                  ? 'bg-amber-400/15 border border-amber-400/40 shadow-lg shadow-amber-400/10'
+                                  : isPastRow
+                                  ? 'bg-brand/10 border border-brand/20'
+                                  : 'bg-white/[0.03] border border-white/[0.05]'
+                                }`} />
+                              <span className="relative z-10">{isPastRow ? '✓' : row + 1}</span>
+                              {isCurrentRow && (
+                                <motion.div animate={{ scale: [1, 1.6, 1], opacity: [0.4, 0, 0.4] }} transition={{ repeat: Infinity, duration: 1.8 }}
+                                  className="absolute inset-0 rounded-lg border-2 border-amber-400/50" />
+                              )}
+                            </div>
 
-                              return (
-                                <motion.button
-                                  key={l}
-                                  onClick={() => pickLane(row, l)}
-                                  disabled={!isCurrentRow || !!hitCar || cashedOut}
-                                  whileHover={isCurrentRow && !hitCar ? { scale: 1.04, y: -1 } : {}}
-                                  whileTap={isCurrentRow && !hitCar ? { scale: 0.97 } : {}}
-                                  className={`relative flex-1 h-[52px] rounded-lg font-bold text-[13px] transition-all duration-200 flex items-center justify-center
-                                    ${isHitPick
-                                      ? 'bg-red-500/25 ring-2 ring-red-500/70 text-red-400'
-                                      : isSafeRevealed && wasPicked
-                                      ? 'bg-brand/15 ring-2 ring-brand/50 text-brand'
-                                      : isSafeRevealed
-                                      ? 'bg-brand/[0.06] ring-1 ring-brand/15 text-brand/50'
-                                      : isCarRevealed && !wasPicked
-                                      ? 'bg-zinc-800/60 ring-1 ring-zinc-700/40 text-zinc-500'
-                                      : isCurrentRow
-                                      ? 'bg-zinc-800/70 ring-1 ring-zinc-600/40 text-muted-light cursor-pointer hover:bg-amber-500/10 hover:ring-amber-400/40 hover:text-white active:ring-amber-400/60'
-                                      : 'bg-zinc-800/30 ring-1 ring-zinc-700/20 text-muted/20 cursor-default'
-                                    }`}
-                                >
-                                  {isHitPick ? (
-                                    <motion.span initial={{ scale: 0, rotate: -20 }} animate={{ scale: 1.3, rotate: 0 }} className="text-xl select-none">🚗</motion.span>
-                                  ) : isCarRevealed ? (
-                                    <span className="text-base opacity-40 select-none">🚗</span>
-                                  ) : isSafeRevealed && wasPicked ? (
-                                    <motion.span initial={{ scale: 0 }} animate={{ scale: 1.1 }} className="text-xl select-none">🐔</motion.span>
-                                  ) : isSafeRevealed ? (
-                                    <span className="text-base opacity-30 select-none">✓</span>
-                                  ) : isCurrentRow ? (
-                                    <span className="text-lg opacity-40 select-none">?</span>
-                                  ) : null}
+                            {/* Lane tiles */}
+                            <div className={`flex-1 flex gap-[5px] p-[5px] rounded-xl transition-all duration-300
+                              ${isCurrentRow
+                                ? 'bg-amber-400/[0.04] ring-1 ring-amber-400/15'
+                                : ''}`}>
+                              {Array.from({ length: lanes }, (_, l) => {
+                                const wasPicked = rowPick?.lane === l
+                                const isCarLane = rows[row]?.carIndex === l
+                                const showResult = isPastRow || isHitRow || cashedOut
+                                const isSafeRevealed = showResult && !isCarLane
+                                const isCarRevealed = showResult && isCarLane
+                                const isHitPick = isHitRow && wasPicked && isCarLane
 
-                                  {/* Lane divider dashes */}
-                                  {l < lanes - 1 && !isCurrentRow && !isPastRow && (
-                                    <div className="absolute -right-[5px] top-2 bottom-2 w-[2px] border-r border-dashed border-zinc-700/30 pointer-events-none" />
-                                  )}
-                                </motion.button>
-                              )
-                            })}
-                          </div>
+                                return (
+                                  <motion.button
+                                    key={l}
+                                    onClick={() => pickLane(row, l)}
+                                    disabled={!isCurrentRow || !!hitCar || cashedOut}
+                                    whileHover={isCurrentRow && !hitCar ? { scale: 1.05, y: -3, transition: { duration: 0.15 } } : {}}
+                                    whileTap={isCurrentRow && !hitCar ? { scale: 0.93 } : {}}
+                                    className={`relative flex-1 h-[50px] sm:h-[54px] rounded-xl font-bold transition-all duration-200 flex items-center justify-center overflow-hidden
+                                      ${isHitPick
+                                        ? 'shadow-2xl shadow-red-500/30'
+                                        : isSafeRevealed && wasPicked
+                                        ? 'shadow-lg shadow-brand/20'
+                                        : isCurrentRow
+                                        ? 'cursor-pointer hover:shadow-xl hover:shadow-amber-400/10'
+                                        : 'cursor-default'
+                                      }`}
+                                    style={{
+                                      background: isHitPick
+                                        ? 'linear-gradient(135deg, rgba(239,68,68,0.25), rgba(239,68,68,0.1))'
+                                        : isSafeRevealed && wasPicked
+                                        ? 'linear-gradient(135deg, rgba(0,232,123,0.2), rgba(0,232,123,0.08))'
+                                        : isSafeRevealed
+                                        ? 'linear-gradient(135deg, rgba(0,232,123,0.06), rgba(0,232,123,0.02))'
+                                        : isCarRevealed
+                                        ? 'rgba(255,255,255,0.015)'
+                                        : isCurrentRow
+                                        ? 'linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))'
+                                        : 'rgba(255,255,255,0.015)',
+                                    }}
+                                  >
+                                    {/* Ring border */}
+                                    <div className={`absolute inset-0 rounded-xl transition-all duration-200
+                                      ${isHitPick
+                                        ? 'ring-2 ring-red-500/60'
+                                        : isSafeRevealed && wasPicked
+                                        ? 'ring-2 ring-brand/50'
+                                        : isSafeRevealed
+                                        ? 'ring-1 ring-brand/15'
+                                        : isCarRevealed
+                                        ? 'ring-1 ring-white/[0.04]'
+                                        : isCurrentRow
+                                        ? 'ring-1 ring-white/[0.08] hover:ring-amber-400/30'
+                                        : 'ring-1 ring-white/[0.03]'
+                                      }`} />
 
-                          {/* Multiplier */}
-                          <div className={`w-[60px] text-right text-[11px] font-mono font-bold shrink-0
-                            ${isCurrentRow ? 'text-accent-amber' : isPastRow ? 'text-brand/50' : 'text-muted/30'}`}>
-                            {multiplier.toFixed(2)}x
+                                    {/* Asphalt texture */}
+                                    {!showResult && (
+                                      <div className="absolute inset-0 opacity-[0.025]" style={{
+                                        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 6px, rgba(255,255,255,0.15) 6px, rgba(255,255,255,0.15) 7px)',
+                                      }} />
+                                    )}
+
+                                    {/* Content */}
+                                    <div className="relative z-10">
+                                      {isHitPick ? (
+                                        <motion.div initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: [0, -5, 5, 0] }}
+                                          transition={{ type: 'spring', damping: 8 }}
+                                          className="flex flex-col items-center">
+                                          <span className="text-2xl select-none drop-shadow-lg">🚗</span>
+                                          <motion.span initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+                                            className="text-[8px] text-red-400 font-black uppercase tracking-widest mt-0.5">CRASH</motion.span>
+                                        </motion.div>
+                                      ) : isCarRevealed ? (
+                                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.3 }}
+                                          className="text-base select-none">🚗</motion.span>
+                                      ) : isSafeRevealed && wasPicked ? (
+                                        <motion.div initial={{ scale: 0, y: 8 }} animate={{ scale: 1, y: 0 }}
+                                          transition={{ type: 'spring', damping: 12 }}
+                                          className="flex flex-col items-center">
+                                          <span className="text-xl select-none">🐔</span>
+                                        </motion.div>
+                                      ) : isSafeRevealed ? (
+                                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.2 }}
+                                          className="text-xs text-brand select-none">✓</motion.span>
+                                      ) : isCurrentRow ? (
+                                        <motion.span animate={{ y: [0, -2, 0], opacity: [0.25, 0.5, 0.25] }}
+                                          transition={{ repeat: Infinity, duration: 2.5, delay: l * 0.15 }}
+                                          className="text-base select-none">?</motion.span>
+                                      ) : null}
+                                    </div>
+                                  </motion.button>
+                                )
+                              })}
+                            </div>
+
+                            {/* Multiplier */}
+                            <div className="w-[60px] shrink-0 text-right">
+                              <span className={`inline-block px-2 py-1 rounded-lg text-[11px] font-mono font-bold transition-all
+                                ${isCurrentRow
+                                  ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20'
+                                  : isPastRow
+                                  ? 'text-brand/50'
+                                  : 'text-white/15'
+                                }`}>
+                                {multiplier.toFixed(2)}x
+                              </span>
+                            </div>
                           </div>
                         </motion.div>
                       )
@@ -354,34 +461,55 @@ export default function ChickenPage() {
 
                   {/* Start zone */}
                   <div className="mt-2">
-                    <div className="flex items-center gap-2 py-2 px-4 rounded-xl bg-zinc-800/30 border border-zinc-700/20">
+                    <div className="flex items-center gap-3 py-2.5 px-4 rounded-xl border border-white/[0.05]"
+                      style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.015), transparent, rgba(255,255,255,0.015))' }}>
                       <span className="text-base">🚶</span>
-                      <span className="text-muted text-[12px] font-medium">START</span>
-                      <span className="ml-auto text-[11px] text-muted/50 font-mono">1.00x</span>
+                      <div>
+                        <div className="text-white/50 text-[12px] font-bold">START</div>
+                        <div className="text-white/20 text-[10px]">Step into the road</div>
+                      </div>
+                      <span className="ml-auto text-white/15 font-mono text-[11px]">1.00x</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Result overlay */}
                 <AnimatePresence>
-                  {(hitCar || cashedOut) && (
+                  {gameEnded && (
                     <motion.div
-                      initial={{ opacity: 0, y: 10 }}
+                      initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className={`mx-4 mb-4 rounded-xl p-4 border text-center
-                        ${hitCar
-                          ? 'bg-accent-red/10 border-accent-red/30'
-                          : 'bg-brand/10 border-brand/30'
-                        }`}
+                      exit={{ opacity: 0, y: 20 }}
+                      transition={{ type: 'spring', damping: 15 }}
+                      className="relative mx-4 mb-4"
                     >
-                      <div className={`text-2xl font-black font-mono ${hitCar ? 'text-accent-red' : 'text-brand'}`}>
-                        {hitCar ? '🚗 ROADKILL' : `🐔 ${currentMult.toFixed(2)}x`}
-                      </div>
-                      <div className={`text-sm mt-1 ${hitCar ? 'text-accent-red/70' : 'text-brand/70'}`}>
-                        {hitCar
-                          ? `Lost $${parseFloat(betAmount).toFixed(2)} at road ${hitCar.row + 1}`
-                          : `Won $${(parseFloat(betAmount) * currentMult).toFixed(2)}`
-                        }
+                      <div className={`relative overflow-hidden rounded-2xl border backdrop-blur-sm
+                        ${hitCar ? 'border-red-500/25' : 'border-brand/25'}`}>
+                        {/* Gradient BG */}
+                        <div className={`absolute inset-0 ${hitCar
+                          ? 'bg-gradient-to-br from-red-500/15 via-red-900/10 to-transparent'
+                          : 'bg-gradient-to-br from-brand/15 via-emerald-900/10 to-transparent'}`} />
+                        {/* Radial glow */}
+                        <div className={`absolute inset-0 ${hitCar
+                          ? 'bg-[radial-gradient(circle_at_50%_0%,rgba(239,68,68,0.15),transparent_70%)]'
+                          : 'bg-[radial-gradient(circle_at_50%_0%,rgba(0,232,123,0.15),transparent_70%)]'}`} />
+
+                        <div className="relative p-6 text-center">
+                          <motion.div initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: 0 }}
+                            transition={{ type: 'spring', damping: 10, delay: 0.1 }}
+                            className="text-5xl mb-3">
+                            {hitCar ? '💥' : '🏆'}
+                          </motion.div>
+                          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+                            transition={{ type: 'spring', damping: 10, delay: 0.25 }}
+                            className={`text-3xl font-black font-mono mb-1 ${hitCar ? 'text-red-400' : 'text-brand animate-multiplier-glow'}`}>
+                            {hitCar ? 'ROADKILL' : `${currentMult.toFixed(2)}x`}
+                          </motion.div>
+                          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
+                            className={`text-sm font-medium ${hitCar ? 'text-red-400/60' : 'text-brand/60'}`}>
+                            {hitCar ? `Lost $${parseFloat(betAmount).toFixed(2)} at road ${hitCar.row + 1}` : `Won $${(parseFloat(betAmount) * currentMult).toFixed(2)}`}
+                          </motion.div>
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -394,17 +522,9 @@ export default function ChickenPage() {
         </div>
       </div>
 
-      <FairnessModal
-        isOpen={showFairness}
-        onClose={() => setShowFairness(false)}
-        game="chicken"
-        serverSeedHash={serverSeedHash}
-        clientSeed={clientSeed}
-        nonce={nonce}
-        previousServerSeed={previousServerSeed}
-        onClientSeedChange={setClientSeed}
-        onRotateSeed={rotateSeed}
-      />
+      <FairnessModal isOpen={showFairness} onClose={() => setShowFairness(false)} game="chicken"
+        serverSeedHash={serverSeedHash} clientSeed={clientSeed} nonce={nonce}
+        previousServerSeed={previousServerSeed} onClientSeedChange={setClientSeed} onRotateSeed={rotateSeed} />
     </GameLayout>
   )
 }
