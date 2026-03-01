@@ -19,7 +19,12 @@ const GRID_OPTIONS = [
   { size: 64, cols: 8 },
 ]
 
-const minePresets = [1, 3, 5, 10, 24]
+const minePresetsMap: Record<number, number[]> = {
+  25: [1, 3, 5, 10, 24],
+  36: [1, 5, 10, 18, 35],
+  49: [1, 5, 12, 24, 48],
+  64: [1, 5, 16, 32, 63],
+}
 
 const calcMultiplier = (gridSize: number, numMines: number, revealed: number): number => {
   if (revealed === 0) return 1
@@ -230,10 +235,10 @@ export default function MinesPage() {
                   <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">Mines</span>
                   <span className="text-[13px] text-brand font-mono font-bold">{numMines}</span>
                 </div>
-                <input type="range" min="1" max={Math.min(maxMines, 24)} value={numMines} onChange={e => setNumMines(parseInt(e.target.value))} disabled={gameActive}
+                <input type="range" min="1" max={maxMines} value={numMines} onChange={e => setNumMines(parseInt(e.target.value))} disabled={gameActive}
                   className="w-full h-1.5 bg-surface rounded-full appearance-none cursor-pointer accent-brand disabled:opacity-50 mb-2" />
                 <div className="flex gap-1.5">
-                  {minePresets.filter(p => p < gridSize).map(p => (
+                  {(minePresetsMap[gridSize] || minePresetsMap[25]!).filter(p => p < gridSize).map(p => (
                     <button key={p} onClick={() => !gameActive && setNumMines(p)} disabled={gameActive}
                       className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-50 ${numMines === p ? 'bg-brand/15 border border-brand/40 text-brand' : 'bg-surface border border-border text-muted hover:text-white'}`}>{p}</button>
                   ))}
