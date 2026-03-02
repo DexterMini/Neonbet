@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   X, Home, Star, Clock, Zap, Gamepad2, Tv, Spade,
-  Gift, Crown, Wallet, MessageCircle, ChevronRight,
+  Gift, Crown, MessageCircle, ChevronRight,
   Flame, Trophy, TrendingUp, Bomb, Dices, CircleDot,
   Target, RotateCcw, Grid3X3, Layers, Gem, Bird, Shield,
 } from 'lucide-react'
@@ -43,7 +43,6 @@ const originalGames = [
 const bottomNav = [
   { name: 'Promotions', href: '/promotions', icon: Gift, badge: 3 },
   { name: 'VIP Club', href: '/vip', icon: Crown },
-  { name: 'Wallet', href: '/wallet', icon: Wallet },
   { name: 'Admin', href: '/admin', icon: Shield },
 ]
 

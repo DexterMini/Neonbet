@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { Search, Menu, Bell, User, LogOut, Settings, X, Wallet, ChevronDown, Zap, MessageCircle } from 'lucide-react'
+import { Search, Menu, Bell, User, LogOut, Settings, X, Wallet, ChevronDown, Zap, MessageCircle, Copy, Check, ArrowDown, ArrowUp, ExternalLink } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui'
 import {
@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/Dropdown'
 import { useAuthStore } from '@/stores/authStore'
 import { useChatStore } from '@/stores/chatStore'
+import { QRCodeSVG } from 'qrcode.react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 declare global {
   interface Window {
@@ -27,6 +29,15 @@ const USD_PRICES: Record<string, number> = {
   btc: 46800, eth: 3200, ltc: 70, usdt: 1, usdc: 1, sol: 150,
 }
 
+const CRYPTO_META: { symbol: string; name: string; icon: string; color: string; address: string }[] = [
+  { symbol: 'BTC', name: 'Bitcoin', icon: '₿', color: 'text-orange-400', address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' },
+  { symbol: 'ETH', name: 'Ethereum', icon: 'Ξ', color: 'text-blue-400', address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F' },
+  { symbol: 'SOL', name: 'Solana', icon: '◎', color: 'text-purple-400', address: 'DRpbCBMxVnDK7maPMoGQfFkKMkb6eq8UGNJJg4dU3vKL' },
+  { symbol: 'USDT', name: 'Tether', icon: '₮', color: 'text-emerald-400', address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F' },
+  { symbol: 'USDC', name: 'USD Coin', icon: '$', color: 'text-blue-300', address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F' },
+  { symbol: 'LTC', name: 'Litecoin', icon: 'Ł', color: 'text-gray-300', address: 'ltc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' },
+]
+
 export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -37,6 +48,11 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [connecting, setConnecting] = useState(false)
   const [totalUsd, setTotalUsd] = useState(0)
+  const [walletOpen, setWalletOpen] = useState(false)
+  const [selectedCrypto, setSelectedCrypto] = useState(0)
+  const [copied, setCopied] = useState(false)
+  const [walletTab, setWalletTab] = useState<'deposit' | 'withdraw'>('deposit')
+  const walletRef = useRef<HTMLDivElement>(null)
 
   const fetchBalance = useCallback(async () => {
     if (!token) { setTotalUsd(0); return }
@@ -62,6 +78,25 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   useEffect(() => {
     if (isHydrated && isAuthenticated) fetchBalance()
   }, [isHydrated, isAuthenticated, fetchBalance])
+
+  // Close wallet dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (walletRef.current && !walletRef.current.contains(e.target as Node)) {
+        setWalletOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const copyAddress = () => {
+    const addr = CRYPTO_META[selectedCrypto]?.address || ''
+    if (!addr) return
+    navigator.clipboard.writeText(addr)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const connectWallet = async () => {
     if (typeof window.ethereum === 'undefined') {
@@ -184,10 +219,156 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
 
           {isLoggedIn ? (
             <>
-              {/* Balance pill */}
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-surface rounded-lg border border-border">
-                <Wallet className="w-3.5 h-3.5 text-brand" />
-                <span className="text-brand text-[13px] font-mono font-semibold tabular-nums">{formatCurrency(totalUsd)}</span>
+              {/* Balance pill → opens Wallet dropdown */}
+              <div className="relative hidden sm:block" ref={walletRef}>
+                <button
+                  onClick={() => setWalletOpen(!walletOpen)}
+                  className={cn(
+                    'flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all',
+                    walletOpen
+                      ? 'bg-brand/10 border-brand/40 ring-1 ring-brand/20'
+                      : 'bg-surface border-border hover:border-brand/30'
+                  )}
+                >
+                  <Wallet className="w-3.5 h-3.5 text-brand" />
+                  <span className="text-brand text-[13px] font-mono font-semibold tabular-nums">{formatCurrency(totalUsd)}</span>
+                  <ChevronDown className={cn('w-3 h-3 text-muted transition-transform', walletOpen && 'rotate-180')} />
+                </button>
+
+                {/* Wallet Dropdown Panel */}
+                <AnimatePresence>
+                  {walletOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-[380px] bg-surface rounded-xl border border-border shadow-2xl z-50 overflow-hidden"
+                    >
+                      {/* Tabs */}
+                      <div className="flex border-b border-border">
+                        <button
+                          onClick={() => setWalletTab('deposit')}
+                          className={cn(
+                            'flex-1 flex items-center justify-center gap-2 py-3 text-xs font-semibold transition-all',
+                            walletTab === 'deposit' ? 'text-brand border-b-2 border-brand bg-brand/5' : 'text-muted hover:text-white'
+                          )}
+                        >
+                          <ArrowDown size={14} /> Deposit
+                        </button>
+                        <button
+                          onClick={() => setWalletTab('withdraw')}
+                          className={cn(
+                            'flex-1 flex items-center justify-center gap-2 py-3 text-xs font-semibold transition-all',
+                            walletTab === 'withdraw' ? 'text-brand border-b-2 border-brand bg-brand/5' : 'text-muted hover:text-white'
+                          )}
+                        >
+                          <ArrowUp size={14} /> Withdraw
+                        </button>
+                      </div>
+
+                      {walletTab === 'deposit' ? (
+                        <div className="p-4 space-y-4">
+                          {/* Crypto selector pills */}
+                          <div>
+                            <label className="text-[10px] text-muted uppercase tracking-wider font-bold mb-2 block">Select Currency</label>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {CRYPTO_META.map((c, i) => (
+                                <button
+                                  key={c.symbol}
+                                  onClick={() => { setSelectedCrypto(i); setCopied(false) }}
+                                  className={cn(
+                                    'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all',
+                                    selectedCrypto === i
+                                      ? 'bg-brand/15 border border-brand/40 text-white'
+                                      : 'bg-background border border-border text-muted hover:text-white hover:border-brand/30'
+                                  )}
+                                >
+                                  <span className={cn('text-sm', c.color)}>{c.icon}</span>
+                                  <span>{c.symbol}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* QR Code */}
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="bg-white p-3 rounded-xl">
+                              <QRCodeSVG
+                                value={CRYPTO_META[selectedCrypto]?.address || 'neonbet'}
+                                size={140}
+                                bgColor="#ffffff"
+                                fgColor="#000000"
+                                level="H"
+                                includeMargin={false}
+                              />
+                            </div>
+                            <span className="text-[10px] text-muted">
+                              Scan to deposit {CRYPTO_META[selectedCrypto]?.name}
+                            </span>
+                          </div>
+
+                          {/* Address */}
+                          <div>
+                            <label className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1.5 block">
+                              {CRYPTO_META[selectedCrypto]?.name} Address
+                            </label>
+                            <div className="flex items-center gap-2 bg-background rounded-lg border border-border p-2.5">
+                              <span className="flex-1 text-[11px] text-white font-mono truncate">
+                                {CRYPTO_META[selectedCrypto]?.address}
+                              </span>
+                              <button onClick={copyAddress}
+                                className="shrink-0 p-1.5 rounded bg-brand/10 hover:bg-brand/20 text-brand transition-colors"
+                              >
+                                {copied ? <Check size={14} /> : <Copy size={14} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Network info */}
+                          <div className="bg-background/50 rounded-lg p-2.5 text-[10px] text-muted space-y-1">
+                            <div className="flex justify-between">
+                              <span>Network</span>
+                              <span className="text-white font-semibold">
+                                {CRYPTO_META[selectedCrypto]?.symbol === 'BTC' ? 'Bitcoin' :
+                                 CRYPTO_META[selectedCrypto]?.symbol === 'SOL' ? 'Solana' :
+                                 CRYPTO_META[selectedCrypto]?.symbol === 'LTC' ? 'Litecoin' : 'ERC-20'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Min Deposit</span>
+                              <span className="text-white font-semibold">
+                                {CRYPTO_META[selectedCrypto]?.symbol === 'BTC' ? '0.0001 BTC' :
+                                 CRYPTO_META[selectedCrypto]?.symbol === 'ETH' ? '0.001 ETH' :
+                                 CRYPTO_META[selectedCrypto]?.symbol === 'SOL' ? '0.01 SOL' : '1 ' + CRYPTO_META[selectedCrypto]?.symbol}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Confirmations</span>
+                              <span className="text-white font-semibold">
+                                {CRYPTO_META[selectedCrypto]?.symbol === 'BTC' ? '2' :
+                                 CRYPTO_META[selectedCrypto]?.symbol === 'SOL' ? '1' : '12'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 relative">
+                          <div className="absolute inset-0 bg-surface/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-b-xl">
+                            <ArrowUp size={24} className="text-muted mb-2 opacity-40" />
+                            <span className="text-sm font-bold text-white">Coming Soon</span>
+                            <span className="text-[11px] text-muted mt-1">Withdrawals launching soon</span>
+                          </div>
+                          <div className="opacity-30 pointer-events-none space-y-3 py-4">
+                            <div className="h-10 bg-background rounded-lg" />
+                            <div className="h-10 bg-background rounded-lg" />
+                            <div className="h-10 bg-background rounded-lg" />
+                          </div>
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Notifications */}
@@ -214,9 +395,6 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => router.push('/profile')}>
                     <User className="w-4 h-4" /> Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => router.push('/wallet')}>
-                    <Wallet className="w-4 h-4" /> Wallet
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => router.push('/vip')}>
                     <Zap className="w-4 h-4" /> VIP Club
