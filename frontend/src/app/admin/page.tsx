@@ -254,6 +254,14 @@ export default function AdminDashboard() {
   const [auditLog, setAuditLog] = useState<any[]>([])
   const [currentTime, setCurrentTime] = useState(new Date())
 
+  // Balance Ops enhanced state
+  const [adjPlayerSearch, setAdjPlayerSearch] = useState('')
+  const [adjPlayerResults, setAdjPlayerResults] = useState<AdminUser[]>([])
+  const [adjSelectedPlayer, setAdjSelectedPlayer] = useState<AdminUser | null>(null)
+  const [adjDropdownOpen, setAdjDropdownOpen] = useState(false)
+  const [recentOps, setRecentOps] = useState<{ id: number; type: string; amount: string; currency: string; username: string; time: string; reason: string }[]>([])
+  const opsCounterRef = useRef(0)
+
   const automation = useAutomationStore()
   const health = useSystemHealth()
   const sparklines = useSparklineData(7)
@@ -351,6 +359,16 @@ export default function AdminDashboard() {
       })
       if (res.ok) {
         toast.success(`${adjType === 'credit' ? 'Credited' : 'Debited'} ${adjAmount} ${adjCurrency} successfully`)
+        opsCounterRef.current += 1
+        setRecentOps(prev => [...prev, {
+          id: opsCounterRef.current,
+          type: adjType,
+          amount: adjAmount,
+          currency: adjCurrency,
+          username: adjSelectedPlayer?.username || adjUserId.slice(0, 12),
+          time: new Date().toLocaleTimeString(),
+          reason: adjReason,
+        }])
         setAdjAmount('')
         setAdjReason('')
         fetchAuditLog()
@@ -371,6 +389,25 @@ export default function AdminDashboard() {
       }
     } catch { /* ignore */ }
   }, [apiBase, headers])
+
+  const searchForAdjPlayer = useCallback(async (q: string) => {
+    if (!q || q.length < 2) { setAdjPlayerResults([]); return }
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/users/search?query=${encodeURIComponent(q)}&limit=5`, { headers: headers() })
+      if (res.ok) {
+        const data = await res.json()
+        setAdjPlayerResults(data.users || [])
+      }
+    } catch { /* */ }
+  }, [apiBase, headers])
+
+  const pickAdjPlayer = useCallback((user: AdminUser) => {
+    setAdjSelectedPlayer(user)
+    setAdjUserId(user.user_id)
+    setAdjPlayerSearch(user.username)
+    setAdjDropdownOpen(false)
+    setAdjPlayerResults([])
+  }, [])
 
   useEffect(() => {
     if (!authenticated) return
@@ -1013,121 +1050,420 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* ══════════════ ADJUSTMENTS ══════════════ */}
+            {/* ══════════════ BALANCE OPS ══════════════ */}
             {tab === 'adjustments' && (
-              <div className="max-w-2xl mx-auto">
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-                  <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
-                      <Wallet className="w-4 h-4 text-brand" />
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-semibold text-white">Balance Operations</h2>
-                      <p className="text-[11px] text-white/30">Credit, debit, reload, or cashback any player</p>
+              <div className="space-y-5">
+                {/* Session Stats Banner */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Credits (session)', value: formatCurrency(recentOps.filter(o => o.type === 'credit').reduce((s, o) => s + parseFloat(o.amount || '0'), 0)), icon: ArrowDownCircle, color: '#06d6a0', gradient: 'from-emerald-500/10 to-transparent' },
+                    { label: 'Debits (session)', value: formatCurrency(recentOps.filter(o => o.type === 'debit').reduce((s, o) => s + parseFloat(o.amount || '0'), 0)), icon: ArrowUpCircle, color: '#ef4444', gradient: 'from-red-500/10 to-transparent' },
+                    { label: 'Operations', value: String(recentOps.length), icon: Activity, color: '#26c6da', gradient: 'from-cyan-500/10 to-transparent' },
+                    { label: 'Unique Players', value: String(new Set(recentOps.map(o => o.username)).size), icon: Users, color: '#a78bfa', gradient: 'from-violet-500/10 to-transparent' },
+                  ].map((s, i) => {
+                    const Icon = s.icon
+                    return (
+                      <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                        className={cn('relative overflow-hidden rounded-xl border border-white/[0.06] p-4 bg-gradient-to-b', s.gradient)}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: s.color + '15' }}>
+                            <Icon className="w-3.5 h-3.5" style={{ color: s.color }} />
+                          </div>
+                        </div>
+                        <p className="text-white font-bold text-xl font-mono">{s.value}</p>
+                        <p className="text-white/30 text-[10px] uppercase tracking-wider mt-0.5">{s.label}</p>
+                      </motion.div>
+                    )
+                  })}
+                </div>
+
+                {/* Main layout: Form + Side panel */}
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+                  {/* Form — 3 cols */}
+                  <div className="lg:col-span-3">
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                      <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand/20 to-purple-600/20 flex items-center justify-center border border-brand/20">
+                          <Wallet className="w-4 h-4 text-brand" />
+                        </div>
+                        <div>
+                          <h2 className="text-sm font-semibold text-white">Balance Operation</h2>
+                          <p className="text-[11px] text-white/30">Credit, debit, or adjust any player&apos;s balance</p>
+                        </div>
+                      </div>
+                      <div className="p-5 space-y-5">
+                        {/* Player Search */}
+                        <div className="relative">
+                          <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Find Player</label>
+                          <div className="relative">
+                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
+                            <input
+                              type="text"
+                              value={adjPlayerSearch}
+                              onChange={(e) => {
+                                setAdjPlayerSearch(e.target.value)
+                                setAdjDropdownOpen(true)
+                                searchForAdjPlayer(e.target.value)
+                              }}
+                              onFocus={() => adjPlayerResults.length > 0 && setAdjDropdownOpen(true)}
+                              placeholder="Search username, email, or paste player ID..."
+                              className="w-full pl-10 pr-10 py-3.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white text-sm placeholder:text-white/15 focus:outline-none focus:border-brand/40 transition-all"
+                            />
+                            {adjSelectedPlayer && (
+                              <button
+                                onClick={() => { setAdjSelectedPlayer(null); setAdjUserId(''); setAdjPlayerSearch('') }}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-white/[0.06] text-white/20 hover:text-white/60 transition-all"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          {/* Search dropdown */}
+                          <AnimatePresence>
+                            {adjDropdownOpen && adjPlayerResults.length > 0 && (
+                              <motion.div
+                                initial={{ opacity: 0, y: -4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -4 }}
+                                className="absolute z-50 top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-2xl border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden"
+                              >
+                                {adjPlayerResults.map((u) => (
+                                  <button
+                                    key={u.user_id}
+                                    onClick={() => pickAdjPlayer(u)}
+                                    className="w-full flex items-center gap-3 p-3.5 hover:bg-white/[0.04] transition-colors text-left border-b border-white/[0.04] last:border-0"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand/20 to-purple-600/20 flex items-center justify-center text-brand text-xs font-bold border border-white/[0.06]">
+                                      {u.username?.slice(0, 2).toUpperCase() || '??'}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-white text-sm font-medium truncate">{u.username}</p>
+                                      <p className="text-white/30 text-[10px] truncate font-mono">{u.email}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[10px] font-bold">
+                                        <Star size={8} /> {u.vip_level}
+                                      </span>
+                                      <span className={cn('w-1.5 h-1.5 rounded-full',
+                                        u.status === 'active' ? 'bg-emerald-400' : u.status === 'frozen' ? 'bg-blue-400' : 'bg-red-400'
+                                      )} />
+                                    </div>
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        {/* Selected player inline card */}
+                        <AnimatePresence>
+                          {adjSelectedPlayer && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden">
+                              <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-brand/5 via-purple-600/5 to-transparent border border-brand/10">
+                                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-brand/20">
+                                  {adjSelectedPlayer.username?.slice(0, 2).toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-white font-semibold text-sm">{adjSelectedPlayer.username}</p>
+                                  <p className="text-white/30 text-[10px] font-mono truncate">{adjSelectedPlayer.user_id}</p>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className={cn('inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase',
+                                    adjSelectedPlayer.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : adjSelectedPlayer.status === 'frozen' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                  )}>
+                                    <span className={cn('w-1.5 h-1.5 rounded-full',
+                                      adjSelectedPlayer.status === 'active' ? 'bg-emerald-400' : adjSelectedPlayer.status === 'frozen' ? 'bg-blue-400' : 'bg-red-400'
+                                    )} />
+                                    {adjSelectedPlayer.status}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-[10px] font-bold border border-amber-500/15">
+                                    <Star size={10} /> Lv.{adjSelectedPlayer.vip_level}
+                                  </span>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {/* Operation type + Currency grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Operation</label>
+                            <div className="flex gap-2">
+                              <button onClick={() => setAdjType('credit')}
+                                className={cn('flex-1 py-3 rounded-xl text-sm font-semibold transition-all border flex items-center justify-center gap-2',
+                                  adjType === 'credit'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-lg shadow-emerald-500/5'
+                                    : 'bg-white/[0.02] text-white/30 border-white/[0.06] hover:border-white/[0.1]'
+                                )}>
+                                <ArrowDownCircle className="w-4 h-4" /> Credit
+                              </button>
+                              <button onClick={() => setAdjType('debit')}
+                                className={cn('flex-1 py-3 rounded-xl text-sm font-semibold transition-all border flex items-center justify-center gap-2',
+                                  adjType === 'debit'
+                                    ? 'bg-red-500/10 text-red-400 border-red-500/30 shadow-lg shadow-red-500/5'
+                                    : 'bg-white/[0.02] text-white/30 border-white/[0.06] hover:border-white/[0.1]'
+                                )}>
+                                <ArrowUpCircle className="w-4 h-4" /> Debit
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Currency</label>
+                            <div className="grid grid-cols-6 gap-1.5">
+                              {[
+                                { code: 'USD', symbol: '$', color: '#06d6a0' },
+                                { code: 'BTC', symbol: '₿', color: '#f7931a' },
+                                { code: 'ETH', symbol: 'Ξ', color: '#627eea' },
+                                { code: 'SOL', symbol: '◎', color: '#9945ff' },
+                                { code: 'USDT', symbol: '₮', color: '#26a17b' },
+                                { code: 'LTC', symbol: 'Ł', color: '#bfbbbb' },
+                              ].map((c) => (
+                                <button key={c.code} onClick={() => setAdjCurrency(c.code)}
+                                  className={cn('py-2.5 rounded-lg text-xs font-bold transition-all border text-center',
+                                    adjCurrency === c.code
+                                      ? 'border-white/[0.15] bg-white/[0.06] text-white shadow-sm'
+                                      : 'border-white/[0.04] bg-white/[0.01] text-white/30 hover:text-white/60 hover:border-white/[0.08]'
+                                  )}>
+                                  <span style={{ color: adjCurrency === c.code ? c.color : undefined }}>{c.symbol}</span>
+                                  <span className="block text-[9px] mt-0.5 text-white/30">{c.code}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Amount */}
+                        <div>
+                          <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Amount</label>
+                          <div className="relative">
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 text-lg font-bold">
+                              {adjCurrency === 'USD' ? '$' : adjCurrency === 'BTC' ? '₿' : adjCurrency === 'ETH' ? 'Ξ' : adjCurrency === 'SOL' ? '◎' : adjCurrency === 'USDT' ? '₮' : 'Ł'}
+                            </span>
+                            <input type="number" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full pl-10 pr-4 py-4 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white text-2xl font-bold font-mono placeholder:text-white/10 focus:outline-none focus:border-brand/40 transition-all" />
+                          </div>
+                          <div className="flex gap-1.5 mt-2.5">
+                            {['5', '10', '25', '50', '100', '250', '500', '1000'].map(v => (
+                              <button key={v} onClick={() => setAdjAmount(v)}
+                                className={cn('flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all border',
+                                  adjAmount === v ? 'bg-brand/10 text-brand border-brand/30' : 'bg-white/[0.02] text-white/25 border-white/[0.04] hover:text-white/50 hover:border-white/[0.08]'
+                                )}>
+                                ${v}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Reason */}
+                        <div>
+                          <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Reason</label>
+                          <div className="flex flex-wrap gap-1.5 mb-2.5">
+                            {[
+                              { label: 'Reload Bonus', icon: '🎁' },
+                              { label: 'Cashback', icon: '💰' },
+                              { label: 'VIP Reward', icon: '👑' },
+                              { label: 'Compensation', icon: '🤝' },
+                              { label: 'Manual Correction', icon: '✏️' },
+                              { label: 'Promo Code', icon: '🎫' },
+                              { label: 'Referral Bonus', icon: '🔗' },
+                              { label: 'Tournament Prize', icon: '🏆' },
+                            ].map(r => (
+                              <button key={r.label} onClick={() => setAdjReason(r.label)}
+                                className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-all border flex items-center gap-1.5',
+                                  adjReason === r.label ? 'bg-brand/10 text-brand border-brand/30' : 'bg-white/[0.02] text-white/30 border-white/[0.06] hover:text-white hover:border-white/[0.1]'
+                                )}>
+                                <span className="text-[11px]">{r.icon}</span> {r.label}
+                              </button>
+                            ))}
+                          </div>
+                          <input type="text" value={adjReason} onChange={(e) => setAdjReason(e.target.value)}
+                            placeholder="Or type a custom reason..."
+                            className="w-full p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white text-sm placeholder:text-white/15 focus:outline-none focus:border-brand/40 transition-all" />
+                        </div>
+
+                        {/* Preview */}
+                        <AnimatePresence>
+                          {adjUserId && adjAmount && adjReason && (
+                            <motion.div initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4 }}
+                              className={cn('p-4 rounded-xl border backdrop-blur-sm',
+                                adjType === 'credit' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'
+                              )}>
+                              <div className="flex items-center gap-3">
+                                <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0',
+                                  adjType === 'credit' ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                                )}>
+                                  {adjType === 'credit' ? <ArrowDownCircle className="w-5 h-5 text-emerald-400" /> : <ArrowUpCircle className="w-5 h-5 text-red-400" />}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-white text-sm font-medium">
+                                    {adjType === 'credit' ? 'Credit' : 'Debit'}{' '}
+                                    <span className="font-bold font-mono">{adjAmount} {adjCurrency}</span>{' '}
+                                    {adjType === 'credit' ? 'to' : 'from'}{' '}
+                                    <span className="text-brand">{adjSelectedPlayer?.username || adjUserId.slice(0, 12) + '...'}</span>
+                                  </p>
+                                  <p className="text-white/30 text-xs mt-0.5">{adjReason}</p>
+                                </div>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        {/* Submit */}
+                        <button onClick={handleAdjustBalance}
+                          disabled={!adjUserId || !adjAmount || !adjReason || adjSubmitting}
+                          className={cn(
+                            'w-full py-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98]',
+                            adjType === 'credit'
+                              ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:brightness-110 shadow-emerald-500/20'
+                              : 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:brightness-110 shadow-red-500/20',
+                            (!adjUserId || !adjAmount || !adjReason || adjSubmitting) && 'opacity-40 cursor-not-allowed'
+                          )}>
+                          {adjSubmitting
+                            ? <><RefreshCw className="w-4 h-4 animate-spin" /> Processing...</>
+                            : adjType === 'credit'
+                              ? <><ArrowDownCircle className="w-4 h-4" /> Credit {adjAmount ? `${adjAmount} ${adjCurrency}` : 'Balance'}</>
+                              : <><ArrowUpCircle className="w-4 h-4" /> Debit {adjAmount ? `${adjAmount} ${adjCurrency}` : 'Balance'}</>
+                          }
+                        </button>
+                      </div>
                     </div>
                   </div>
-                  <div className="p-5 space-y-5">
-                    {/* User ID */}
-                    <div>
-                      <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Player ID</label>
-                      <input type="text" value={adjUserId} onChange={(e) => setAdjUserId(e.target.value)}
-                        placeholder="Paste user ID or select from Players tab"
-                        className="w-full p-3.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white text-sm placeholder:text-white/15 focus:outline-none focus:border-brand/40 transition-all font-mono" />
+
+                  {/* Side panel — 2 cols */}
+                  <div className="lg:col-span-2 space-y-4">
+                    {/* Player Balance Card */}
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
+                        <UserCheck className="w-3.5 h-3.5 text-brand" />
+                        <span className="text-xs font-semibold text-white">Player Info</span>
+                      </div>
+                      {adjSelectedPlayer ? (
+                        <div className="p-4 space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-brand/20">
+                              {adjSelectedPlayer.username?.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-white font-semibold truncate">{adjSelectedPlayer.username}</p>
+                              <p className="text-white/30 text-xs truncate">{adjSelectedPlayer.email}</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
+                              <p className="text-white/30 text-[9px] uppercase">Status</p>
+                              <p className={cn('text-xs font-bold capitalize',
+                                adjSelectedPlayer.status === 'active' ? 'text-emerald-400' : adjSelectedPlayer.status === 'frozen' ? 'text-blue-400' : 'text-red-400'
+                              )}>{adjSelectedPlayer.status}</p>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
+                              <p className="text-white/30 text-[9px] uppercase">VIP</p>
+                              <p className="text-amber-400 text-xs font-bold">Lv.{adjSelectedPlayer.vip_level}</p>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
+                              <p className="text-white/30 text-[9px] uppercase">Risk</p>
+                              <p className={cn('text-xs font-bold',
+                                adjSelectedPlayer.risk_score < 30 ? 'text-emerald-400' : adjSelectedPlayer.risk_score < 60 ? 'text-amber-400' : 'text-red-400'
+                              )}>{adjSelectedPlayer.risk_score}</p>
+                            </div>
+                          </div>
+                          {adjSelectedPlayer.balances && Object.keys(adjSelectedPlayer.balances).length > 0 && (
+                            <div>
+                              <p className="text-white/20 text-[9px] uppercase tracking-wider font-semibold mb-1.5">Balances</p>
+                              <div className="space-y-1">
+                                {Object.entries(adjSelectedPlayer.balances).map(([cur, amt]) => (
+                                  <div key={cur} className="flex justify-between items-center p-2 bg-white/[0.02] rounded-lg border border-white/[0.03]">
+                                    <span className="text-white/40 text-xs uppercase">{cur}</span>
+                                    <span className="text-white font-mono text-xs font-semibold">{amt}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center">
+                          <Users className="w-8 h-8 text-white/[0.06] mx-auto mb-2" />
+                          <p className="text-white/20 text-xs">Search for a player to see their info</p>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Type toggle */}
-                    <div>
-                      <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Operation Type</label>
-                      <div className="flex gap-2">
-                        <button onClick={() => setAdjType('credit')}
-                          className={cn('flex-1 py-3.5 rounded-xl text-sm font-semibold transition-all border flex items-center justify-center gap-2',
-                            adjType === 'credit'
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-lg shadow-emerald-500/5'
-                              : 'bg-white/[0.02] text-white/30 border-white/[0.06] hover:border-white/[0.1]'
-                          )}>
-                          <ArrowDownCircle className="w-4 h-4" /> Credit
+                    {/* Recent Operations */}
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-violet-400" />
+                          <span className="text-xs font-semibold text-white">Recent Operations</span>
+                        </div>
+                        <span className="text-[10px] text-white/20 font-mono">{recentOps.length} this session</span>
+                      </div>
+                      {recentOps.length > 0 ? (
+                        <div className="divide-y divide-white/[0.04] max-h-80 overflow-y-auto scrollbar-hide">
+                          {recentOps.slice().reverse().map((op) => (
+                            <motion.div key={op.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+                              className="flex items-center gap-3 p-3 hover:bg-white/[0.02] transition-colors">
+                              <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0',
+                                op.type === 'credit' ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                              )}>
+                                {op.type === 'credit'
+                                  ? <ArrowDownCircle className="w-3.5 h-3.5 text-emerald-400" />
+                                  : <ArrowUpCircle className="w-3.5 h-3.5 text-red-400" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white text-xs font-medium truncate">
+                                  <span className={op.type === 'credit' ? 'text-emerald-400' : 'text-red-400'}>{op.type === 'credit' ? '+' : '-'}{op.amount}</span>
+                                  <span className="text-white/40 ml-1">{op.currency}</span>
+                                  <span className="text-white/20 ml-1.5">→ {op.username}</span>
+                                </p>
+                                <p className="text-white/15 text-[10px] truncate">{op.reason}</p>
+                              </div>
+                              <span className="text-white/10 text-[9px] font-mono shrink-0">{op.time}</span>
+                            </motion.div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-6 text-center">
+                          <Activity className="w-6 h-6 text-white/[0.06] mx-auto mb-1.5" />
+                          <p className="text-white/15 text-[10px]">No operations yet this session</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Quick Actions */}
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                      <p className="text-white/20 text-[9px] uppercase tracking-wider font-semibold mb-3">Quick Actions</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button onClick={() => { setAdjType('credit'); setAdjReason('Reload Bonus'); setAdjAmount('10') }}
+                          className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all text-left group">
+                          <Gift className="w-4 h-4 text-brand mb-1.5 group-hover:scale-110 transition-transform" />
+                          <p className="text-white text-xs font-medium">$10 Reload</p>
+                          <p className="text-white/20 text-[9px]">Quick bonus credit</p>
                         </button>
-                        <button onClick={() => setAdjType('debit')}
-                          className={cn('flex-1 py-3.5 rounded-xl text-sm font-semibold transition-all border flex items-center justify-center gap-2',
-                            adjType === 'debit'
-                              ? 'bg-red-500/10 text-red-400 border-red-500/30 shadow-lg shadow-red-500/5'
-                              : 'bg-white/[0.02] text-white/30 border-white/[0.06] hover:border-white/[0.1]'
-                          )}>
-                          <ArrowUpCircle className="w-4 h-4" /> Debit
+                        <button onClick={() => { setAdjType('credit'); setAdjReason('Cashback'); setAdjAmount('25') }}
+                          className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all text-left group">
+                          <DollarSign className="w-4 h-4 text-emerald-400 mb-1.5 group-hover:scale-110 transition-transform" />
+                          <p className="text-white text-xs font-medium">$25 Cashback</p>
+                          <p className="text-white/20 text-[9px]">Loss compensation</p>
+                        </button>
+                        <button onClick={() => { setAdjType('credit'); setAdjReason('VIP Reward'); setAdjAmount('50') }}
+                          className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all text-left group">
+                          <Star className="w-4 h-4 text-amber-400 mb-1.5 group-hover:scale-110 transition-transform" />
+                          <p className="text-white text-xs font-medium">$50 VIP</p>
+                          <p className="text-white/20 text-[9px]">VIP reward credit</p>
+                        </button>
+                        <button onClick={() => { setAdjType('credit'); setAdjReason('Tournament Prize'); setAdjAmount('100') }}
+                          className="p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all text-left group">
+                          <Flame className="w-4 h-4 text-orange-400 mb-1.5 group-hover:scale-110 transition-transform" />
+                          <p className="text-white text-xs font-medium">$100 Prize</p>
+                          <p className="text-white/20 text-[9px]">Tournament payout</p>
                         </button>
                       </div>
                     </div>
-
-                    {/* Amount */}
-                    <div>
-                      <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Amount</label>
-                      <div className="flex gap-3">
-                        <input type="number" value={adjAmount} onChange={(e) => setAdjAmount(e.target.value)}
-                          placeholder="0.00"
-                          className="flex-1 p-3.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white text-xl font-bold font-mono placeholder:text-white/10 focus:outline-none focus:border-brand/40 transition-all" />
-                        <select value={adjCurrency} onChange={(e) => setAdjCurrency(e.target.value)}
-                          className="px-4 py-3.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white text-sm font-semibold focus:outline-none appearance-none cursor-pointer">
-                          {['USD', 'BTC', 'ETH', 'SOL', 'USDT', 'LTC'].map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        {['5', '10', '25', '50', '100', '500'].map(v => (
-                          <button key={v} onClick={() => setAdjAmount(v)}
-                            className={cn('flex-1 py-2 rounded-lg text-xs font-semibold transition-all border',
-                              adjAmount === v ? 'bg-brand/10 text-brand border-brand/30' : 'bg-white/[0.02] text-white/30 border-white/[0.06] hover:text-white hover:border-white/[0.1]'
-                            )}>
-                            ${v}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Reason */}
-                    <div>
-                      <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Reason</label>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {['Reload Bonus', 'Cashback', 'VIP Reward', 'Compensation', 'Manual Correction', 'Promo Code'].map(r => (
-                          <button key={r} onClick={() => setAdjReason(r)}
-                            className={cn('px-3 py-1.5 rounded-lg text-xs font-medium transition-all border',
-                              adjReason === r ? 'bg-brand/10 text-brand border-brand/30' : 'bg-white/[0.02] text-white/30 border-white/[0.06] hover:text-white hover:border-white/[0.1]'
-                            )}>
-                            {r}
-                          </button>
-                        ))}
-                      </div>
-                      <input type="text" value={adjReason} onChange={(e) => setAdjReason(e.target.value)}
-                        placeholder="Or type a custom reason..."
-                        className="w-full p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white text-sm placeholder:text-white/15 focus:outline-none focus:border-brand/40 transition-all" />
-                    </div>
-
-                    {/* Preview */}
-                    {adjUserId && adjAmount && adjReason && (
-                      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                        className={cn('p-4 rounded-xl border',
-                          adjType === 'credit' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'
-                        )}>
-                        <p className="text-white text-sm">
-                          {adjType === 'credit' ? '➕ Credit' : '➖ Debit'}{' '}
-                          <span className="font-bold font-mono">{adjAmount} {adjCurrency}</span>{' '}
-                          {adjType === 'credit' ? 'to' : 'from'} player{' '}
-                          <span className="font-mono text-xs text-white/40">{adjUserId.slice(0, 16)}...</span>
-                        </p>
-                        <p className="text-white/40 text-xs mt-1">Reason: {adjReason}</p>
-                      </motion.div>
-                    )}
-
-                    {/* Submit */}
-                    <button onClick={handleAdjustBalance}
-                      disabled={!adjUserId || !adjAmount || !adjReason || adjSubmitting}
-                      className={cn(
-                        'w-full py-3.5 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-lg',
-                        adjType === 'credit'
-                          ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:brightness-110 shadow-emerald-500/20'
-                          : 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:brightness-110 shadow-red-500/20',
-                        (!adjUserId || !adjAmount || !adjReason || adjSubmitting) && 'opacity-40 cursor-not-allowed'
-                      )}>
-                      {adjSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : adjType === 'credit' ? <><ArrowDownCircle className="w-4 h-4" /> Credit Balance</> : <><ArrowUpCircle className="w-4 h-4" /> Debit Balance</>}
-                    </button>
                   </div>
                 </div>
               </div>
