@@ -5,6 +5,8 @@ import { RotateCcw, X, TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useAutomationStore } from '@/stores/automationStore'
+import { useDemoBalance } from '@/stores/demoBalanceStore'
 
 /* ── Session stats store ──────────────────────────── */
 interface SessionStats {
@@ -17,14 +19,16 @@ interface SessionStats {
   currentStreak: number
   bestStreak: number
   profitHistory: number[] // rolling profit values for sparkline chart
+  currentGame: string    // current game name for automation tracking
 }
 
 interface SessionStatsState extends SessionStats {
+  setCurrentGame: (game: string) => void
   recordBet: (won: boolean, betAmount: number, profit: number, multiplier: number) => void
   reset: () => void
 }
 
-export const useSessionStats = create<SessionStatsState>((set) => ({
+export const useSessionStats = create<SessionStatsState>((set, get) => ({
   totalBets: 0,
   wins: 0,
   losses: 0,
@@ -34,8 +38,51 @@ export const useSessionStats = create<SessionStatsState>((set) => ({
   currentStreak: 0,
   bestStreak: 0,
   profitHistory: [],
+  currentGame: '',
 
-  recordBet: (won, betAmount, profit, multiplier) =>
+  setCurrentGame: (game) => set({ currentGame: game }),
+
+  recordBet: (won, betAmount, profit, multiplier) => {
+    // Auto-detect game from URL path (/games/dice -> dice)
+    let gameName = get().currentGame || 'unknown'
+    if (gameName === 'unknown' || gameName === '') {
+      try {
+        const path = typeof window !== 'undefined' ? window.location.pathname : ''
+        const match = path.match(/\/games\/([^/]+)/)
+        if (match) gameName = match[1]
+      } catch { /* SSR safety */ }
+    }
+
+    // ─── Forward to automation engine for autonomous tracking ───
+    try {
+      const automation = useAutomationStore.getState()
+      const payout = won ? betAmount + profit : 0
+      const houseProfit = betAmount - payout
+
+      // Record the bet in the profit dashboard
+      automation.recordBet({
+        game: gameName,
+        betAmount,
+        payout,
+        houseProfit,
+        userId: 'demo-user',
+      })
+
+      // ─── Instant cashback (auto-credit on loss) ──────────────
+      if (!won && automation.cashback.enabled && automation.cashback.frequency === 'instant') {
+        const cashback = automation.calculateCashback('demo-user')
+        if (cashback > 0) {
+          automation.payCashback('demo-user')
+          // Credit cashback directly to demo balance
+          const demoBalance = useDemoBalance.getState()
+          demoBalance.credit(cashback)
+        }
+      }
+    } catch {
+      // Silently ignore if automation store is not available
+    }
+
+    // ─── Update session stats as before ────────────────────────
     set((s) => {
       const newStreak = won
         ? (s.currentStreak >= 0 ? s.currentStreak + 1 : 1)
@@ -52,7 +99,8 @@ export const useSessionStats = create<SessionStatsState>((set) => ({
         bestStreak: Math.max(s.bestStreak, Math.abs(newStreak)),
         profitHistory: [...s.profitHistory, newProfit].slice(-60),
       }
-    }),
+    })
+  },
 
   reset: () =>
     set({
