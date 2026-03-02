@@ -18,6 +18,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { useChatStore } from '@/stores/chatStore'
 import { QRCodeSVG } from 'qrcode.react'
 import { AnimatePresence, motion } from 'framer-motion'
+import { toast } from 'sonner'
 
 declare global {
   interface Window {
@@ -29,13 +30,13 @@ const USD_PRICES: Record<string, number> = {
   btc: 46800, eth: 3200, ltc: 70, usdt: 1, usdc: 1, sol: 150,
 }
 
-const CRYPTO_META: { symbol: string; name: string; icon: string; color: string; address: string }[] = [
-  { symbol: 'BTC', name: 'Bitcoin', icon: '₿', color: 'text-orange-400', address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' },
-  { symbol: 'ETH', name: 'Ethereum', icon: 'Ξ', color: 'text-blue-400', address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F' },
-  { symbol: 'SOL', name: 'Solana', icon: '◎', color: 'text-purple-400', address: 'DRpbCBMxVnDK7maPMoGQfFkKMkb6eq8UGNJJg4dU3vKL' },
-  { symbol: 'USDT', name: 'Tether', icon: '₮', color: 'text-emerald-400', address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F' },
-  { symbol: 'USDC', name: 'USD Coin', icon: '$', color: 'text-blue-300', address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F' },
-  { symbol: 'LTC', name: 'Litecoin', icon: 'Ł', color: 'text-gray-300', address: 'ltc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' },
+const CRYPTO_META: { symbol: string; name: string; icon: string; color: string; address: string; network: string; minDeposit: string }[] = [
+  { symbol: 'BTC', name: 'Bitcoin', icon: '₿', color: 'text-orange-400', address: '', network: 'Bitcoin', minDeposit: '0.0001 BTC' },
+  { symbol: 'ETH', name: 'Ethereum', icon: 'Ξ', color: 'text-blue-400', address: '', network: 'ERC-20', minDeposit: '0.001 ETH' },
+  { symbol: 'SOL', name: 'Solana', icon: '◎', color: 'text-purple-400', address: '', network: 'Solana', minDeposit: '0.01 SOL' },
+  { symbol: 'USDT', name: 'Tether', icon: '₮', color: 'text-emerald-400', address: '', network: 'TRC-20', minDeposit: '10 USDT' },
+  { symbol: 'USDC', name: 'USD Coin', icon: '$', color: 'text-blue-300', address: '', network: 'ERC-20', minDeposit: '10 USDC' },
+  { symbol: 'LTC', name: 'Litecoin', icon: 'Ł', color: 'text-gray-300', address: '', network: 'Litecoin', minDeposit: '0.01 LTC' },
 ]
 
 export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
@@ -52,6 +53,14 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const [selectedCrypto, setSelectedCrypto] = useState(0)
   const [copied, setCopied] = useState(false)
   const [walletTab, setWalletTab] = useState<'deposit' | 'withdraw'>('deposit')
+  const [depositAmount, setDepositAmount] = useState('')
+  const [depositLoading, setDepositLoading] = useState(false)
+  const [payAddress, setPayAddress] = useState('')
+  const [payAmount, setPayAmount] = useState('')
+  const [depositStatus, setDepositStatus] = useState<'idle' | 'waiting' | 'confirming' | 'done'>('idle')
+  const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [withdrawAddress, setWithdrawAddress] = useState('')
+  const [withdrawLoading, setWithdrawLoading] = useState(false)
   const walletRef = useRef<HTMLDivElement>(null)
 
   const fetchBalance = useCallback(async () => {
@@ -91,11 +100,100 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   }, [])
 
   const copyAddress = () => {
-    const addr = CRYPTO_META[selectedCrypto]?.address || ''
+    const addr = payAddress || CRYPTO_META[selectedCrypto]?.address || ''
     if (!addr) return
     navigator.clipboard.writeText(addr)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const createDeposit = async () => {
+    const amount = parseFloat(depositAmount)
+    if (!amount || amount < 1) {
+      toast.error('Minimum deposit is $1')
+      return
+    }
+    setDepositLoading(true)
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
+      const res = await fetch(`${apiBase}/api/v1/payments/deposit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          amount_usd: amount,
+          currency: CRYPTO_META[selectedCrypto].symbol,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.detail || 'Failed to create deposit')
+      }
+      const data = await res.json()
+      if (data.pay_address) {
+        setPayAddress(data.pay_address)
+        setPayAmount(data.pay_amount || '')
+        setDepositStatus('waiting')
+        toast.success(`Send ${data.pay_amount} ${CRYPTO_META[selectedCrypto].symbol} to the address below`)
+      } else if (data.invoice_url) {
+        window.open(data.invoice_url, '_blank')
+        toast.success('Payment page opened in new tab')
+        setDepositStatus('waiting')
+      }
+    } catch (e: any) {
+      toast.error(e.message || 'Deposit failed')
+    }
+    setDepositLoading(false)
+  }
+
+  const handleWithdraw = async () => {
+    const amount = parseFloat(withdrawAmount)
+    if (!amount || amount <= 0) {
+      toast.error('Enter a valid amount')
+      return
+    }
+    if (!withdrawAddress || withdrawAddress.length < 20) {
+      toast.error('Enter a valid wallet address')
+      return
+    }
+    setWithdrawLoading(true)
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
+      const res = await fetch(`${apiBase}/api/v1/wallet/withdraw`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `wd_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          currency: CRYPTO_META[selectedCrypto].symbol,
+          amount,
+          address: withdrawAddress,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.detail || 'Withdrawal failed')
+      }
+      const data = await res.json()
+      toast.success(`Withdrawal of ${amount} ${CRYPTO_META[selectedCrypto].symbol} submitted`)
+      setWithdrawAmount('')
+      setWithdrawAddress('')
+      fetchBalance()
+    } catch (e: any) {
+      toast.error(e.message || 'Withdrawal failed')
+    }
+    setWithdrawLoading(false)
+  }
+
+  const resetDepositState = () => {
+    setPayAddress('')
+    setPayAmount('')
+    setDepositStatus('idle')
+    setDepositAmount('')
   }
 
   const connectWallet = async () => {
@@ -276,7 +374,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                               {CRYPTO_META.map((c, i) => (
                                 <button
                                   key={c.symbol}
-                                  onClick={() => { setSelectedCrypto(i); setCopied(false) }}
+                                  onClick={() => { setSelectedCrypto(i); setCopied(false); resetDepositState() }}
                                   className={cn(
                                     'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all',
                                     selectedCrypto === i
@@ -291,79 +389,231 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                             </div>
                           </div>
 
-                          {/* QR Code */}
-                          <div className="flex flex-col items-center gap-3">
-                            <div className="bg-white p-3 rounded-xl">
-                              <QRCodeSVG
-                                value={CRYPTO_META[selectedCrypto]?.address || 'neonbet'}
-                                size={140}
-                                bgColor="#ffffff"
-                                fgColor="#000000"
-                                level="H"
-                                includeMargin={false}
-                              />
+                          {depositStatus === 'idle' ? (
+                            <>
+                              {/* Deposit amount input */}
+                              <div>
+                                <label className="text-[10px] text-muted uppercase tracking-wider font-bold mb-2 block">Deposit Amount (USD)</label>
+                                <input
+                                  type="number"
+                                  value={depositAmount}
+                                  onChange={(e) => setDepositAmount(e.target.value)}
+                                  placeholder="0.00"
+                                  min="1"
+                                  className="w-full px-4 py-3 bg-background border border-border rounded-lg text-white text-lg font-mono placeholder:text-muted/30 focus:outline-none focus:border-brand/50 transition-all"
+                                />
+                                {/* Quick amounts */}
+                                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                                  {['10', '25', '50', '100'].map((v) => (
+                                    <button
+                                      key={v}
+                                      onClick={() => setDepositAmount(v)}
+                                      className={cn(
+                                        'py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                                        depositAmount === v
+                                          ? 'bg-brand/15 border-brand/40 text-brand'
+                                          : 'bg-background border-border text-muted hover:text-white hover:border-brand/30'
+                                      )}
+                                    >
+                                      ${v}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Deposit button */}
+                              <button
+                                onClick={createDeposit}
+                                disabled={!depositAmount || depositLoading}
+                                className={cn(
+                                  'w-full py-3 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2',
+                                  depositAmount && !depositLoading
+                                    ? 'bg-brand text-background-deep hover:brightness-110 shadow-glow-brand-sm'
+                                    : 'bg-surface border border-border text-muted cursor-not-allowed'
+                                )}
+                              >
+                                {depositLoading ? (
+                                  <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> Creating...</>
+                                ) : (
+                                  <><ArrowDown size={14} /> Deposit {CRYPTO_META[selectedCrypto]?.symbol}</>
+                                )}
+                              </button>
+
+                              {/* Network info */}
+                              <div className="bg-background/50 rounded-lg p-2.5 text-[10px] text-muted space-y-1">
+                                <div className="flex justify-between">
+                                  <span>Network</span>
+                                  <span className="text-white font-semibold">{CRYPTO_META[selectedCrypto]?.network}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Min Deposit</span>
+                                  <span className="text-white font-semibold">{CRYPTO_META[selectedCrypto]?.minDeposit}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Processor</span>
+                                  <span className="text-brand font-semibold">NOWPayments</span>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              {/* Payment created — show address + QR */}
+                              <div className="flex flex-col items-center gap-3">
+                                <div className="flex items-center gap-2 text-xs">
+                                  <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+                                  </span>
+                                  <span className="text-amber-400 font-semibold">Awaiting payment...</span>
+                                </div>
+                                {payAddress && (
+                                  <div className="bg-white p-3 rounded-xl">
+                                    <QRCodeSVG
+                                      value={payAddress}
+                                      size={140}
+                                      bgColor="#ffffff"
+                                      fgColor="#000000"
+                                      level="H"
+                                      includeMargin={false}
+                                    />
+                                  </div>
+                                )}
+                                {payAmount && (
+                                  <div className="text-center">
+                                    <p className="text-white font-bold font-mono text-lg">{payAmount} {CRYPTO_META[selectedCrypto]?.symbol}</p>
+                                    <p className="text-muted text-[10px]">≈ ${depositAmount} USD</p>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Address */}
+                              {payAddress && (
+                                <div>
+                                  <label className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1.5 block">
+                                    Send to this address
+                                  </label>
+                                  <div className="flex items-center gap-2 bg-background rounded-lg border border-border p-2.5">
+                                    <span className="flex-1 text-[11px] text-white font-mono truncate">{payAddress}</span>
+                                    <button onClick={copyAddress}
+                                      className="shrink-0 p-1.5 rounded bg-brand/10 hover:bg-brand/20 text-brand transition-colors"
+                                    >
+                                      {copied ? <Check size={14} /> : <Copy size={14} />}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Back button */}
+                              <button
+                                onClick={resetDepositState}
+                                className="w-full py-2.5 rounded-lg border border-border text-muted text-xs font-medium hover:text-white hover:border-brand/30 transition-all"
+                              >
+                                ← New Deposit
+                              </button>
+
+                              {/* Info */}
+                              <div className="bg-background/50 rounded-lg p-2.5 text-[10px] text-muted space-y-1">
+                                <div className="flex justify-between">
+                                  <span>Network</span>
+                                  <span className="text-white font-semibold">{CRYPTO_META[selectedCrypto]?.network}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Status</span>
+                                  <span className="text-amber-400 font-semibold">Waiting for payment</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Auto-credit</span>
+                                  <span className="text-brand font-semibold">After confirmation</span>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="p-4 space-y-3">
+                          {/* Selected crypto */}
+                          <div>
+                            <label className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1.5 block">Currency</label>
+                            <div className="grid grid-cols-3 gap-1.5">
+                              {CRYPTO_META.map((c, i) => (
+                                <button
+                                  key={c.symbol}
+                                  onClick={() => { setSelectedCrypto(i) }}
+                                  className={cn(
+                                    'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all',
+                                    selectedCrypto === i
+                                      ? 'bg-brand/15 border border-brand/40 text-white'
+                                      : 'bg-background border border-border text-muted hover:text-white hover:border-brand/30'
+                                  )}
+                                >
+                                  <span className={cn('text-sm', c.color)}>{c.icon}</span>
+                                  <span>{c.symbol}</span>
+                                </button>
+                              ))}
                             </div>
-                            <span className="text-[10px] text-muted">
-                              Scan to deposit {CRYPTO_META[selectedCrypto]?.name}
-                            </span>
+                          </div>
+
+                          {/* Amount */}
+                          <div>
+                            <label className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1.5 block">Amount</label>
+                            <input
+                              type="number"
+                              value={withdrawAmount}
+                              onChange={(e) => setWithdrawAmount(e.target.value)}
+                              placeholder="0.00"
+                              min="0"
+                              step="any"
+                              className="w-full px-4 py-2.5 bg-background border border-border rounded-lg text-white text-sm font-mono placeholder:text-muted/30 focus:outline-none focus:border-brand/50 transition-all"
+                            />
                           </div>
 
                           {/* Address */}
                           <div>
-                            <label className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1.5 block">
-                              {CRYPTO_META[selectedCrypto]?.name} Address
-                            </label>
-                            <div className="flex items-center gap-2 bg-background rounded-lg border border-border p-2.5">
-                              <span className="flex-1 text-[11px] text-white font-mono truncate">
-                                {CRYPTO_META[selectedCrypto]?.address}
-                              </span>
-                              <button onClick={copyAddress}
-                                className="shrink-0 p-1.5 rounded bg-brand/10 hover:bg-brand/20 text-brand transition-colors"
-                              >
-                                {copied ? <Check size={14} /> : <Copy size={14} />}
-                              </button>
-                            </div>
+                            <label className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1.5 block">Wallet Address</label>
+                            <input
+                              type="text"
+                              value={withdrawAddress}
+                              onChange={(e) => setWithdrawAddress(e.target.value)}
+                              placeholder={`Your ${CRYPTO_META[selectedCrypto]?.symbol} address`}
+                              className="w-full px-4 py-2.5 bg-background border border-border rounded-lg text-white text-sm font-mono placeholder:text-muted/30 focus:outline-none focus:border-brand/50 transition-all"
+                            />
                           </div>
 
-                          {/* Network info */}
+                          {/* Network fee info */}
                           <div className="bg-background/50 rounded-lg p-2.5 text-[10px] text-muted space-y-1">
                             <div className="flex justify-between">
                               <span>Network</span>
-                              <span className="text-white font-semibold">
-                                {CRYPTO_META[selectedCrypto]?.symbol === 'BTC' ? 'Bitcoin' :
-                                 CRYPTO_META[selectedCrypto]?.symbol === 'SOL' ? 'Solana' :
-                                 CRYPTO_META[selectedCrypto]?.symbol === 'LTC' ? 'Litecoin' : 'ERC-20'}
-                              </span>
+                              <span className="text-white font-semibold">{CRYPTO_META[selectedCrypto]?.network}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span>Min Deposit</span>
+                              <span>Fee</span>
                               <span className="text-white font-semibold">
                                 {CRYPTO_META[selectedCrypto]?.symbol === 'BTC' ? '0.0001 BTC' :
-                                 CRYPTO_META[selectedCrypto]?.symbol === 'ETH' ? '0.001 ETH' :
-                                 CRYPTO_META[selectedCrypto]?.symbol === 'SOL' ? '0.01 SOL' : '1 ' + CRYPTO_META[selectedCrypto]?.symbol}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>Confirmations</span>
-                              <span className="text-white font-semibold">
-                                {CRYPTO_META[selectedCrypto]?.symbol === 'BTC' ? '2' :
-                                 CRYPTO_META[selectedCrypto]?.symbol === 'SOL' ? '1' : '12'}
+                                 CRYPTO_META[selectedCrypto]?.symbol === 'ETH' ? '0.005 ETH' :
+                                 CRYPTO_META[selectedCrypto]?.symbol === 'SOL' ? '0.01 SOL' :
+                                 CRYPTO_META[selectedCrypto]?.symbol === 'LTC' ? '0.001 LTC' :
+                                 '1 ' + CRYPTO_META[selectedCrypto]?.symbol}
                               </span>
                             </div>
                           </div>
-                        </div>
-                      ) : (
-                        <div className="p-4 relative">
-                          <div className="absolute inset-0 bg-surface/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-b-xl">
-                            <ArrowUp size={24} className="text-muted mb-2 opacity-40" />
-                            <span className="text-sm font-bold text-white">Coming Soon</span>
-                            <span className="text-[11px] text-muted mt-1">Withdrawals launching soon</span>
-                          </div>
-                          <div className="opacity-30 pointer-events-none space-y-3 py-4">
-                            <div className="h-10 bg-background rounded-lg" />
-                            <div className="h-10 bg-background rounded-lg" />
-                            <div className="h-10 bg-background rounded-lg" />
-                          </div>
+
+                          {/* Withdraw button */}
+                          <button
+                            onClick={handleWithdraw}
+                            disabled={!withdrawAmount || !withdrawAddress || withdrawLoading}
+                            className={cn(
+                              'w-full py-3 rounded-lg font-semibold text-sm transition-all flex items-center justify-center gap-2',
+                              withdrawAmount && withdrawAddress && !withdrawLoading
+                                ? 'bg-accent-red text-white hover:brightness-110'
+                                : 'bg-surface border border-border text-muted cursor-not-allowed'
+                            )}
+                          >
+                            {withdrawLoading ? (
+                              <><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg> Processing...</>
+                            ) : (
+                              <><ArrowUp size={14} /> Withdraw {CRYPTO_META[selectedCrypto]?.symbol}</>
+                            )}
+                          </button>
                         </div>
                       )}
                     </motion.div>

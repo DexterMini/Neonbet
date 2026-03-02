@@ -47,6 +47,18 @@ class WalletSettings(BaseSettings):
         env_prefix = "WALLET_"
 
 
+class PaymentSettings(BaseSettings):
+    """NOWPayments integration"""
+    nowpayments_api_key: str = Field(default="")
+    nowpayments_ipn_secret: str = Field(default="")
+    nowpayments_sandbox: bool = Field(default=True)
+    nowpayments_callback_url: str = Field(default="")
+    nowpayments_success_url: str = Field(default="")
+    
+    class Config:
+        env_prefix = "PAYMENT_"
+
+
 class GameSettings(BaseSettings):
     """Game engine configuration"""
     house_edge: float = Field(default=0.02)  # 2%
@@ -124,6 +136,7 @@ class Settings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     redis: RedisSettings = Field(default_factory=RedisSettings)
     wallet: WalletSettings = Field(default_factory=WalletSettings)
+    payment: PaymentSettings = Field(default_factory=PaymentSettings)
     game: GameSettings = Field(default_factory=GameSettings)
     risk: RiskSettings = Field(default_factory=RiskSettings)
     vip: VIPSettings = Field(default_factory=VIPSettings)

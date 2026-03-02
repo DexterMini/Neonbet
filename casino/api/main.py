@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from casino.config import get_settings
-from casino.api.routes import auth_router, bets_router, wallet_router, admin_router
+from casino.api.routes import auth_router, bets_router, wallet_router, admin_router, payments_router
 from casino.api.routes.websocket import router as ws_router, start_crash_game, stop_crash_game
 from casino.api.middleware import IdempotencyMiddleware
 from casino.models.session import init_db, close_db
@@ -212,6 +212,7 @@ def create_app() -> FastAPI:
     app.include_router(bets_router, prefix="/api/v1")
     app.include_router(wallet_router, prefix="/api/v1")
     app.include_router(admin_router, prefix="/api/v1")
+    app.include_router(payments_router, prefix="/api/v1")
     app.include_router(ws_router)  # WebSocket routes
     
     return app
