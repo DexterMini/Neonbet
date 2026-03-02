@@ -40,6 +40,15 @@ const CRYPTO_META: Record<string, { name: string; icon: string }> = {
   SOL: { name: 'Solana', icon: '◎' },
 }
 
+const WITHDRAWAL_FEES: Record<string, number> = {
+  BTC: 0.0001,
+  ETH: 0.005,
+  USDT: 1,
+  USDC: 1,
+  SOL: 0.01,
+  LTC: 0.001,
+}
+
 const PRICES: Record<string, number> = {
   BTC: 46800, ETH: 3200, LTC: 70, USDT: 1, USDC: 1, SOL: 150,
 }
@@ -50,6 +59,8 @@ export default function WalletPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit')
   const [copied, setCopied] = useState(false)
+  const [withdrawAmount, setWithdrawAmount] = useState('')
+  const [withdrawAddress, setWithdrawAddress] = useState('')
   const [showCryptoSelect, setShowCryptoSelect] = useState(false)
   const [nonadaOpen, setNonadaOpen] = useState(false)
 
@@ -202,9 +213,8 @@ export default function WalletPage() {
                   <Button variant={activeTab === 'deposit' ? 'primary' : 'secondary'} onClick={() => setActiveTab('deposit')}>
                     <ArrowDown className="w-4 h-4 mr-2" /> Deposit
                   </Button>
-                  <Button variant="secondary" disabled className="opacity-50 cursor-not-allowed">
+                  <Button variant={activeTab === 'withdraw' ? 'primary' : 'secondary'} onClick={() => setActiveTab('withdraw')}>
                     <ArrowUp className="w-4 h-4 mr-2" /> Withdraw
-                    <span className="ml-2 text-[10px] uppercase tracking-wider text-accent-amber">Soon</span>
                   </Button>
                 </div>
               </div>
@@ -314,13 +324,11 @@ export default function WalletPage() {
                   <button
                     onClick={() => setActiveTab('withdraw')}
                     className={cn(
-                      'flex-1 py-2.5 rounded-md text-sm font-semibold transition-colors relative',
-                      'text-text-muted/50 cursor-not-allowed',
+                      'flex-1 py-2.5 rounded-md text-sm font-semibold transition-colors',
+                      activeTab === 'withdraw' ? 'bg-brand text-background' : 'text-text-muted hover:text-text-primary',
                     )}
-                    disabled
                   >
                     Withdraw
-                    <span className="ml-1 text-[9px] text-accent-amber font-bold uppercase">Soon</span>
                   </button>
                 </div>
 
@@ -424,14 +432,75 @@ export default function WalletPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-accent-amber/10 flex items-center justify-center mb-4">
-                      <ArrowUp className="w-8 h-8 text-accent-amber" />
+                  <div className="relative">
+                    {/* Coming Soon overlay */}
+                    <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-[2px] rounded-lg flex flex-col items-center justify-center">
+                      <div className="px-4 py-2 rounded-full bg-accent-amber/10 border border-accent-amber/20 mb-2">
+                        <span className="text-accent-amber text-xs font-bold uppercase tracking-wider">Coming Soon</span>
+                      </div>
+                      <p className="text-text-muted text-xs">Withdrawals will be enabled shortly</p>
                     </div>
-                    <h3 className="text-text-primary font-semibold text-lg mb-2">Withdrawals Coming Soon</h3>
-                    <p className="text-text-muted text-sm max-w-[260px]">
-                      We&apos;re working on enabling withdrawals. This feature will be available shortly.
-                    </p>
+
+                    {/* Disabled withdraw form (visible but not interactive) */}
+                    <div className="opacity-40 pointer-events-none select-none">
+                      {/* Withdraw Amount */}
+                      <div className="mb-4">
+                        <label className="block text-text-muted text-xs font-medium mb-2">Amount</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={withdrawAmount}
+                            onChange={e => setWithdrawAmount(e.target.value)}
+                            placeholder="0.00"
+                            disabled
+                            className="w-full p-3.5 bg-background border border-border rounded-lg text-text-primary text-lg font-bold placeholder:text-text-muted/40 focus:outline-none transition-colors"
+                          />
+                          <button
+                            disabled
+                            className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-brand/10 text-brand text-xs font-semibold rounded-md"
+                          >
+                            MAX
+                          </button>
+                        </div>
+                        <p className="text-text-muted text-xs mt-2">
+                          Available: {selectedCrypto?.balance || 0} {selectedSymbol}
+                        </p>
+                      </div>
+
+                      {/* Withdraw Address */}
+                      <div className="mb-6">
+                        <label className="block text-text-muted text-xs font-medium mb-2">Withdrawal Address</label>
+                        <input
+                          type="text"
+                          value={withdrawAddress}
+                          onChange={e => setWithdrawAddress(e.target.value)}
+                          placeholder={`Enter ${selectedSymbol} address`}
+                          disabled
+                          className="w-full p-3.5 bg-background border border-border rounded-lg text-text-primary placeholder:text-text-muted/40 focus:outline-none transition-colors"
+                        />
+                      </div>
+
+                      {/* Fees */}
+                      <div className="p-3.5 bg-background rounded-lg mb-6 space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-text-muted">Network Fee</span>
+                          <span className="text-text-primary">{WITHDRAWAL_FEES[selectedSymbol] ?? '0.0005'} {selectedSymbol}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-text-muted">You&apos;ll receive</span>
+                          <span className="text-text-primary font-semibold">0.00 {selectedSymbol}</span>
+                        </div>
+                      </div>
+
+                      {/* Withdraw Button */}
+                      <Button
+                        className="w-full"
+                        size="lg"
+                        disabled
+                      >
+                        Withdraw {selectedSymbol}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
