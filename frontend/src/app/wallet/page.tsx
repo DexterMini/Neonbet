@@ -40,16 +40,6 @@ const CRYPTO_META: Record<string, { name: string; icon: string }> = {
   SOL: { name: 'Solana', icon: '◎' },
 }
 
-// Per-currency network fees (matching backend wallet.py)
-const WITHDRAWAL_FEES: Record<string, number> = {
-  BTC: 0.0001,
-  ETH: 0.005,
-  USDT: 1,
-  USDC: 1,
-  SOL: 0.01,
-  LTC: 0.001,
-}
-
 const PRICES: Record<string, number> = {
   BTC: 46800, ETH: 3200, LTC: 70, USDT: 1, USDC: 1, SOL: 150,
 }
@@ -60,8 +50,6 @@ export default function WalletPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit')
   const [copied, setCopied] = useState(false)
-  const [withdrawAmount, setWithdrawAmount] = useState('')
-  const [withdrawAddress, setWithdrawAddress] = useState('')
   const [showCryptoSelect, setShowCryptoSelect] = useState(false)
   const [nonadaOpen, setNonadaOpen] = useState(false)
 
@@ -70,7 +58,6 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [depositAddress, setDepositAddress] = useState('')
   const [loading, setLoading] = useState(true)
-  const [withdrawing, setWithdrawing] = useState(false)
   const [selectedSymbol, setSelectedSymbol] = useState('BTC')
 
   const selectedCrypto = cryptos.find(c => c.symbol === selectedSymbol) || cryptos[0]
@@ -151,40 +138,6 @@ export default function WalletPage() {
     }
   }, [token, authHeaders])
 
-  // ---- Withdraw ----
-  const handleWithdraw = async () => {
-    if (!token || !withdrawAmount || !withdrawAddress) return
-    setWithdrawing(true)
-    try {
-      const res = await fetch('/api/v1/wallet/withdraw', {
-        method: 'POST',
-        headers: {
-          ...authHeaders(),
-          'Content-Type': 'application/json',
-          'X-Idempotency-Key': crypto.randomUUID(),
-        },
-        body: JSON.stringify({
-          currency: selectedSymbol,
-          amount: parseFloat(withdrawAmount),
-          address: withdrawAddress,
-        }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => null)
-        throw new Error(err?.detail || 'Withdrawal failed')
-      }
-      toast.success('Withdrawal submitted')
-      setWithdrawAmount('')
-      setWithdrawAddress('')
-      fetchBalances()
-      fetchTransactions()
-    } catch (err: any) {
-      toast.error(err?.message || 'Withdrawal failed')
-    } finally {
-      setWithdrawing(false)
-    }
-  }
-
   // ---- Init ----
   useEffect(() => {
     if (!isHydrated) return
@@ -249,8 +202,9 @@ export default function WalletPage() {
                   <Button variant={activeTab === 'deposit' ? 'primary' : 'secondary'} onClick={() => setActiveTab('deposit')}>
                     <ArrowDown className="w-4 h-4 mr-2" /> Deposit
                   </Button>
-                  <Button variant={activeTab === 'withdraw' ? 'primary' : 'secondary'} onClick={() => setActiveTab('withdraw')}>
+                  <Button variant="secondary" disabled className="opacity-50 cursor-not-allowed">
                     <ArrowUp className="w-4 h-4 mr-2" /> Withdraw
+                    <span className="ml-2 text-[10px] uppercase tracking-wider text-accent-amber">Soon</span>
                   </Button>
                 </div>
               </div>
@@ -360,11 +314,13 @@ export default function WalletPage() {
                   <button
                     onClick={() => setActiveTab('withdraw')}
                     className={cn(
-                      'flex-1 py-2.5 rounded-md text-sm font-semibold transition-colors',
-                      activeTab === 'withdraw' ? 'bg-brand text-background' : 'text-text-muted hover:text-text-primary',
+                      'flex-1 py-2.5 rounded-md text-sm font-semibold transition-colors relative',
+                      'text-text-muted/50 cursor-not-allowed',
                     )}
+                    disabled
                   >
                     Withdraw
+                    <span className="ml-1 text-[9px] text-accent-amber font-bold uppercase">Soon</span>
                   </button>
                 </div>
 
@@ -468,67 +424,15 @@ export default function WalletPage() {
                     </div>
                   </>
                 ) : (
-                  <>
-                    {/* Withdraw Amount */}
-                    <div className="mb-4">
-                      <label className="block text-text-muted text-xs font-medium mb-2">Amount</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={withdrawAmount}
-                          onChange={e => setWithdrawAmount(e.target.value)}
-                          placeholder="0.00"
-                          className="w-full p-3.5 bg-background border border-border rounded-lg text-text-primary text-lg font-bold placeholder:text-text-muted/40 focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/20 transition-colors"
-                        />
-                        <button
-                          onClick={() => setWithdrawAmount((selectedCrypto?.balance || 0).toString())}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-brand/10 text-brand text-xs font-semibold rounded-md hover:bg-brand/20 transition-colors"
-                        >
-                          MAX
-                        </button>
-                      </div>
-                      <p className="text-text-muted text-xs mt-2">
-                        Available: {selectedCrypto?.balance || 0} {selectedSymbol}
-                      </p>
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-accent-amber/10 flex items-center justify-center mb-4">
+                      <ArrowUp className="w-8 h-8 text-accent-amber" />
                     </div>
-
-                    {/* Withdraw Address */}
-                    <div className="mb-6">
-                      <label className="block text-text-muted text-xs font-medium mb-2">Withdrawal Address</label>
-                      <input
-                        type="text"
-                        value={withdrawAddress}
-                        onChange={e => setWithdrawAddress(e.target.value)}
-                        placeholder={`Enter ${selectedSymbol} address`}
-                        className="w-full p-3.5 bg-background border border-border rounded-lg text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/20 transition-colors"
-                      />
-                    </div>
-
-                    {/* Fees */}
-                    <div className="p-3.5 bg-background rounded-lg mb-6 space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-text-muted">Network Fee</span>
-                        <span className="text-text-primary">{WITHDRAWAL_FEES[selectedSymbol] ?? '0.0005'} {selectedSymbol}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-text-muted">You&apos;ll receive</span>
-                        <span className="text-text-primary font-semibold">
-                          {withdrawAmount ? Math.max(0, parseFloat(withdrawAmount) - (WITHDRAWAL_FEES[selectedSymbol] ?? 0.0005)).toFixed(4) : '0.00'} {selectedSymbol}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Withdraw Button */}
-                    <Button
-                      className="w-full"
-                      size="lg"
-                      disabled={!withdrawAmount || !withdrawAddress || withdrawing || !isAuthenticated}
-                      loading={withdrawing}
-                      onClick={handleWithdraw}
-                    >
-                      Withdraw {selectedSymbol}
-                    </Button>
-                  </>
+                    <h3 className="text-text-primary font-semibold text-lg mb-2">Withdrawals Coming Soon</h3>
+                    <p className="text-text-muted text-sm max-w-[260px]">
+                      We&apos;re working on enabling withdrawals. This feature will be available shortly.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
