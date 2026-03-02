@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import {
   useChatStore,
-  startChatSimulation,
   type ChatMessage,
 } from '@/stores/chatStore'
 import {
@@ -466,11 +465,6 @@ export function ChatPanel() {
   const [isAtBottom, setIsAtBottom] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
-
-  // Start simulation on mount
-  useEffect(() => {
-    startChatSimulation()
-  }, [])
 
   // Auto-scroll to bottom
   useEffect(() => {

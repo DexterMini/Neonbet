@@ -13,15 +13,13 @@ interface LiveBetsTableProps {
 type Tab = 'all' | 'my' | 'high'
 
 export function LiveBetsTable({ game }: LiveBetsTableProps) {
-  const { bets, myBets, startGenerating, stopGenerating } = useLiveBetsStore()
+  const { bets, myBets } = useLiveBetsStore()
   const [tab, setTab] = useState<Tab>('all')
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    startGenerating(game)
-    return () => stopGenerating()
-  }, [game, startGenerating, stopGenerating])
+  }, [])
 
   const visibleBets = useMemo(() => {
     if (!mounted) return []
