@@ -431,7 +431,7 @@ export default function SlotsPage() {
         const col: SlotSymbol[] = []
         for (let row = 0; row < NUM_ROWS; row++) {
           const { result } = await generateBet('slots', { reel, row })
-          const val = Array.isArray(result) ? (result as number[])[0] : (result as number)
+          const val = typeof result === 'number' ? result : Array.isArray(result) ? (result as number[])[0] : 0
           col.push(SYMBOLS[Math.floor(Math.abs(val) * SYMBOLS.length) % SYMBOLS.length])
         }
         newGrid.push(col)
@@ -656,10 +656,7 @@ export default function SlotsPage() {
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => setShowFairness(true)}
-                    className="p-2 rounded-lg bg-[#1a1a36] border border-[#2a2a50]/50 text-white/40 hover:text-white/80 hover:border-[#3a3a60] transition-all">
-                    <GameSettingsDropdown />
-                  </button>
+                  <GameSettingsDropdown />
                 </div>
 
                 <div className="h-px bg-gradient-to-r from-transparent via-amber-500/20 to-transparent" />
