@@ -41,7 +41,7 @@ interface SystemStats {
 type AdminTab = 'overview' | 'users' | 'adjustments' | 'audit'
 
 /* ── Admin Password Gate ───────────────────────────── */
-const ADMIN_PIN = 'neonbet2026'
+const ADMIN_PIN = '1337A6B'
 
 /* ── Component ─────────────────────────────────────── */
 export default function AdminDashboard() {
