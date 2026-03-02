@@ -20,7 +20,7 @@ const mainNav = [
 
 const gameCategories = [
   { name: 'Originals', href: '/', icon: Zap, color: 'text-brand' },
-  { name: 'Slots', href: '#slots', icon: Gamepad2, color: 'text-accent-purple' },
+  { name: 'Slots', href: '/games/slots', icon: Gamepad2, color: 'text-accent-purple' },
   { name: 'Live Casino', href: '#live', icon: Tv, color: 'text-accent-red' },
   { name: 'Game Shows', href: '#shows', icon: Flame, color: 'text-accent-amber' },
   { name: 'Table Games', href: '#tables', icon: Spade, color: 'text-accent-blue' },
