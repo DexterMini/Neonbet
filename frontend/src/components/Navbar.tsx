@@ -167,9 +167,11 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
             title="Toggle Chat"
           >
             <MessageCircle className="w-[18px] h-[18px]" />
-            <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-bold bg-brand text-background-deep rounded-full">
-              {onlineCount > 999 ? `${(onlineCount / 1000).toFixed(1)}k` : onlineCount}
-            </span>
+            {onlineCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-bold bg-brand text-background-deep rounded-full">
+                {onlineCount}
+              </span>
+            )}
           </button>
 
           {/* Mobile search toggle */}

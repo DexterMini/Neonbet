@@ -120,6 +120,18 @@ export function useProvablyFair() {
         result = float
         break
       }
+      case 'slots': {
+        // Generate an array of results for each reel position
+        const reelResults: number[] = []
+        const reelCount = params?.reels || 5
+        const rowCount = params?.rows || 3
+        for (let i = 0; i < reelCount * rowCount; i++) {
+          const { float } = await generateResult(pf.serverSeed, pf.clientSeed, currentNonce + i)
+          reelResults.push(float)
+        }
+        result = reelResults
+        break
+      }
       default:
         throw new Error(`Unknown game: ${game}`)
     }

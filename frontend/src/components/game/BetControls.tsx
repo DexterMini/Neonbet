@@ -47,7 +47,7 @@ export function BetControls({
 
   return (
     <div className="w-full lg:w-[300px] shrink-0">
-      <div className="bg-background-secondary rounded-2xl border border-border/60 overflow-hidden">
+      <div className="bg-background-secondary rounded-2xl border border-border/60">
         {/* Tabs */}
         <div className="flex border-b border-border/60">
           <button

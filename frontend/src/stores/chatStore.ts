@@ -166,7 +166,7 @@ function seedMessages(count: number): ChatMessage[] {
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   isOpen: false,
-  onlineCount: 1347,
+  onlineCount: 47,
   rain: null,
   isMuted: false,
 
@@ -205,21 +205,21 @@ let seeded = false
 export function startChatSimulation() {
   if (!seeded) {
     seeded = true
-    const initial = seedMessages(25)
-    useChatStore.setState({ messages: initial, onlineCount: 1247 + Math.floor(Math.random() * 200) })
+    const initial = seedMessages(8)
+    useChatStore.setState({ messages: initial, onlineCount: 32 + Math.floor(Math.random() * 30) })
   }
   if (intervalId) return
   intervalId = setInterval(() => {
     const msg = generateRandomMessage()
     useChatStore.getState().addMessage(msg)
-  }, 2500 + Math.random() * 3000)
+  }, 8000 + Math.random() * 15000)
 
   // Occasionally fluctuate online count
   setInterval(() => {
     const current = useChatStore.getState().onlineCount
-    const delta = Math.floor(Math.random() * 20) - 10
-    useChatStore.getState().setOnlineCount(Math.max(800, current + delta))
-  }, 10000)
+    const delta = Math.floor(Math.random() * 6) - 3
+    useChatStore.getState().setOnlineCount(Math.max(15, Math.min(80, current + delta)))
+  }, 30000)
 }
 
 export function stopChatSimulation() {
