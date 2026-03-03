@@ -14,6 +14,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { Button, Badge } from '@/components/ui'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
+import { MobileNav } from '@/components/MobileNav'
 import { toast } from 'sonner'
 
 interface BetStats {
@@ -128,7 +129,7 @@ export default function ProfilePage() {
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar onMenuClick={() => setSidebarOpen(true)} />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-mobile-nav">
           <div className="max-w-6xl mx-auto">
             {/* Header */}
             <div className="mb-8">
@@ -484,6 +485,7 @@ export default function ProfilePage() {
             </div>
           </div>
         </main>
+        <MobileNav />
       </div>
     </div>
   )

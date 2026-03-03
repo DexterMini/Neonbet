@@ -318,31 +318,44 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
           {isLoggedIn ? (
             <>
               {/* Balance pill → opens Wallet dropdown */}
-              <div className="relative hidden sm:block" ref={walletRef}>
+              <div className="relative" ref={walletRef}>
                 <button
                   onClick={() => setWalletOpen(!walletOpen)}
                   className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all',
+                    'flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg border transition-all',
                     walletOpen
                       ? 'bg-brand/10 border-brand/40 ring-1 ring-brand/20'
                       : 'bg-surface border-border hover:border-brand/30'
                   )}
                 >
                   <Wallet className="w-3.5 h-3.5 text-brand" />
-                  <span className="text-brand text-[13px] font-mono font-semibold tabular-nums">{formatCurrency(totalUsd)}</span>
-                  <ChevronDown className={cn('w-3 h-3 text-muted transition-transform', walletOpen && 'rotate-180')} />
+                  <span className="text-brand text-[12px] sm:text-[13px] font-mono font-semibold tabular-nums">{formatCurrency(totalUsd)}</span>
+                  <ChevronDown className={cn('w-3 h-3 text-muted transition-transform hidden sm:block', walletOpen && 'rotate-180')} />
                 </button>
 
                 {/* Wallet Dropdown Panel */}
                 <AnimatePresence>
                   {walletOpen && (
+                    <>
+                    {/* Mobile backdrop */}
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="sm:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+                      onClick={() => setWalletOpen(false)}
+                    />
                     <motion.div
                       initial={{ opacity: 0, y: 8, scale: 0.96 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 8, scale: 0.96 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute right-0 top-full mt-2 w-[380px] bg-surface rounded-xl border border-border shadow-2xl z-50 overflow-hidden"
+                      className="fixed sm:absolute inset-x-0 sm:inset-x-auto sm:right-0 bottom-0 sm:bottom-auto sm:top-full sm:mt-2 w-full sm:w-[380px] max-h-[85vh] sm:max-h-none overflow-y-auto bg-surface rounded-t-2xl sm:rounded-xl border border-border shadow-2xl z-50"
                     >
+                      {/* Mobile drag handle */}
+                      <div className="sm:hidden flex justify-center pt-3 pb-1">
+                        <div className="w-10 h-1 rounded-full bg-white/20" />
+                      </div>
                       {/* Tabs */}
                       <div className="flex border-b border-border">
                         <button
@@ -617,6 +630,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                         </div>
                       )}
                     </motion.div>
+                  </>
                   )}
                 </AnimatePresence>
               </div>
@@ -659,12 +673,12 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
           ) : (
             <>
               <Link href="/login">
-                <Button variant="ghost" size="sm" className="hidden sm:inline-flex text-[13px]">
+                <Button variant="ghost" size="sm" className="text-[12px] sm:text-[13px] px-2 sm:px-3">
                   Log In
                 </Button>
               </Link>
               <Link href="/register">
-                <Button size="sm" className="text-[13px] font-semibold shadow-glow-brand-sm">
+                <Button size="sm" className="text-[12px] sm:text-[13px] font-semibold shadow-glow-brand-sm px-2 sm:px-3">
                   Sign Up
                 </Button>
               </Link>

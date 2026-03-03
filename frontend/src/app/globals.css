@@ -77,6 +77,19 @@
     display: none;
   }
 
+  /* ─── Mobile bottom nav safe area ─── */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pb-mobile-nav {
+    padding-bottom: 3.5rem; /* 56px = bottom nav height */
+  }
+  @media (min-width: 1024px) {
+    .pb-mobile-nav {
+      padding-bottom: 0;
+    }
+  }
+
   /* ─── Glass / Surface utilities ─── */
   .glass {
     @apply bg-white/[0.02] backdrop-blur-xl border border-white/[0.04];

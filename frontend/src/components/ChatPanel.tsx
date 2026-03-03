@@ -523,7 +523,7 @@ export function ChatPanel() {
       <aside
         className={cn(
           'fixed lg:relative right-0 top-0 z-50 lg:z-auto',
-          'h-screen w-[320px] lg:w-[320px]',
+          'h-screen w-full sm:w-[320px] lg:w-[320px]',
           'bg-background-secondary/95 backdrop-blur-xl lg:bg-background-secondary/80',
           'border-l border-border/60',
           'flex flex-col shrink-0',

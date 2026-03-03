@@ -12,6 +12,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { Button, Badge } from '@/components/ui'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
+import { MobileNav } from '@/components/MobileNav'
 import { toast } from 'sonner'
 
 interface CryptoBalance {
@@ -193,7 +194,7 @@ export default function WalletPage() {
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar onMenuClick={() => setSidebarOpen(true)} />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-mobile-nav">
           <div className="max-w-5xl mx-auto">
             {/* Header */}
             <div className="mb-8">
@@ -542,6 +543,8 @@ export default function WalletPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <MobileNav />
     </div>
   )
 }

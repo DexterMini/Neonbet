@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Navbar } from '@/components/Navbar'
 import { Sidebar } from '@/components/Sidebar'
 import { ChatPanel } from '@/components/ChatPanel'
+import { MobileNav } from '@/components/MobileNav'
 import { cn } from '@/lib/utils'
 import {
   ChevronRight,
@@ -639,7 +640,7 @@ export default function HomePage() {
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar onMenuClick={() => setSidebarOpen(true)} />
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-mobile-nav">
 
           {/* ═══════ Hero Promo Banner ═══════ */}
           <section className="px-3 sm:px-6 pt-4 sm:pt-5">
@@ -736,7 +737,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-4">
               {filteredGames.map(game => (
                 <GameCardGrid key={game.id} game={game} />
               ))}
@@ -816,6 +817,8 @@ export default function HomePage() {
             </div>
 
             <div className="bg-surface/80 rounded-2xl border border-border overflow-hidden backdrop-blur-sm">
+              <div className="overflow-x-auto">
+              <div className="min-w-[480px]">
               <div className="grid grid-cols-5 gap-2 px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wider border-b border-border/60">
                 <span>Game</span>
                 <span>Player</span>
@@ -842,6 +845,8 @@ export default function HomePage() {
                     </span>
                   </div>
                 ))}
+              </div>
+              </div>
               </div>
             </div>
           </section>
@@ -902,6 +907,7 @@ export default function HomePage() {
       </div>
 
       <ChatPanel />
+      <MobileNav />
     </div>
   )
 }

@@ -8,6 +8,7 @@ import {
   Flame, Shield, Target, Eye, ChevronRight, Activity, Globe2,
   Sparkles, Percent
 } from 'lucide-react'
+import { MobileNav } from '@/components/MobileNav'
 
 /* ──────────────────── Types ──────────────────── */
 
@@ -788,7 +789,7 @@ export default function SportsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-white">
+    <div className="min-h-screen bg-background text-white pb-mobile-nav">
       {/* Header */}
       <div className="relative overflow-hidden border-b border-border bg-gradient-to-r from-surface via-surface to-brand/5">
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-5" />
@@ -1273,6 +1274,8 @@ export default function SportsPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <MobileNav />
     </div>
   )
 }

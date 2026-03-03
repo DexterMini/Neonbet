@@ -92,10 +92,11 @@ export function BetControls({
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">$</span>
               <input
                 type="text"
+                inputMode="decimal"
                 value={betAmount}
                 onChange={e => onBetAmountChange(e.target.value)}
                 disabled={disabled || isAutoRunning}
-                className="w-full bg-surface border border-border rounded-xl pl-7 pr-3 py-2 font-mono tabular-nums text-[13px] text-white focus:outline-none focus:border-brand/40 transition-all disabled:opacity-50"
+                className="w-full bg-surface border border-border rounded-xl pl-7 pr-3 py-2.5 sm:py-2 font-mono tabular-nums text-sm sm:text-[13px] text-white focus:outline-none focus:border-brand/40 transition-all disabled:opacity-50"
               />
             </div>
             <div className="flex gap-1.5 mt-1.5">
@@ -109,7 +110,7 @@ export function BetControls({
                     if (l === 'Min') onBetAmountChange('0.10')
                     if (l === 'Max') onBetAmountChange('1000.00')
                   }}
-                  className="flex-1 bg-surface border border-border rounded-lg px-2 py-1.5 text-[11px] font-semibold text-muted-light hover:text-white hover:border-border-light transition-all disabled:opacity-50"
+                  className="flex-1 bg-surface border border-border rounded-lg px-2 py-2.5 sm:py-1.5 text-[12px] sm:text-[11px] font-semibold text-muted-light hover:text-white hover:border-border-light transition-all disabled:opacity-50 active:scale-95"
                 >
                   {l}
                 </button>
