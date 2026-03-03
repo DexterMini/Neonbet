@@ -18,6 +18,7 @@ import { Sidebar } from '@/components/Sidebar'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { useAutomationStore, type CashbackConfig } from '@/stores/automationStore'
+import { useDemoBalance, formatDemoBalance } from '@/stores/demoBalanceStore'
 import { toast } from 'sonner'
 
 /* ── Types ──────────────────────────────────────────── */
@@ -263,6 +264,7 @@ export default function AdminDashboard() {
   const opsCounterRef = useRef(0)
 
   const automation = useAutomationStore()
+  const demoBalance = useDemoBalance()
   const health = useSystemHealth()
   const sparklines = useSparklineData(7)
 
@@ -339,45 +341,43 @@ export default function AdminDashboard() {
     } catch { toast.error('Network error') }
   }
 
-  const handleAdjustBalance = async () => {
-    if (!adjUserId || !adjAmount || !adjReason) {
-      toast.error('Fill in all fields')
+  const handleAdjustBalance = () => {
+    const amt = parseFloat(adjAmount)
+    if (!amt || amt <= 0 || !adjReason) {
+      toast.error('Enter a valid amount and reason')
       return
     }
     setAdjSubmitting(true)
-    try {
-      const res = await fetch(`${apiBase}/api/v1/admin/users/adjust-balance`, {
-        method: 'POST',
-        headers: headers(),
-        body: JSON.stringify({
-          user_id: adjUserId,
-          currency: adjCurrency.toLowerCase(),
-          amount: parseFloat(adjAmount),
-          type: adjType,
-          reason: adjReason,
-        }),
-      })
-      if (res.ok) {
-        toast.success(`${adjType === 'credit' ? 'Credited' : 'Debited'} ${adjAmount} ${adjCurrency} successfully`)
-        opsCounterRef.current += 1
-        setRecentOps(prev => [...prev, {
-          id: opsCounterRef.current,
-          type: adjType,
-          amount: adjAmount,
-          currency: adjCurrency,
-          username: adjSelectedPlayer?.username || adjUserId.slice(0, 12),
-          time: new Date().toLocaleTimeString(),
-          reason: adjReason,
-        }])
-        setAdjAmount('')
-        setAdjReason('')
-        fetchAuditLog()
+
+    // Simulate brief processing delay for realism
+    setTimeout(() => {
+      if (adjType === 'credit') {
+        demoBalance.credit(amt)
+        toast.success(`Credited $${amt.toFixed(2)} to demo balance`, { icon: '✅' })
       } else {
-        const err = await res.json().catch(() => null)
-        toast.error(err?.detail || 'Adjustment failed')
+        const ok = demoBalance.deduct(amt)
+        if (!ok) {
+          toast.error(`Insufficient balance — current: ${formatDemoBalance(demoBalance.balance)}`)
+          setAdjSubmitting(false)
+          return
+        }
+        toast.success(`Debited $${amt.toFixed(2)} from demo balance`, { icon: '💸' })
       }
-    } catch { toast.error('Network error') }
-    setAdjSubmitting(false)
+
+      opsCounterRef.current += 1
+      setRecentOps(prev => [...prev, {
+        id: opsCounterRef.current,
+        type: adjType,
+        amount: adjAmount,
+        currency: adjCurrency,
+        username: adjSelectedPlayer?.username || 'Demo Player',
+        time: new Date().toLocaleTimeString(),
+        reason: adjReason,
+      }])
+      setAdjAmount('')
+      setAdjReason('')
+      setAdjSubmitting(false)
+    }, 400)
   }
 
   const fetchAuditLog = useCallback(async () => {
@@ -1092,101 +1092,28 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="p-5 space-y-5">
-                        {/* Player Search */}
-                        <div className="relative">
-                          <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Find Player</label>
-                          <div className="relative">
-                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-                            <input
-                              type="text"
-                              value={adjPlayerSearch}
-                              onChange={(e) => {
-                                setAdjPlayerSearch(e.target.value)
-                                setAdjDropdownOpen(true)
-                                searchForAdjPlayer(e.target.value)
-                              }}
-                              onFocus={() => adjPlayerResults.length > 0 && setAdjDropdownOpen(true)}
-                              placeholder="Search username, email, or paste player ID..."
-                              className="w-full pl-10 pr-10 py-3.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white text-sm placeholder:text-white/15 focus:outline-none focus:border-brand/40 transition-all"
-                            />
-                            {adjSelectedPlayer && (
-                              <button
-                                onClick={() => { setAdjSelectedPlayer(null); setAdjUserId(''); setAdjPlayerSearch('') }}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md hover:bg-white/[0.06] text-white/20 hover:text-white/60 transition-all"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
+                        {/* Target — auto-selected demo player */}
+                        <div>
+                          <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Target Player</label>
+                          <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-brand/5 via-purple-600/5 to-transparent border border-brand/10">
+                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-brand/20">
+                              DP
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-semibold text-sm">Demo Player</p>
+                              <p className="text-white/30 text-[10px] font-mono">Local balance · Autonomous mode</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                active
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand/10 text-brand text-xs font-bold font-mono border border-brand/20">
+                                {formatDemoBalance(demoBalance.balance)}
+                              </span>
+                            </div>
                           </div>
-                          {/* Search dropdown */}
-                          <AnimatePresence>
-                            {adjDropdownOpen && adjPlayerResults.length > 0 && (
-                              <motion.div
-                                initial={{ opacity: 0, y: -4 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -4 }}
-                                className="absolute z-50 top-full left-0 right-0 mt-2 bg-surface/95 backdrop-blur-2xl border border-white/[0.08] rounded-xl shadow-2xl overflow-hidden"
-                              >
-                                {adjPlayerResults.map((u) => (
-                                  <button
-                                    key={u.user_id}
-                                    onClick={() => pickAdjPlayer(u)}
-                                    className="w-full flex items-center gap-3 p-3.5 hover:bg-white/[0.04] transition-colors text-left border-b border-white/[0.04] last:border-0"
-                                  >
-                                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand/20 to-purple-600/20 flex items-center justify-center text-brand text-xs font-bold border border-white/[0.06]">
-                                      {u.username?.slice(0, 2).toUpperCase() || '??'}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-white text-sm font-medium truncate">{u.username}</p>
-                                      <p className="text-white/30 text-[10px] truncate font-mono">{u.email}</p>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 text-[10px] font-bold">
-                                        <Star size={8} /> {u.vip_level}
-                                      </span>
-                                      <span className={cn('w-1.5 h-1.5 rounded-full',
-                                        u.status === 'active' ? 'bg-emerald-400' : u.status === 'frozen' ? 'bg-blue-400' : 'bg-red-400'
-                                      )} />
-                                    </div>
-                                  </button>
-                                ))}
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
                         </div>
-
-                        {/* Selected player inline card */}
-                        <AnimatePresence>
-                          {adjSelectedPlayer && (
-                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
-                              className="overflow-hidden">
-                              <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-brand/5 via-purple-600/5 to-transparent border border-brand/10">
-                                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-brand/20">
-                                  {adjSelectedPlayer.username?.slice(0, 2).toUpperCase()}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-white font-semibold text-sm">{adjSelectedPlayer.username}</p>
-                                  <p className="text-white/30 text-[10px] font-mono truncate">{adjSelectedPlayer.user_id}</p>
-                                </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  <span className={cn('inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase',
-                                    adjSelectedPlayer.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                    : adjSelectedPlayer.status === 'frozen' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                                  )}>
-                                    <span className={cn('w-1.5 h-1.5 rounded-full',
-                                      adjSelectedPlayer.status === 'active' ? 'bg-emerald-400' : adjSelectedPlayer.status === 'frozen' ? 'bg-blue-400' : 'bg-red-400'
-                                    )} />
-                                    {adjSelectedPlayer.status}
-                                  </span>
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-[10px] font-bold border border-amber-500/15">
-                                    <Star size={10} /> Lv.{adjSelectedPlayer.vip_level}
-                                  </span>
-                                </div>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
 
                         {/* Operation type + Currency grid */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1288,7 +1215,7 @@ export default function AdminDashboard() {
 
                         {/* Preview */}
                         <AnimatePresence>
-                          {adjUserId && adjAmount && adjReason && (
+                          {adjAmount && adjReason && (
                             <motion.div initial={{ opacity: 0, y: 8, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4 }}
                               className={cn('p-4 rounded-xl border backdrop-blur-sm',
                                 adjType === 'credit' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'
@@ -1302,11 +1229,15 @@ export default function AdminDashboard() {
                                 <div className="flex-1">
                                   <p className="text-white text-sm font-medium">
                                     {adjType === 'credit' ? 'Credit' : 'Debit'}{' '}
-                                    <span className="font-bold font-mono">{adjAmount} {adjCurrency}</span>{' '}
+                                    <span className="font-bold font-mono">${adjAmount}</span>{' '}
                                     {adjType === 'credit' ? 'to' : 'from'}{' '}
-                                    <span className="text-brand">{adjSelectedPlayer?.username || adjUserId.slice(0, 12) + '...'}</span>
+                                    <span className="text-brand">Demo Player</span>
                                   </p>
-                                  <p className="text-white/30 text-xs mt-0.5">{adjReason}</p>
+                                  <p className="text-white/30 text-xs mt-0.5">{adjReason} · New balance: {formatDemoBalance(
+                                    adjType === 'credit'
+                                      ? demoBalance.balance + (parseFloat(adjAmount) || 0)
+                                      : Math.max(0, demoBalance.balance - (parseFloat(adjAmount) || 0))
+                                  )}</p>
                                 </div>
                               </div>
                             </motion.div>
@@ -1315,13 +1246,13 @@ export default function AdminDashboard() {
 
                         {/* Submit */}
                         <button onClick={handleAdjustBalance}
-                          disabled={!adjUserId || !adjAmount || !adjReason || adjSubmitting}
+                          disabled={!adjAmount || !adjReason || adjSubmitting}
                           className={cn(
                             'w-full py-4 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 shadow-lg active:scale-[0.98]',
                             adjType === 'credit'
                               ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:brightness-110 shadow-emerald-500/20'
                               : 'bg-gradient-to-r from-red-500 to-red-600 text-white hover:brightness-110 shadow-red-500/20',
-                            (!adjUserId || !adjAmount || !adjReason || adjSubmitting) && 'opacity-40 cursor-not-allowed'
+                            (!adjAmount || !adjReason || adjSubmitting) && 'opacity-40 cursor-not-allowed'
                           )}>
                           {adjSubmitting
                             ? <><RefreshCw className="w-4 h-4 animate-spin" /> Processing...</>
@@ -1336,61 +1267,65 @@ export default function AdminDashboard() {
 
                   {/* Side panel — 2 cols */}
                   <div className="lg:col-span-2 space-y-4">
-                    {/* Player Balance Card */}
+                    {/* Live Demo Balance Card */}
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-                      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center gap-2">
-                        <UserCheck className="w-3.5 h-3.5 text-brand" />
-                        <span className="text-xs font-semibold text-white">Player Info</span>
+                      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Wallet className="w-3.5 h-3.5 text-brand" />
+                          <span className="text-xs font-semibold text-white">Live Balance</span>
+                        </div>
+                        <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
+                          <PulseDot color="bg-emerald-400" /> LIVE
+                        </span>
                       </div>
-                      {adjSelectedPlayer ? (
-                        <div className="p-4 space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-brand/20">
-                              {adjSelectedPlayer.username?.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-white font-semibold truncate">{adjSelectedPlayer.username}</p>
-                              <p className="text-white/30 text-xs truncate">{adjSelectedPlayer.email}</p>
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-3 gap-2">
-                            <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
-                              <p className="text-white/30 text-[9px] uppercase">Status</p>
-                              <p className={cn('text-xs font-bold capitalize',
-                                adjSelectedPlayer.status === 'active' ? 'text-emerald-400' : adjSelectedPlayer.status === 'frozen' ? 'text-blue-400' : 'text-red-400'
-                              )}>{adjSelectedPlayer.status}</p>
-                            </div>
-                            <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
-                              <p className="text-white/30 text-[9px] uppercase">VIP</p>
-                              <p className="text-amber-400 text-xs font-bold">Lv.{adjSelectedPlayer.vip_level}</p>
-                            </div>
-                            <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
-                              <p className="text-white/30 text-[9px] uppercase">Risk</p>
-                              <p className={cn('text-xs font-bold',
-                                adjSelectedPlayer.risk_score < 30 ? 'text-emerald-400' : adjSelectedPlayer.risk_score < 60 ? 'text-amber-400' : 'text-red-400'
-                              )}>{adjSelectedPlayer.risk_score}</p>
-                            </div>
-                          </div>
-                          {adjSelectedPlayer.balances && Object.keys(adjSelectedPlayer.balances).length > 0 && (
-                            <div>
-                              <p className="text-white/20 text-[9px] uppercase tracking-wider font-semibold mb-1.5">Balances</p>
-                              <div className="space-y-1">
-                                {Object.entries(adjSelectedPlayer.balances).map(([cur, amt]) => (
-                                  <div key={cur} className="flex justify-between items-center p-2 bg-white/[0.02] rounded-lg border border-white/[0.03]">
-                                    <span className="text-white/40 text-xs uppercase">{cur}</span>
-                                    <span className="text-white font-mono text-xs font-semibold">{amt}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                      <div className="p-4 space-y-4">
+                        <div className="text-center py-3">
+                          <p className="text-white/30 text-[9px] uppercase tracking-wider mb-1">Current Balance</p>
+                          <motion.p
+                            key={demoBalance.balance}
+                            initial={{ scale: 1.1, color: '#06d6a0' }}
+                            animate={{ scale: 1, color: '#ffffff' }}
+                            transition={{ duration: 0.3 }}
+                            className="text-3xl font-bold font-mono text-white"
+                          >
+                            {formatDemoBalance(demoBalance.balance)}
+                          </motion.p>
+                          <p className="text-white/15 text-[10px] mt-1">Demo mode · localStorage</p>
                         </div>
-                      ) : (
-                        <div className="p-8 text-center">
-                          <Users className="w-8 h-8 text-white/[0.06] mx-auto mb-2" />
-                          <p className="text-white/20 text-xs">Search for a player to see their info</p>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
+                            <p className="text-white/30 text-[9px] uppercase">Status</p>
+                            <p className="text-emerald-400 text-xs font-bold">Active</p>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
+                            <p className="text-white/30 text-[9px] uppercase">Mode</p>
+                            <p className="text-brand text-xs font-bold">Autonomous</p>
+                          </div>
                         </div>
-                      )}
+
+                        <div className="space-y-1.5">
+                          <p className="text-white/20 text-[9px] uppercase tracking-wider font-semibold">Quick Balance</p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button onClick={() => demoBalance.setBalance(1000)}
+                              className="py-2 rounded-lg bg-white/[0.03] border border-white/[0.04] text-white/40 text-xs font-medium hover:bg-white/[0.06] hover:text-white transition-all">
+                              Reset $1,000
+                            </button>
+                            <button onClick={() => demoBalance.setBalance(10000)}
+                              className="py-2 rounded-lg bg-white/[0.03] border border-white/[0.04] text-white/40 text-xs font-medium hover:bg-white/[0.06] hover:text-white transition-all">
+                              Set $10,000
+                            </button>
+                            <button onClick={() => demoBalance.setBalance(100000)}
+                              className="py-2 rounded-lg bg-white/[0.03] border border-white/[0.04] text-white/40 text-xs font-medium hover:bg-white/[0.06] hover:text-white transition-all">
+                              Set $100,000
+                            </button>
+                            <button onClick={() => demoBalance.setBalance(1000000)}
+                              className="py-2 rounded-lg bg-brand/5 border border-brand/20 text-brand text-xs font-bold hover:bg-brand/10 transition-all">
+                              Max $1M
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Recent Operations */}
