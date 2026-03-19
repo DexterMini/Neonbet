@@ -46,13 +46,21 @@ bet_status_enum = sa.Enum(
 
 
 def upgrade() -> None:
-    # ---- Enum types ----
-    user_status_enum.create(op.get_bind(), checkfirst=True)
-    kyc_level_enum.create(op.get_bind(), checkfirst=True)
-    currency_enum.create(op.get_bind(), checkfirst=True)
-    ledger_event_type_enum.create(op.get_bind(), checkfirst=True)
-    game_type_enum.create(op.get_bind(), checkfirst=True)
-    bet_status_enum.create(op.get_bind(), checkfirst=True)
+    # ---- Enum types (use raw SQL for IF NOT EXISTS support) ----
+    op.execute("DO $$ BEGIN CREATE TYPE userstatus AS ENUM ('active', 'suspended', 'frozen', 'banned', 'pending_verification'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    op.execute("DO $$ BEGIN CREATE TYPE kyclevel AS ENUM ('none', 'tier_1', 'tier_2', 'tier_3'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    op.execute("DO $$ BEGIN CREATE TYPE currency AS ENUM ('btc', 'eth', 'usdt', 'usdc', 'sol', 'ltc'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    op.execute("DO $$ BEGIN CREATE TYPE ledgereventtype AS ENUM ('deposit', 'withdrawal', 'withdrawal_pending', 'withdrawal_cancelled', 'bet_placed', 'bet_won', 'bet_lost', 'bet_refunded', 'bet_voided', 'bonus_credit', 'bonus_wagered', 'bonus_forfeited', 'rakeback_credit', 'lossback_credit', 'admin_adjustment', 'system_correction', 'balance_frozen', 'balance_unfrozen'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    op.execute("DO $$ BEGIN CREATE TYPE gametype AS ENUM ('dice', 'crash', 'plinko', 'mines', 'limbo', 'wheel', 'blackjack', 'roulette', 'slots'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+    op.execute("DO $$ BEGIN CREATE TYPE betstatus AS ENUM ('pending', 'active', 'won', 'lost', 'refunded', 'voided'); EXCEPTION WHEN duplicate_object THEN null; END $$;")
+
+    # Use postgresql.ENUM with create_type=False to reference existing enums in columns
+    _user_status = postgresql.ENUM('active', 'suspended', 'frozen', 'banned', 'pending_verification', name='userstatus', create_type=False)
+    _kyc_level = postgresql.ENUM('none', 'tier_1', 'tier_2', 'tier_3', name='kyclevel', create_type=False)
+    _currency = postgresql.ENUM('btc', 'eth', 'usdt', 'usdc', 'sol', 'ltc', name='currency', create_type=False)
+    _ledger_event_type = postgresql.ENUM('deposit', 'withdrawal', 'withdrawal_pending', 'withdrawal_cancelled', 'bet_placed', 'bet_won', 'bet_lost', 'bet_refunded', 'bet_voided', 'bonus_credit', 'bonus_wagered', 'bonus_forfeited', 'rakeback_credit', 'lossback_credit', 'admin_adjustment', 'system_correction', 'balance_frozen', 'balance_unfrozen', name='ledgereventtype', create_type=False)
+    _game_type = postgresql.ENUM('dice', 'crash', 'plinko', 'mines', 'limbo', 'wheel', 'blackjack', 'roulette', 'slots', name='gametype', create_type=False)
+    _bet_status = postgresql.ENUM('pending', 'active', 'won', 'lost', 'refunded', 'voided', name='betstatus', create_type=False)
 
     # ---- Users ----
     op.create_table(
@@ -61,8 +69,8 @@ def upgrade() -> None:
         sa.Column('email', sa.String(255), unique=True, nullable=False),
         sa.Column('username', sa.String(50), unique=True, nullable=False),
         sa.Column('password_hash', sa.String(255), nullable=False),
-        sa.Column('status', user_status_enum, server_default='pending_verification', nullable=False),
-        sa.Column('kyc_level', kyc_level_enum, server_default='none', nullable=False),
+        sa.Column('status', _user_status, server_default='pending_verification', nullable=False),
+        sa.Column('kyc_level', _kyc_level, server_default='none', nullable=False),
         sa.Column('email_verified', sa.Boolean, server_default=sa.text('false'), nullable=False),
         sa.Column('phone_verified', sa.Boolean, server_default=sa.text('false'), nullable=False),
         sa.Column('totp_secret', sa.String(32), nullable=True),
@@ -87,7 +95,7 @@ def upgrade() -> None:
         'user_balances',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('currency', currency_enum, nullable=False),
+        sa.Column('currency', _currency, nullable=False),
         sa.Column('available', sa.Numeric(20, 8), server_default=sa.text('0'), nullable=False),
         sa.Column('locked', sa.Numeric(20, 8), server_default=sa.text('0'), nullable=False),
         sa.Column('frozen', sa.Numeric(20, 8), server_default=sa.text('0'), nullable=False),
@@ -127,8 +135,8 @@ def upgrade() -> None:
         sa.Column('id', sa.BigInteger, primary_key=True, autoincrement=True),
         sa.Column('event_id', postgresql.UUID(as_uuid=True), unique=True, nullable=False),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='RESTRICT'), nullable=False),
-        sa.Column('event_type', ledger_event_type_enum, nullable=False),
-        sa.Column('currency', currency_enum, nullable=False),
+        sa.Column('event_type', _ledger_event_type, nullable=False),
+        sa.Column('currency', _currency, nullable=False),
         sa.Column('amount', sa.Numeric(20, 8), nullable=False),
         sa.Column('balance_before', sa.Numeric(20, 8), nullable=False),
         sa.Column('balance_after', sa.Numeric(20, 8), nullable=False),
@@ -176,11 +184,11 @@ def upgrade() -> None:
         'bets',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='RESTRICT'), nullable=False),
-        sa.Column('game_type', game_type_enum, nullable=False),
+        sa.Column('game_type', _game_type, nullable=False),
         sa.Column('game_round_id', postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column('currency', currency_enum, nullable=False),
+        sa.Column('currency', _currency, nullable=False),
         sa.Column('bet_amount', sa.Numeric(20, 8), nullable=False),
-        sa.Column('status', bet_status_enum, server_default='pending', nullable=False),
+        sa.Column('status', _bet_status, server_default='pending', nullable=False),
         sa.Column('multiplier', sa.Numeric(20, 8), nullable=True),
         sa.Column('payout', sa.Numeric(20, 8), nullable=True),
         sa.Column('profit', sa.Numeric(20, 8), nullable=True),
@@ -204,7 +212,7 @@ def upgrade() -> None:
         'deposits',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='RESTRICT'), nullable=False),
-        sa.Column('currency', currency_enum, nullable=False),
+        sa.Column('currency', _currency, nullable=False),
         sa.Column('amount', sa.Numeric(20, 8), nullable=False),
         sa.Column('tx_hash', sa.String(128), unique=True, nullable=True),
         sa.Column('from_address', sa.String(128), nullable=True),
@@ -225,7 +233,7 @@ def upgrade() -> None:
         'withdrawals',
         sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='RESTRICT'), nullable=False),
-        sa.Column('currency', currency_enum, nullable=False),
+        sa.Column('currency', _currency, nullable=False),
         sa.Column('amount', sa.Numeric(20, 8), nullable=False),
         sa.Column('fee', sa.Numeric(20, 8), server_default=sa.text('0'), nullable=False),
         sa.Column('to_address', sa.String(128), nullable=False),
