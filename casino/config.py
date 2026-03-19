@@ -5,7 +5,7 @@ Central configuration management using Pydantic Settings
 """
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, field_validator
 from typing import List
 from functools import lru_cache
 
@@ -16,6 +16,15 @@ class DatabaseSettings(BaseSettings):
     pool_size: int = Field(default=20)
     max_overflow: int = Field(default=10)
     echo: bool = Field(default=False)
+
+    @field_validator("url")
+    @classmethod
+    def ensure_asyncpg_scheme(cls, v: str) -> str:
+        if v.startswith("postgresql://"):
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        return v
     
     class Config:
         env_prefix = "DB_"
