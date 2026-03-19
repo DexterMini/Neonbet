@@ -293,7 +293,7 @@ export default function DicePage() {
           <FairnessModal isOpen={showFairness} onClose={() => setShowFairness(false)} game="dice" serverSeedHash={serverSeedHash} clientSeed={clientSeed} nonce={nonce} previousServerSeed={previousServerSeed} onClientSeedChange={setClientSeed} onRotateSeed={rotateSeed} />
           <TwoFactorModal
             open={twoFactorOpen}
-            amount={pendingBet ?? Number(betAmount) || 0}
+            amount={pendingBet ?? (Number(betAmount) || 0)}
             onClose={handleTwoFactorClose}
             onConfirm={handleTwoFactorConfirm}
             busy={isRolling || isPlacing}

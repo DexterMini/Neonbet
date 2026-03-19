@@ -181,7 +181,8 @@ export default function StairsPage() {
           // Completed all rows!
           const bet = parseFloat(betAmount)
           const finalMulti = multTable[newRow] ?? multTable[multTable.length - 1]
-          setLastWin(true)setGameActive(false)
+          setLastWin(true)
+          setGameActive(false)
           setHistory(prev => [{ rows: newRow, won: true, multi: finalMulti }, ...prev.slice(0, 19)])
           sessionStats.recordBet(true, bet, bet * finalMulti - bet, finalMulti)
           toast.success(`🏆 Cleared all ${diff.rows} rows! ${finalMulti}x`)

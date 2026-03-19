@@ -27,7 +27,7 @@ const gameCategories = [
   { name: 'Table Games', href: '#tables', icon: Spade, color: 'text-accent-blue' },
 ]
 
-const originalGames = [
+const originalGames: { id: string; name: string; href: string; icon: typeof Dices; color: string; hot?: boolean; isNew?: boolean }[] = [
   { id: 'dice', name: 'Dice', href: '/games/dice', icon: Dices, color: 'text-red-400' },
   { id: 'limbo', name: 'Limbo', href: '/games/limbo', icon: Target, color: 'text-sky-400' },
 ]

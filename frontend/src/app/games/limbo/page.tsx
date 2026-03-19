@@ -281,7 +281,7 @@ export default function LimboPage() {
             previousServerSeed={previousServerSeed} onClientSeedChange={setClientSeed} onRotateSeed={rotateSeed} />
           <TwoFactorModal
             open={twoFactorOpen}
-            amount={pendingBet ?? Number(betAmount) || 0}
+            amount={pendingBet ?? (Number(betAmount) || 0)}
             onClose={handleTwoFactorClose}
             onConfirm={handleTwoFactorConfirm}
             busy={isPlaying || isPlacing}
