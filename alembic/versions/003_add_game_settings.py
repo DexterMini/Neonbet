@@ -22,7 +22,7 @@ def upgrade() -> None:
     op.create_table(
         'game_settings',
         sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column('game_type', sa.Enum('dice', 'crash', 'plinko', 'mines', 'limbo', 'wheel', 'blackjack', 'roulette', 'slots', name='gametype'), nullable=False),
+        sa.Column('game_type', postgresql.ENUM('dice', 'crash', 'plinko', 'mines', 'limbo', 'wheel', 'blackjack', 'roulette', 'slots', name='gametype', create_type=False), nullable=False),
         sa.Column('house_edge', sa.Numeric(precision=5, scale=4), nullable=False, server_default=sa.text("'0.0500'")),
         sa.Column('description', sa.Text(), nullable=True),
         sa.Column('updated_by', postgresql.UUID(as_uuid=True), nullable=True),
