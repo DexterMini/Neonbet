@@ -76,6 +76,10 @@ class CrashEngine:
             "round_crash": [],
         }
     
+    def set_house_edge(self, house_edge: Decimal) -> None:
+        """Set house edge for this game engine"""
+        self.house_edge = Decimal(str(house_edge))
+    
     def generate_crash_point(self, server_seed: str, round_id: str) -> Decimal:
         """
         Generate crash point using provably fair method.

@@ -14,13 +14,17 @@ from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import pyotp
 
+from casino.config import settings
 from casino.models import (
     User, UserBalance, Currency, Deposit, Withdrawal,
     LedgerEvent, LedgerEventType,
+    kyc_level_to_int,
 )
 from casino.api.dependencies import get_db, get_current_user
 from casino.services.ledger import LedgerService, InsufficientBalanceError
+from casino.services.payment import get_payment_service, NOWPaymentsService
 
 
 router = APIRouter(prefix="/wallet", tags=["Wallet"])
@@ -186,61 +190,9 @@ async def get_deposit_address(
     
     Addresses are generated per-user and reusable.
     """
-    currency_upper = currency.upper()
-    if currency_upper not in SUPPORTED_CURRENCIES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported currency. Available: {SUPPORTED_CURRENCIES}"
-        )
-    
-    currency_upper = currency_upper  # already uppered above
-    
-    # TODO: Generate or retrieve deposit address from wallet service
-    
-    # Network defaults
-    networks = {
-        "BTC": "bitcoin",
-        "ETH": "ethereum",
-        "USDT": network or "trc20",  # TRC20, ERC20, BEP20
-        "USDC": network or "ethereum",
-        "SOL": "solana",
-        "LTC": "litecoin"
-    }
-    
-    min_deposits = {
-        "BTC": "0.0001",
-        "ETH": "0.005",
-        "USDT": "10",
-        "USDC": "10",
-        "SOL": "0.1",
-        "LTC": "0.01"
-    }
-    
-    confirmations = {
-        "BTC": 3,
-        "ETH": 12,
-        "USDT": 20,
-        "USDC": 12,
-        "SOL": 32,
-        "LTC": 6
-    }
-    
-    # Mock address (TODO: real wallet service integration)
-    mock_addresses = {
-        "BTC": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
-        "ETH": "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
-        "USDT": "TJYeasypBnB4Kv7Mkkzpd5MbRZpM3nALZM",
-        "USDC": "0x71C7656EC7ab88b098defB751B7401B5f6d8976F",
-        "SOL": "7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV",
-        "LTC": "ltc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
-    }
-    
-    return DepositAddressResponse(
-        currency=currency_upper,
-        address=mock_addresses.get(currency_upper, "mock_address"),
-        network=networks.get(currency_upper, "unknown"),
-        min_deposit=min_deposits.get(currency_upper, "0.01"),
-        confirmations_required=confirmations.get(currency_upper, 6)
+    raise HTTPException(
+        status_code=410,
+        detail="Direct deposit addresses are disabled. Use /api/v1/payments/deposit/invoice instead.",
     )
 
 
@@ -275,6 +227,23 @@ async def withdraw(
         "LTC": Decimal("0.001"),
     }
     fee = fees.get(request.currency, Decimal("0"))
+
+    # Enforce 2FA for withdrawals when configured
+    if settings.security.require_2fa_for_withdrawal:
+        if not user.totp_enabled or not user.totp_secret:
+            raise HTTPException(status_code=403, detail="2FA is required for withdrawals")
+        if not request.two_factor_code:
+            raise HTTPException(status_code=400, detail="Two-factor code required")
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(request.two_factor_code, valid_window=1):
+            raise HTTPException(status_code=400, detail="Invalid or expired 2FA code")
+
+    # KYC gating (thresholds aligned with risk engine defaults)
+    kyc_level = kyc_level_to_int(user.kyc_level)
+    if kyc_level == 0 and request.amount > Decimal("500"):
+        raise HTTPException(status_code=403, detail="KYC required for withdrawals over $500")
+    if kyc_level == 1 and request.amount > Decimal("5000"):
+        raise HTTPException(status_code=403, detail="Enhanced KYC required for withdrawals over $5,000")
 
     # Check balance
     ledger = LedgerService(db)
@@ -510,38 +479,78 @@ async def convert_currency(
     amount: Decimal,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    payment_svc: NOWPaymentsService = Depends(get_payment_service),
 ):
     """
-    Convert between currencies.
-    
-    Uses real-time exchange rates with 0.5% spread.
+    Convert between currencies within the casino wallet.
+
+    Uses real-time NOWPayments exchange rates with 0.5% spread.
     """
     from_currency = from_currency.upper()
     to_currency = to_currency.upper()
-    
+
     if from_currency not in SUPPORTED_CURRENCIES:
         raise HTTPException(status_code=400, detail=f"Unsupported currency: {from_currency}")
     if to_currency not in SUPPORTED_CURRENCIES:
         raise HTTPException(status_code=400, detail=f"Unsupported currency: {to_currency}")
-    
-    # TODO: Get real exchange rates
-    # TODO: Check balance
-    # TODO: Perform conversion
-    
-    # Mock conversion
-    mock_rates = {
-        ("BTC", "USDT"): Decimal("42000"),
-        ("ETH", "USDT"): Decimal("2500"),
-        ("SOL", "USDT"): Decimal("100"),
-        ("LTC", "USDT"): Decimal("70"),
-    }
-    
+    if from_currency == to_currency:
+        raise HTTPException(status_code=400, detail="Cannot convert currency to itself")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    # Fetch USD value of source amount via NOWPayments
+    try:
+        # get_estimated_price gives us crypto amount for 1 USD; we need inverse
+        # Use a reference amount of $1000 to get rate
+        from_estimate = await payment_svc.get_estimated_price(1000.0, from_currency)
+        to_estimate = await payment_svc.get_estimated_price(1000.0, to_currency)
+
+        # from_estimate["estimated_amount"] = how many from_currency for $1000
+        # to_estimate["estimated_amount"]   = how many to_currency for $1000
+        from_per_usd = Decimal(str(from_estimate["estimated_amount"])) / Decimal("1000")
+        to_per_usd = Decimal(str(to_estimate["estimated_amount"])) / Decimal("1000")
+
+        if from_per_usd == 0 or to_per_usd == 0:
+            raise HTTPException(status_code=502, detail="Failed to get valid exchange rates")
+
+        # amount (from_currency) → USD → to_currency
+        usd_value = amount / from_per_usd
+        raw_to_amount = usd_value * to_per_usd
+
+        # Apply 0.5% spread
+        fee_percent = Decimal("0.005")
+        to_amount = raw_to_amount * (1 - fee_percent)
+        rate = raw_to_amount / amount
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=502, detail="Failed to fetch exchange rates")
+
+    ledger = LedgerService(db)
+    try:
+        await ledger.debit(
+            user_id=str(user.id),
+            currency=from_currency,
+            amount=amount,
+            event_type=LedgerEventType.WITHDRAWAL,
+            metadata={"reason": f"currency_conversion_{from_currency}_to_{to_currency}"},
+        )
+        await ledger.credit(
+            user_id=str(user.id),
+            currency=to_currency,
+            amount=to_amount,
+            event_type=LedgerEventType.DEPOSIT,
+            metadata={"reason": f"currency_conversion_{from_currency}_to_{to_currency}"},
+        )
+    except InsufficientBalanceError:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+
     return {
         "success": True,
         "from_currency": from_currency,
         "from_amount": str(amount),
         "to_currency": to_currency,
-        "to_amount": "0.00",  # Calculated
-        "rate": "0.00",
-        "fee_percent": "0.5"
+        "to_amount": str(to_amount.quantize(Decimal("0.00000001"))),
+        "rate": str(rate.quantize(Decimal("0.00000001"))),
+        "fee_percent": "0.5",
     }

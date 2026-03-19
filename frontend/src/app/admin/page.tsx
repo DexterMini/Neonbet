@@ -18,7 +18,6 @@ import { Sidebar } from '@/components/Sidebar'
 import { cn, formatCurrency } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { useAutomationStore, type CashbackConfig } from '@/stores/automationStore'
-import { useDemoBalance, formatDemoBalance } from '@/stores/demoBalanceStore'
 import { toast } from 'sonner'
 
 /* ── Types ──────────────────────────────────────────── */
@@ -45,9 +44,7 @@ interface SystemStats {
   unresolved_alerts: number
 }
 
-type AdminTab = 'overview' | 'users' | 'adjustments' | 'automation' | 'audit'
-
-const ADMIN_PIN = '1337A6B'
+type AdminTab = 'overview' | 'users' | 'adjustments' | 'automation' | 'games' | 'audit'
 
 /* ── Sparkline component ───────────────────────────── */
 function Sparkline({ data, color = '#06d6a0', width = 80, height = 28 }: {
@@ -230,13 +227,10 @@ function useSparklineData(count = 7) {
    MAIN COMPONENT
    ══════════════════════════════════════════════════════ */
 export default function AdminDashboard() {
-  const { token } = useAuthStore()
+  const { token, user } = useAuthStore()
+  const isAdmin = user?.is_admin === true
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [authenticated, setAuthenticated] = useState(false)
-  const [pinInput, setPinInput] = useState('')
-  const [pinError, setPinError] = useState(false)
-  const [pinShake, setPinShake] = useState(false)
 
   const [tab, setTab] = useState<AdminTab>('overview')
   const [stats, setStats] = useState<SystemStats | null>(null)
@@ -255,6 +249,13 @@ export default function AdminDashboard() {
   const [auditLog, setAuditLog] = useState<any[]>([])
   const [currentTime, setCurrentTime] = useState(new Date())
 
+  // Game Settings state
+  const [gameSettings, setGameSettings] = useState<any[]>([])
+  const [editingGame, setEditingGame] = useState<string | null>(null)
+  const [editRTP, setEditRTP] = useState<string>('')
+  const [editDescription, setEditDescription] = useState<string>('')
+  const [savingGame, setSavingGame] = useState(false)
+
   // Balance Ops enhanced state
   const [adjPlayerSearch, setAdjPlayerSearch] = useState('')
   const [adjPlayerResults, setAdjPlayerResults] = useState<AdminUser[]>([])
@@ -264,7 +265,6 @@ export default function AdminDashboard() {
   const opsCounterRef = useRef(0)
 
   const automation = useAutomationStore()
-  const demoBalance = useDemoBalance()
   const health = useSystemHealth()
   const sparklines = useSparklineData(7)
 
@@ -282,16 +282,8 @@ export default function AdminDashboard() {
   const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
 
   /* ── Auth gate ─────────────────────────────────── */
-  const handlePinSubmit = () => {
-    if (pinInput === ADMIN_PIN) {
-      setAuthenticated(true)
-      setPinError(false)
-    } else {
-      setPinError(true)
-      setPinShake(true)
-      setTimeout(() => { setPinError(false); setPinShake(false) }, 600)
-    }
-  }
+  // Admin access is now controlled by the is_admin flag on the user record.
+  // No client-side PIN required.
 
   /* ── API calls ─────────────────────────────────── */
   const fetchStats = useCallback(async () => {
@@ -341,43 +333,58 @@ export default function AdminDashboard() {
     } catch { toast.error('Network error') }
   }
 
-  const handleAdjustBalance = () => {
+  const handleAdjustBalance = async () => {
     const amt = parseFloat(adjAmount)
     if (!amt || amt <= 0 || !adjReason) {
       toast.error('Enter a valid amount and reason')
       return
     }
+    const targetUser = adjSelectedPlayer
+    if (!targetUser) {
+      toast.error('Select a target player')
+      return
+    }
     setAdjSubmitting(true)
-
-    // Simulate brief processing delay for realism
-    setTimeout(() => {
-      if (adjType === 'credit') {
-        demoBalance.credit(amt)
-        toast.success(`Credited $${amt.toFixed(2)} to demo balance`, { icon: '✅' })
-      } else {
-        const ok = demoBalance.deduct(amt)
-        if (!ok) {
-          toast.error(`Insufficient balance — current: ${formatDemoBalance(demoBalance.balance)}`)
-          setAdjSubmitting(false)
-          return
-        }
-        toast.success(`Debited $${amt.toFixed(2)} from demo balance`, { icon: '💸' })
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/users/adjust-balance`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({
+          user_id: targetUser.user_id,
+          currency: adjCurrency.toLowerCase(),
+          amount: amt,
+          type: adjType,
+          reason: adjReason,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        toast.error(err?.detail || 'Adjustment failed')
+        setAdjSubmitting(false)
+        return
       }
-
+      toast.success(
+        adjType === 'credit'
+          ? `Credited ${amt} ${adjCurrency} to ${targetUser.username}`
+          : `Debited ${amt} ${adjCurrency} from ${targetUser.username}`,
+        { icon: adjType === 'credit' ? '✅' : '💸' }
+      )
       opsCounterRef.current += 1
       setRecentOps(prev => [...prev, {
         id: opsCounterRef.current,
         type: adjType,
         amount: adjAmount,
         currency: adjCurrency,
-        username: adjSelectedPlayer?.username || 'Demo Player',
+        username: targetUser.username,
         time: new Date().toLocaleTimeString(),
         reason: adjReason,
       }])
       setAdjAmount('')
       setAdjReason('')
-      setAdjSubmitting(false)
-    }, 400)
+    } catch {
+      toast.error('Network error')
+    }
+    setAdjSubmitting(false)
   }
 
   const fetchAuditLog = useCallback(async () => {
@@ -389,6 +396,49 @@ export default function AdminDashboard() {
       }
     } catch { /* ignore */ }
   }, [apiBase, headers])
+
+  const fetchGameSettings = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/games/settings`, { headers: headers() })
+      if (res.ok) {
+        const data = await res.json()
+        setGameSettings(data || [])
+      }
+    } catch { /* ignore */ }
+  }, [apiBase, headers])
+
+  const handleUpdateGameRTP = async (gameType: string) => {
+    const rtpValue = parseFloat(editRTP)
+    if (!editRTP || isNaN(rtpValue) || rtpValue < 0 || rtpValue > 100) {
+      toast.error('Enter a valid RTP percentage (0-100)')
+      return
+    }
+
+    const houseEdge = (100 - rtpValue) / 100
+    setSavingGame(true)
+
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/games/settings/${gameType}`, {
+        method: 'POST',
+        headers: headers(),
+        body: JSON.stringify({
+          house_edge: houseEdge,
+          description: editDescription,
+        }),
+      })
+      if (res.ok) {
+        toast.success(`${gameType.toUpperCase()} RTP updated!`)
+        fetchGameSettings()
+        setEditingGame(null)
+      } else {
+        const err = await res.json().catch(() => null)
+        toast.error(err?.detail || 'Update failed')
+      }
+    } catch {
+      toast.error('Network error')
+    }
+    setSavingGame(false)
+  }
 
   const searchForAdjPlayer = useCallback(async (q: string) => {
     if (!q || q.length < 2) { setAdjPlayerResults([]); return }
@@ -410,11 +460,12 @@ export default function AdminDashboard() {
   }, [])
 
   useEffect(() => {
-    if (!authenticated) return
+    if (!isAdmin) return
     fetchStats()
     fetchUsers()
     fetchAuditLog()
-  }, [authenticated, fetchStats, fetchUsers, fetchAuditLog])
+    fetchGameSettings()
+  }, [isAdmin, fetchStats, fetchUsers, fetchAuditLog, fetchGameSettings])
 
   const greeting = useMemo(() => {
     const h = currentTime.getHours()
@@ -425,8 +476,8 @@ export default function AdminDashboard() {
 
   const ps = automation.profitStats
 
-  /* ═══════════════ PIN SCREEN ═══════════════ */
-  if (!authenticated) {
+  /* ═══════════════ ACCESS DENIED SCREEN ═══════════════ */
+  if (!isAdmin) {
     return (
       <div className="flex min-h-screen bg-background">
         <Sidebar mobileOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -435,49 +486,21 @@ export default function AdminDashboard() {
           <main className="flex-1 flex items-center justify-center p-4">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <div className="relative w-full max-w-sm">
-                {/* Glow effect */}
-                <div className="absolute -inset-px bg-gradient-to-r from-brand/20 via-purple-500/20 to-brand/20 rounded-2xl blur-xl opacity-60" />
+                <div className="absolute -inset-px bg-gradient-to-r from-red-500/20 via-red-600/20 to-red-500/20 rounded-2xl blur-xl opacity-60" />
                 <div className="relative bg-surface/90 backdrop-blur-2xl border border-white/[0.08] rounded-2xl p-8 text-center shadow-2xl">
-                  {/* Animated shield */}
-                  <motion.div
-                    animate={{ rotateY: [0, 360] }}
-                    transition={{ duration: 3, repeat: Infinity, ease: 'linear' }}
-                    className="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-brand/30"
-                  >
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-red-500/30">
                     <Shield className="w-8 h-8 text-white" />
-                  </motion.div>
-                  <h1 className="text-xl font-bold text-white mb-1">Admin Access</h1>
-                  <p className="text-white/40 text-sm mb-6">Enter your admin PIN to continue</p>
-
-                  <motion.div animate={pinShake ? { x: [-8, 8, -8, 8, 0] } : {}} transition={{ duration: 0.4 }}>
-                    <input
-                      type="password"
-                      value={pinInput}
-                      onChange={(e) => setPinInput(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handlePinSubmit()}
-                      placeholder="• • • • • • •"
-                      className={cn(
-                        'w-full p-4 bg-white/[0.04] border rounded-xl text-white text-center text-lg font-mono tracking-[0.4em] placeholder:tracking-[0.3em] placeholder:text-white/15 focus:outline-none transition-all duration-200 mb-4',
-                        pinError
-                          ? 'border-red-500/60 bg-red-500/5 focus:border-red-500/60'
-                          : 'border-white/[0.08] focus:border-brand/50 focus:bg-white/[0.06]',
-                      )}
-                    />
-                  </motion.div>
-                  {pinError && (
-                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
-                      className="text-red-400 text-xs mb-4 flex items-center justify-center gap-1">
-                      <AlertTriangle size={12} /> Invalid PIN
-                    </motion.p>
-                  )}
-                  <button
-                    onClick={handlePinSubmit}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-brand to-purple-600 text-white font-semibold text-sm hover:brightness-110 transition-all shadow-lg shadow-brand/20 active:scale-[0.98]"
+                  </div>
+                  <h1 className="text-xl font-bold text-white mb-1">Access Denied</h1>
+                  <p className="text-white/40 text-sm mb-6">You do not have admin privileges.<br />Contact an existing admin to request access.</p>
+                  <a
+                    href="/"
+                    className="inline-block w-full py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white font-semibold text-sm hover:bg-white/[0.1] transition-all"
                   >
-                    Unlock Dashboard
-                  </button>
+                    Return to Lobby
+                  </a>
                   <p className="text-white/20 text-[10px] mt-4 flex items-center justify-center gap-1">
-                    <Lock size={10} /> AES-256 Encrypted Session
+                    <Lock size={10} /> Admin access is role-based
                   </p>
                 </div>
               </div>
@@ -493,6 +516,7 @@ export default function AdminDashboard() {
     { key: 'overview', label: 'Overview', icon: LayoutDashboard },
     { key: 'users', label: 'Players', icon: Users, badge: users.length || undefined },
     { key: 'adjustments', label: 'Balance Ops', icon: Wallet },
+    { key: 'games', label: 'Game Settings', icon: Gauge },
     { key: 'automation', label: 'Automation', icon: Settings },
     { key: 'audit', label: 'Audit Trail', icon: FileText, badge: auditLog.length || undefined },
   ]
@@ -1092,27 +1116,57 @@ export default function AdminDashboard() {
                         </div>
                       </div>
                       <div className="p-5 space-y-5">
-                        {/* Target — auto-selected demo player */}
+                        {/* Target Player */}
                         <div>
                           <label className="block text-white/40 text-[10px] uppercase tracking-wider font-semibold mb-2">Target Player</label>
-                          <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-brand/5 via-purple-600/5 to-transparent border border-brand/10">
-                            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-brand/20">
-                              DP
+                          {adjSelectedPlayer ? (
+                            <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-brand/5 via-purple-600/5 to-transparent border border-brand/10">
+                              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-brand to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-brand/20">
+                                {adjSelectedPlayer.username.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-white font-semibold text-sm">{adjSelectedPlayer.username}</p>
+                                <p className="text-white/30 text-[10px] font-mono">{adjSelectedPlayer.email}</p>
+                              </div>
+                              <button onClick={() => setAdjSelectedPlayer(null)} className="text-white/20 hover:text-white/60 transition-colors">
+                                <X className="w-4 h-4" />
+                              </button>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-white font-semibold text-sm">Demo Player</p>
-                              <p className="text-white/30 text-[10px] font-mono">Local balance · Autonomous mode</p>
+                          ) : (
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={adjPlayerSearch}
+                                onChange={(e) => {
+                                  setAdjPlayerSearch(e.target.value)
+                                  setAdjDropdownOpen(true)
+                                  if (e.target.value.length >= 2) {
+                                    fetch(`${apiBase}/api/v1/admin/users/search?query=${encodeURIComponent(e.target.value)}&limit=5`, { headers: headers() })
+                                      .then(r => r.ok ? r.json() : { users: [] })
+                                      .then(d => setAdjPlayerResults(d.users || []))
+                                  }
+                                }}
+                                placeholder="Search by username or email..."
+                                className="w-full p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white text-sm placeholder:text-white/15 focus:outline-none focus:border-brand/40 transition-all"
+                              />
+                              {adjDropdownOpen && adjPlayerResults.length > 0 && (
+                                <div className="absolute z-10 w-full mt-1 bg-surface border border-border rounded-xl overflow-hidden shadow-xl">
+                                  {adjPlayerResults.map(u => (
+                                    <button key={u.user_id} onClick={() => { setAdjSelectedPlayer(u); setAdjDropdownOpen(false); setAdjPlayerSearch('') }}
+                                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.04] transition-colors text-left">
+                                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand/30 to-purple-600/30 flex items-center justify-center text-white text-xs font-bold">
+                                        {u.username.slice(0, 2).toUpperCase()}
+                                      </div>
+                                      <div>
+                                        <p className="text-white text-sm font-medium">{u.username}</p>
+                                        <p className="text-white/30 text-xs">{u.email}</p>
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                active
-                              </span>
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand/10 text-brand text-xs font-bold font-mono border border-brand/20">
-                                {formatDemoBalance(demoBalance.balance)}
-                              </span>
-                            </div>
-                          </div>
+                          )}
                         </div>
 
                         {/* Operation type + Currency grid */}
@@ -1229,15 +1283,11 @@ export default function AdminDashboard() {
                                 <div className="flex-1">
                                   <p className="text-white text-sm font-medium">
                                     {adjType === 'credit' ? 'Credit' : 'Debit'}{' '}
-                                    <span className="font-bold font-mono">${adjAmount}</span>{' '}
+                                    <span className="font-bold font-mono">{adjAmount} {adjCurrency}</span>{' '}
                                     {adjType === 'credit' ? 'to' : 'from'}{' '}
-                                    <span className="text-brand">Demo Player</span>
+                                    <span className="text-brand">{adjSelectedPlayer?.username || 'selected player'}</span>
                                   </p>
-                                  <p className="text-white/30 text-xs mt-0.5">{adjReason} · New balance: {formatDemoBalance(
-                                    adjType === 'credit'
-                                      ? demoBalance.balance + (parseFloat(adjAmount) || 0)
-                                      : Math.max(0, demoBalance.balance - (parseFloat(adjAmount) || 0))
-                                  )}</p>
+                                  <p className="text-white/30 text-xs mt-0.5">{adjReason}</p>
                                 </div>
                               </div>
                             </motion.div>
@@ -1267,67 +1317,6 @@ export default function AdminDashboard() {
 
                   {/* Side panel — 2 cols */}
                   <div className="lg:col-span-2 space-y-4">
-                    {/* Live Demo Balance Card */}
-                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
-                      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Wallet className="w-3.5 h-3.5 text-brand" />
-                          <span className="text-xs font-semibold text-white">Live Balance</span>
-                        </div>
-                        <span className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400">
-                          <PulseDot color="bg-emerald-400" /> LIVE
-                        </span>
-                      </div>
-                      <div className="p-4 space-y-4">
-                        <div className="text-center py-3">
-                          <p className="text-white/30 text-[9px] uppercase tracking-wider mb-1">Current Balance</p>
-                          <motion.p
-                            key={demoBalance.balance}
-                            initial={{ scale: 1.1, color: '#06d6a0' }}
-                            animate={{ scale: 1, color: '#ffffff' }}
-                            transition={{ duration: 0.3 }}
-                            className="text-3xl font-bold font-mono text-white"
-                          >
-                            {formatDemoBalance(demoBalance.balance)}
-                          </motion.p>
-                          <p className="text-white/15 text-[10px] mt-1">Demo mode · localStorage</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
-                            <p className="text-white/30 text-[9px] uppercase">Status</p>
-                            <p className="text-emerald-400 text-xs font-bold">Active</p>
-                          </div>
-                          <div className="p-2.5 rounded-lg bg-white/[0.03] border border-white/[0.04] text-center">
-                            <p className="text-white/30 text-[9px] uppercase">Mode</p>
-                            <p className="text-brand text-xs font-bold">Autonomous</p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <p className="text-white/20 text-[9px] uppercase tracking-wider font-semibold">Quick Balance</p>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <button onClick={() => demoBalance.setBalance(1000)}
-                              className="py-2 rounded-lg bg-white/[0.03] border border-white/[0.04] text-white/40 text-xs font-medium hover:bg-white/[0.06] hover:text-white transition-all">
-                              Reset $1,000
-                            </button>
-                            <button onClick={() => demoBalance.setBalance(10000)}
-                              className="py-2 rounded-lg bg-white/[0.03] border border-white/[0.04] text-white/40 text-xs font-medium hover:bg-white/[0.06] hover:text-white transition-all">
-                              Set $10,000
-                            </button>
-                            <button onClick={() => demoBalance.setBalance(100000)}
-                              className="py-2 rounded-lg bg-white/[0.03] border border-white/[0.04] text-white/40 text-xs font-medium hover:bg-white/[0.06] hover:text-white transition-all">
-                              Set $100,000
-                            </button>
-                            <button onClick={() => demoBalance.setBalance(1000000)}
-                              className="py-2 rounded-lg bg-brand/5 border border-brand/20 text-brand text-xs font-bold hover:bg-brand/10 transition-all">
-                              Max $1M
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
                     {/* Recent Operations */}
                     <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
                       <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
@@ -1634,6 +1623,129 @@ export default function AdminDashboard() {
                       <CheckCircle className="w-3 h-3" /> All settings auto-save to localStorage
                     </p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ══════════════ GAME SETTINGS RTP ══════════════ */}
+            {tab === 'games' && (
+              <div className="space-y-5">
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                  <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                        <Gauge className="w-4 h-4 text-purple-400" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-semibold text-white">Game RTP Settings</h2>
+                        <p className="text-[11px] text-white/30">Adjust Return to Player % and House Edge for each game</p>
+                      </div>
+                    </div>
+                    <button onClick={fetchGameSettings} className="p-2 rounded-lg hover:bg-white/[0.04] transition-colors">
+                      <RefreshCw className="w-4 h-4 text-white/50 hover:text-white" />
+                    </button>
+                  </div>
+
+                  <div className="p-5 space-y-4">
+                    {gameSettings.length === 0 ? (
+                      <div className="text-center py-8">
+                        <div className="text-white/40 text-sm">Loading game settings...</div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {gameSettings.map((game: any) => {
+                          const isEditing = editingGame === game.game_type
+                          const rtpValue = isEditing ? editRTP : game.rtp.replace('%', '')
+                          const houseEdgeValue = 100 - parseFloat(rtpValue)
+
+                          return (
+                            <div key={game.game_type} className="p-4 rounded-lg border border-white/[0.08] bg-white/[0.01] hover:border-white/[0.12] transition-all">
+                              <div className="flex items-center justify-between mb-3">
+                                <div>
+                                  <h3 className="text-sm font-semibold text-white capitalize">{game.game_type}</h3>
+                                  {game.description && <p className="text-[11px] text-white/40">{game.description}</p>}
+                                </div>
+                                {!isEditing && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingGame(game.game_type)
+                                      setEditRTP(game.rtp.replace('%', ''))
+                                      setEditDescription(game.description || '')
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-white/[0.06] border border-white/[0.06] text-white/70 hover:bg-white/[0.1] hover:text-white transition-all text-xs"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                              </div>
+
+                              {isEditing ? (
+                                <div className="space-y-3">
+                                  <div>
+                                    <label className="block text-xs text-white/50 mb-1.5">RTP % (Return to Player)</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="100"
+                                      step="0.01"
+                                      value={editRTP}
+                                      onChange={(e) => setEditRTP(e.target.value)}
+                                      className="w-full px-3 py-2 bg-white/[0.05] border border-white/[0.1] rounded-lg text-white text-sm"
+                                    />
+                                    <p className="text-[10px] text-white/30 mt-1">House Edge: {houseEdgeValue.toFixed(2)}% (1 - RTP)</p>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs text-white/50 mb-1.5">Description</label>
+                                    <input
+                                      type="text"
+                                      value={editDescription}
+                                      onChange={(e) => setEditDescription(e.target.value)}
+                                      placeholder="e.g., Classic Dice Game"
+                                      className="w-full px-3 py-2 bg-white/[0.05] border border-white/[0.1] rounded-lg text-white text-sm"
+                                    />
+                                  </div>
+                                  <div className="flex gap-2 justify-end">
+                                    <button
+                                      onClick={() => setEditingGame(null)}
+                                      className="px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/70 hover:bg-white/[0.1] transition-all text-xs"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      onClick={() => handleUpdateGameRTP(game.game_type)}
+                                      disabled={savingGame}
+                                      className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all text-xs disabled:opacity-50"
+                                    >
+                                      {savingGame ? 'Saving...' : 'Save'}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06]">
+                                    <div className="text-[10px] text-white/40 mb-0.5">RTP</div>
+                                    <div className="text-base font-bold text-emerald-400">{game.rtp}</div>
+                                  </div>
+                                  <div className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.06]">
+                                    <div className="text-[10px] text-white/40 mb-0.5">House Edge</div>
+                                    <div className="text-base font-bold text-orange-400">{game.house_edge}</div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="px-5 py-4 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[11px] text-white/40 space-y-1">
+                  <p>💡 <strong>Pro Tips:</strong></p>
+                  <p>• Higher RTP = more favorable to players, lower house profit</p>
+                  <p>• RTP + House Edge = 100%</p>
+                  <p>• Changes apply immediately to all new bets</p>
+                  <p>• All changes are logged in the audit trail</p>
                 </div>
               </div>
             )}

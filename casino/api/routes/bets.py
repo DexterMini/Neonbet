@@ -15,12 +15,16 @@ from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+import pyotp
 
-from casino.games import get_game, GAMES, BetResult, GameOutcome
+from casino.games import get_game, GAMES, BetResult, GameOutcome, DiceGame, LimboGame
+from casino.config import settings
 from casino.services.provably_fair import ProvablyFairEngine, GameResult
 from casino.services.ledger import LedgerService, InsufficientBalanceError
+from casino.services.game_settings import GameSettingsService
+from casino.services.risk_engine import RiskEngine, RiskAction
 from casino.models import (
-    User, Bet, BetStatus, Currency, GameType, LedgerEventType,
+    User, Bet, BetStatus, Currency, GameType, LedgerEventType, ServerSeed, kyc_level_to_int,
 )
 from casino.api.dependencies import get_db, get_current_user
 
@@ -33,11 +37,12 @@ router = APIRouter(prefix="/bets", tags=["Betting"])
 # ========================
 
 class PlaceBetRequest(BaseModel):
-    game_type: str = Field(..., description="Game type: dice, limbo, mines, plinko, wheel")
+    game_type: str = Field(..., description="Game type: dice, limbo")
     bet_amount: Decimal = Field(..., gt=0, description="Bet amount in USD")
     currency: str = Field(default="USDT", description="Currency for bet")
     game_data: Dict[str, Any] = Field(default_factory=dict, description="Game-specific data")
     client_seed: Optional[str] = Field(None, description="Optional client seed for provably fair")
+    two_factor_code: Optional[str] = Field(None, description="2FA code for large bets")
     
     @field_validator("game_type")
     @classmethod
@@ -110,6 +115,8 @@ async def place_bet(
     
     **Provably Fair**: Each bet uses HMAC-SHA256 for verifiable randomness.
     Server seed hash is shown before bet, seed revealed after rotation.
+    
+    **Security**: Large bets may require 2FA and risk screening.
     """
     # Resolve currency enum
     try:
@@ -124,11 +131,21 @@ async def place_bet(
         raise HTTPException(status_code=400, detail="Invalid game type")
 
     # Check idempotency — return existing bet if already placed
+    idempotency_key_scoped = f"{user.id}:{idempotency_key}"
     existing = await db.execute(
-        select(Bet).where(Bet.idempotency_key == idempotency_key)
+        select(Bet).where(
+            Bet.user_id == user.id,
+            Bet.idempotency_key.in_([idempotency_key, idempotency_key_scoped]),
+        )
     )
     existing_bet = existing.scalar_one_or_none()
     if existing_bet:
+        server_seed_hash = ""
+        if existing_bet.server_seed_id:
+            seed_result = await db.execute(
+                select(ServerSeed.seed_hash).where(ServerSeed.id == existing_bet.server_seed_id)
+            )
+            server_seed_hash = seed_result.scalar_one_or_none() or ""
         return BetResponse(
             bet_id=str(existing_bet.id),
             game_type=existing_bet.game_type.value,
@@ -138,7 +155,7 @@ async def place_bet(
             payout=str(existing_bet.payout or 0),
             profit=str(existing_bet.profit or 0),
             result_data=existing_bet.result_data or {},
-            server_seed_hash="",
+            server_seed_hash=server_seed_hash,
             client_seed=existing_bet.client_seed,
             nonce=existing_bet.nonce,
             timestamp=existing_bet.created_at.isoformat() if existing_bet.created_at else "",
@@ -155,6 +172,80 @@ async def place_bet(
         raise HTTPException(status_code=400, detail=error)
     if not game.validate_game_data(request.game_data):
         raise HTTPException(status_code=400, detail="Invalid game parameters")
+
+    # Load current house edge from database (used for risk checks + result)
+    game_settings = GameSettingsService(db)
+    current_house_edge = await game_settings.get_house_edge(game_type_enum)
+    game.set_house_edge(current_house_edge)
+
+    # Enforce 2FA for large bets when configured
+    if settings.security.require_2fa_for_large_bets:
+        large_bet_threshold = Decimal(str(settings.security.large_bet_threshold))
+        if request.bet_amount >= large_bet_threshold:
+            if not user.totp_enabled or not user.totp_secret:
+                raise HTTPException(status_code=403, detail="2FA is required for large bets")
+            if not request.two_factor_code:
+                raise HTTPException(status_code=400, detail="Two-factor code required for large bets")
+            totp = pyotp.TOTP(user.totp_secret)
+            if not totp.verify(request.two_factor_code, valid_window=1):
+                raise HTTPException(status_code=400, detail="Invalid or expired 2FA code")
+
+    # Risk checks (if Redis is available)
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is not None:
+        # Estimate potential win based on game type
+        potential_win = request.bet_amount
+        try:
+            if isinstance(game, DiceGame):
+                target = Decimal(str(request.game_data.get("target")))
+                direction = request.game_data.get("direction")
+                win_chance = game.calculate_win_chance(target, direction)
+                multiplier = game.calculate_multiplier(win_chance)
+                potential_win = request.bet_amount * multiplier
+            elif isinstance(game, LimboGame):
+                target = Decimal(str(request.game_data.get("target_multiplier")))
+                potential_win = request.bet_amount * target
+        except Exception:
+            potential_win = request.bet_amount
+
+        # Compute user context for risk engine
+        account_age_days = 0
+        if user.created_at:
+            account_age_days = max(0, (datetime.now(UTC) - user.created_at).days)
+
+        avg_bet = await db.scalar(
+            select(func.avg(Bet.bet_amount)).where(Bet.user_id == user.id)
+        ) or request.bet_amount
+
+        total_deposited = Decimal("0")
+        total_withdrawn = Decimal("0")
+        for b in user.balances:
+            total_deposited += Decimal(str(b.total_deposited or 0))
+            total_withdrawn += Decimal(str(b.total_withdrawn or 0))
+
+        risk_engine = RiskEngine(redis_client)
+        action, reason = await risk_engine.assess_bet_risk(
+            user_id=str(user.id),
+            bet_amount=request.bet_amount,
+            game_type=request.game_type,
+            potential_win=potential_win,
+            context={
+                "account_age_days": account_age_days,
+                "kyc_level": kyc_level_to_int(user.kyc_level),
+                "user_avg_bet": avg_bet,
+                "max_single_win": Decimal(str(settings.wallet.max_single_win)),
+                "total_deposited": total_deposited,
+                "total_withdrawn": total_withdrawn,
+            },
+        )
+
+        if action != RiskAction.ALLOW:
+            status_code = 403
+            if action == RiskAction.DELAY:
+                status_code = 429
+            elif action == RiskAction.REVIEW:
+                status_code = 409
+            raise HTTPException(status_code=status_code, detail=reason)
 
     # Check & lock balance via ledger
     ledger = LedgerService(db)
@@ -216,7 +307,7 @@ async def place_bet(
         nonce=game_result.nonce,
         game_data=request.game_data,
         result_data=bet_result.result_data,
-        idempotency_key=idempotency_key,
+        idempotency_key=idempotency_key_scoped,
         settled_at=datetime.now(UTC),
     )
     db.add(bet_row)

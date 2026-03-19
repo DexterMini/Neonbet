@@ -1,15 +1,15 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GameLayout } from '@/components/GameLayout'
 import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { useDemoBalance, formatDemoBalance } from '@/stores/demoBalanceStore'
 import { toast } from 'sonner'
 import { Bomb, Diamond, Sparkles, RotateCcw, RefreshCw, Shuffle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 
 const GRID_OPTIONS = [
@@ -54,10 +54,10 @@ function FloatingGems({ active }: { active: boolean }) {
 
 export default function MinesPage() {
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
-  const { balance: demoBalance, deduct, credit, refill } = useDemoBalance()
   const sessionStats = useSessionStats()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [gridSize, setGridSize] = useState(25)
@@ -89,22 +89,17 @@ export default function MinesPage() {
     }))
   }, [gridSize, numMines, safeGems])
 
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
+
   const startGame = async () => {
     if (bet <= 0 || !initialized) return
-    if (!isAuthenticated && demoBalance < bet) {
-      toast.error('Insufficient balance! Click refill to get more funds.')
-      return
-    }
     try {
-      let positions: number[]
-      if (isAuthenticated) {
-        const data = await placeBet('mines', betAmount, 'usdt', { mines: numMines })
-        positions = data.result_data?.mine_positions ?? []
-      } else {
-        deduct(bet)
-        const { result } = await generateBet('mines', { mines: numMines, gridSize })
-        positions = result as number[]
-      }
+      const data = await placeBet('mines', betAmount, 'usdt', { mines: numMines })
+      const positions = data.result_data?.mine_positions ?? []
       setMinePositions(positions); setRevealed([]); setHitMine(null); setCashoutAmount(0); setGameActive(true)
     } catch (err: any) {
       toast.error(err?.message || 'Error starting game')
@@ -126,7 +121,6 @@ export default function MinesPage() {
       if (newRevealed.length === gridSize - numMines) {
         setGameActive(false)
         const profit = bet * mult - bet
-        if (!isAuthenticated) credit(bet * mult)
         sessionStats.recordBet(true, bet, profit, mult)
         toast.success(`All gems found! Won $${(bet * mult).toFixed(2)}`)
       }
@@ -137,7 +131,6 @@ export default function MinesPage() {
     if (!gameActive || revealed.length === 0) return
     setGameActive(false)
     const profit = cashoutAmount - bet
-    if (!isAuthenticated) credit(cashoutAmount)
     sessionStats.recordBet(true, bet, profit, currentMult)
     toast.success(`Cashed out $${cashoutAmount.toFixed(2)}!`)
   }
@@ -196,20 +189,6 @@ export default function MinesPage() {
                 )
               }
             >
-              {/* Demo Balance */}
-              {!isAuthenticated && (
-                <div className="flex items-center justify-between bg-surface/80 rounded-lg px-2.5 py-1.5 border border-border">
-                  <span className="text-[10px] text-muted uppercase tracking-wider">Demo</span>
-                  <span className="text-[12px] font-bold text-white font-mono">{formatDemoBalance(demoBalance)}</span>
-                  {demoBalance < 1 && (
-                    <button onClick={refill}
-                      className="flex items-center gap-1 px-2 py-1 bg-brand/10 border border-brand/30 rounded text-brand text-[10px] font-bold hover:bg-brand/20 transition-all">
-                      <RefreshCw className="w-2.5 h-2.5" />Refill
-                    </button>
-                  )}
-                </div>
-              )}
-
               {/* Grid Size */}
               <div>
                 <span className="text-[11px] font-semibold text-muted uppercase tracking-wider block mb-1.5">Grid Size</span>

@@ -5,10 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { GameLayout } from '@/components/GameLayout'
 import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
+import { useAuthStore } from '@/stores/authStore'
 import { toast } from 'sonner'
 import { TrendingUp, Users, Clock, Zap, Rocket } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useRouter } from 'next/navigation'
 
 interface GameRound {
   roundId: string
@@ -40,8 +41,9 @@ function FloatingRockets({ active }: { active: boolean }) {
 export default function CrashPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const sessionStats = useSessionStats()
-  const { balance: demoBalance, deduct, credit } = useDemoBalance()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [autoCashout, setAutoCashout] = useState(2.0)
@@ -54,6 +56,12 @@ export default function CrashPage() {
   const [myBet, setMyBet] = useState<number | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
   const [history, setHistory] = useState<number[]>([2.34, 1.12, 5.67, 1.89, 3.21, 1.01, 8.45, 15.23, 1.45, 3.89])
+
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
 
   // Simulate game rounds
   useEffect(() => {
@@ -155,14 +163,12 @@ export default function CrashPage() {
     if (gameRound.status !== 'waiting') { toast.error('Wait for next round'); return }
     const bet = parseFloat(betAmount)
     if (bet <= 0 || isNaN(bet)) { toast.error('Invalid bet amount'); return }
-    if (!deduct(bet)) { toast.error('Insufficient balance!'); return }
     setHasBet(true); setMyBet(bet); toast.success(`Bet placed: $${bet.toFixed(2)}`)
   }
 
   const handleCashout = () => {
     if (!hasBet || hasCashedOut || gameRound.status !== 'running') return
     const payout = myBet! * gameRound.multiplier
-    credit(payout)
     setHasCashedOut(true)
     sessionStats.recordBet(true, myBet!, payout - myBet!, gameRound.multiplier)
     toast.success(`Cashed out at ${gameRound.multiplier.toFixed(2)}x! Won $${payout.toFixed(2)}`)

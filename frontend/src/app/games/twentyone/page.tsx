@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GameLayout } from '@/components/GameLayout'
 import { FairnessModal } from '@/components/FairnessModal'
@@ -12,7 +12,7 @@ import { Shield, Sparkles, RotateCcw, Spade } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useRouter } from 'next/navigation'
 
 /* ── Floating particles ───────────────────────────── */
 const CARD_PARTICLE_COLORS = ['#ef4444', '#f87171', '#fca5a5', '#dc2626', '#b91c1c', '#fecaca']
@@ -95,10 +95,10 @@ export default function TwentyOnePage() {
     initialized, serverSeedHash, clientSeed, nonce, previousServerSeed,
     generateBet, rotateSeed, setClientSeed,
   } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
-  const { balance: demoBalance, deduct, credit } = useDemoBalance()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [numCards, setNumCards] = useState(2)
@@ -114,6 +114,12 @@ export default function TwentyOnePage() {
   const isBust = gameState === 'finished' && total > 21
   const isLow = gameState === 'finished' && total < 16
   const profit = isWin ? parseFloat(betAmount) * winMultiplier - parseFloat(betAmount) : -parseFloat(betAmount)
+
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
 
   const buildDeck = useCallback((hashes: number[]): Card[] => {
     const d: Card[] = []
@@ -139,9 +145,7 @@ export default function TwentyOnePage() {
   const handleBet = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
     if (bet <= 0) { toast.error('Enter a valid bet'); return { won: false, profit: 0 } }
-    if (!initialized && !isAuthenticated) { toast.error('Not initialized'); return { won: false, profit: 0 } }
-    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return { won: false, profit: 0 } }
-    if (!isAuthenticated) deduct(bet)
+    if (!initialized) { toast.error('Not initialized'); return { won: false, profit: 0 } }
 
     setCards([]); setTotal(0); setWinMultiplier(0); setGameState('revealing')
 
@@ -161,7 +165,6 @@ export default function TwentyOnePage() {
           setGameState('finished')
           const profit = won ? bet * mult - bet : -bet
           if (won) {
-            if (!isAuthenticated) credit(bet * mult)
             sessionStats.recordBet(true, bet, bet * mult - bet, mult)
             toast.success(`${handTotal}! Won $${(bet * mult - bet).toFixed(2)} (${fmtMult(mult)})`)
           } else if (handTotal > 21) {
@@ -176,11 +179,10 @@ export default function TwentyOnePage() {
       })
     } catch {
       toast.error('Failed to place bet')
-      if (!isAuthenticated) credit(bet)
       setGameState('betting')
       return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
     }
-  }, [betAmount, initialized, isAuthenticated, generateBet, buildDeck, calcTotal, numCards, sessionStats])
+  }, [betAmount, initialized, generateBet, buildDeck, calcTotal, numCards, sessionStats])
 
   const autoBetHandler = useCallback(async (amount: number) => handleBet(amount), [handleBet])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)

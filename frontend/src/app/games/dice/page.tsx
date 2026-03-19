@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GameLayout } from '@/components/GameLayout'
 import { FairnessModal } from '@/components/FairnessModal'
+import { TwoFactorModal } from '@/components/TwoFactorModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
@@ -12,7 +13,9 @@ import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/us
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { toast } from 'sonner'
 import { Dice1, ArrowLeftRight, TrendingUp, TrendingDown, RefreshCw, Percent } from 'lucide-react'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useRouter } from 'next/navigation'
+
+const LARGE_BET_THRESHOLD = 1000
 
 /* ── Floating dice particles ──────────────────────── */
 const DICE_PARTICLE_COLORS = ['#a78bfa', '#8b5cf6', '#c4b5fd', '#7c3aed', '#6d28d9', '#ddd6fe']
@@ -41,10 +44,10 @@ function FloatingDice({ active }: { active: boolean }) {
 
 export default function DicePage() {
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
-  const { balance: demoBalance, deduct, credit } = useDemoBalance()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [target, setTarget] = useState(50)
@@ -55,28 +58,33 @@ export default function DicePage() {
   const [showFairness, setShowFairness] = useState(false)
   const [history, setHistory] = useState<{ value: number; won: boolean }[]>([])
   const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false)
+  const [pendingBet, setPendingBet] = useState<number | null>(null)
 
   const winChance = rollOver ? 100 - target : target
     const multiplier = parseFloat((97 / winChance).toFixed(4))
   const potentialProfit = parseFloat(betAmount) * multiplier - parseFloat(betAmount)
   const isWin = rollResult !== null && showResult && (rollOver ? rollResult > target : rollResult < target)
 
-  const doRoll = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
+
+  const doRoll = useCallback(async (amount?: number, twoFactorCode?: string): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
     if (bet <= 0 || isNaN(bet) || !initialized) return { won: false, profit: -bet }
-    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return { won: false, profit: 0 } }
-    if (!isAuthenticated) deduct(bet)
+    if (bet >= LARGE_BET_THRESHOLD && !twoFactorCode) {
+      setPendingBet(bet)
+      setTwoFactorOpen(true)
+      return { won: false, profit: 0 }
+    }
     setIsRolling(true)
     setShowResult(false)
     try {
-      let generatedValue: number
-      if (isAuthenticated) {
-        const data = await placeBet('dice', String(bet), 'usdt', { target, roll_over: rollOver })
-        generatedValue = data.result_data?.roll_value ?? 50
-      } else {
-        const { result } = await generateBet('dice')
-        generatedValue = result as number
-      }
+      const data = await placeBet('dice', String(bet), 'usdt', { target, roll_over: rollOver }, twoFactorCode)
+      const generatedValue = data.result_data?.roll_value ?? 50
       for (let i = 0; i < 12; i++) {
         setRollResult(parseFloat((Math.random() * 100).toFixed(2)))
         await new Promise(r => setTimeout(r, 35))
@@ -88,16 +96,27 @@ export default function DicePage() {
       setHistory(prev => [{ value: generatedValue, won }, ...prev.slice(0, 19)])
       sessionStats.recordBet(won, bet, profit, won ? multiplier : 0)
       if (won) {
-        if (!isAuthenticated) credit(bet * multiplier)
         toast.success(`Rolled ${generatedValue.toFixed(2)}! Won $${(bet * multiplier - bet).toFixed(2)}`)
       } else toast.error(`Rolled ${generatedValue.toFixed(2)} — Better luck next time!`)
       return { won, profit }
     } catch (err: any) {
-      if (!isAuthenticated) credit(bet)
       toast.error(err?.message || 'Error placing bet')
       return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
     } finally { setIsRolling(false) }
-  }, [betAmount, target, rollOver, initialized, isAuthenticated, placeBet, generateBet, multiplier, sessionStats])
+  }, [betAmount, target, rollOver, initialized, placeBet, multiplier, sessionStats])
+
+  const handleTwoFactorClose = useCallback(() => {
+    setTwoFactorOpen(false)
+    setPendingBet(null)
+  }, [])
+
+  const handleTwoFactorConfirm = useCallback(async (code: string) => {
+    if (pendingBet === null) return
+    setTwoFactorOpen(false)
+    const bet = pendingBet
+    setPendingBet(null)
+    await doRoll(bet, code)
+  }, [pendingBet, doRoll])
 
   const autoBetHandler = useCallback(async (amount: number) => doRoll(amount), [doRoll])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)
@@ -272,6 +291,13 @@ export default function DicePage() {
           </div>
 
           <FairnessModal isOpen={showFairness} onClose={() => setShowFairness(false)} game="dice" serverSeedHash={serverSeedHash} clientSeed={clientSeed} nonce={nonce} previousServerSeed={previousServerSeed} onClientSeedChange={setClientSeed} onRotateSeed={rotateSeed} />
+          <TwoFactorModal
+            open={twoFactorOpen}
+            amount={pendingBet ?? Number(betAmount) || 0}
+            onClose={handleTwoFactorClose}
+            onConfirm={handleTwoFactorConfirm}
+            busy={isRolling || isPlacing}
+          />
         </div>
       </div>
     </GameLayout>

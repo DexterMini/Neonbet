@@ -8,6 +8,7 @@ export interface User {
   vip_level: number
   kyc_level: number
   created_at: string
+  is_admin?: boolean
 }
 
 interface AuthState {
@@ -62,24 +63,9 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
           })
-        } catch (error) {
-          // Demo mode: create a local demo user when backend is unavailable
-          const username = usernameOrEmail.includes('@')
-            ? usernameOrEmail.split('@')[0]
-            : usernameOrEmail
-          set({
-            user: {
-              id: 'demo-' + Date.now(),
-              username,
-              email: usernameOrEmail.includes('@') ? usernameOrEmail : `${usernameOrEmail}@demo.neonbet`,
-              vip_level: 1,
-              kyc_level: 0,
-              created_at: new Date().toISOString(),
-            },
-            token: null,
-            isAuthenticated: false,
-            isLoading: false,
-          })
+        } catch (error: any) {
+          set({ isLoading: false })
+          throw error instanceof Error ? error : new Error('Login failed')
         }
       },
 
@@ -104,32 +90,13 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
           })
-        } catch (error) {
-          // Demo mode: create a local demo user when backend is unavailable
-          set({
-            user: {
-              id: 'demo-' + Date.now(),
-              username,
-              email,
-              vip_level: 1,
-              kyc_level: 0,
-              created_at: new Date().toISOString(),
-            },
-            token: null,
-            isAuthenticated: false,
-            isLoading: false,
-          })
+        } catch (error: any) {
+          set({ isLoading: false })
+          throw error instanceof Error ? error : new Error('Registration failed')
         }
       },
 
       logout: () => {
-        const token = useAuthStore.getState().token
-        if (token) {
-          fetch('/api/v1/auth/logout', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-          }).catch(() => {})
-        }
         set({
           user: null,
           token: null,

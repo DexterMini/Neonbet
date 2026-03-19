@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  ArrowDown, ArrowUp, Copy, Check,
-  QrCode, Clock, AlertCircle, ChevronDown,
+  ArrowDown, ArrowUp, Clock, ChevronDown,
   X, Wallet,
 } from 'lucide-react'
 import { Navbar } from '@/components/Navbar'
@@ -59,7 +58,10 @@ export default function WalletPage() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw'>('deposit')
-  const [copied, setCopied] = useState(false)
+  const [depositAmount, setDepositAmount] = useState('')
+  const [depositLoading, setDepositLoading] = useState(false)
+  const [depositStatus, setDepositStatus] = useState<'idle' | 'waiting'>('idle')
+  const [invoiceUrl, setInvoiceUrl] = useState('')
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [withdrawAddress, setWithdrawAddress] = useState('')
   const [showCryptoSelect, setShowCryptoSelect] = useState(false)
@@ -68,7 +70,6 @@ export default function WalletPage() {
   // Live data
   const [cryptos, setCryptos] = useState<CryptoBalance[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [depositAddress, setDepositAddress] = useState('')
   const [loading, setLoading] = useState(true)
   const [selectedSymbol, setSelectedSymbol] = useState('BTC')
 
@@ -135,21 +136,6 @@ export default function WalletPage() {
     }
   }, [token, authHeaders])
 
-  // ---- Fetch deposit address ----
-  const fetchDepositAddress = useCallback(async (sym: string) => {
-    if (!token) { setDepositAddress(''); return }
-    try {
-      const res = await fetch(`/api/v1/wallet/deposit/address/${sym.toLowerCase()}`, {
-        headers: authHeaders(),
-      })
-      if (!res.ok) { setDepositAddress(''); return }
-      const data = await res.json()
-      setDepositAddress(data.address || '')
-    } catch {
-      setDepositAddress('')
-    }
-  }, [token, authHeaders])
-
   // ---- Init ----
   useEffect(() => {
     if (!isHydrated) return
@@ -163,8 +149,10 @@ export default function WalletPage() {
   }, [isHydrated, isAuthenticated, fetchBalances, fetchTransactions])
 
   useEffect(() => {
-    fetchDepositAddress(selectedSymbol)
-  }, [selectedSymbol, fetchDepositAddress])
+    setDepositAmount('')
+    setInvoiceUrl('')
+    setDepositStatus('idle')
+  }, [selectedSymbol])
 
   // NoNada postMessage listener
   useEffect(() => {
@@ -180,11 +168,53 @@ export default function WalletPage() {
     return () => window.removeEventListener('message', handler)
   }, [fetchBalances, fetchTransactions])
 
-  const copyAddress = () => {
-    if (!depositAddress) return
-    navigator.clipboard.writeText(depositAddress)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const createDepositInvoice = async () => {
+    if (!token) {
+      toast.error('Sign in to create a deposit')
+      return
+    }
+    const amount = parseFloat(depositAmount)
+    if (!amount || amount < 1) {
+      toast.error('Minimum deposit is $1')
+      return
+    }
+
+    setDepositLoading(true)
+    try {
+      const res = await fetch('/api/v1/payments/deposit/invoice', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          amount_usd: amount,
+          currency: selectedSymbol,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => null)
+        throw new Error(err?.detail || 'Failed to create deposit invoice')
+      }
+      const data = await res.json()
+      if (!data.invoice_url) {
+        throw new Error('Payment provider did not return an invoice URL')
+      }
+      setInvoiceUrl(data.invoice_url)
+      setDepositStatus('waiting')
+      window.open(data.invoice_url, '_blank')
+      toast.success('Payment page opened in a new tab')
+    } catch (err: any) {
+      toast.error(err?.message || 'Deposit failed')
+    } finally {
+      setDepositLoading(false)
+    }
+  }
+
+  const resetDeposit = () => {
+    setDepositAmount('')
+    setInvoiceUrl('')
+    setDepositStatus('idle')
   }
 
   return (
@@ -394,43 +424,73 @@ export default function WalletPage() {
 
                     <div className="flex items-center gap-3 mb-6">
                       <div className="flex-1 h-px bg-border" />
-                      <span className="text-text-muted text-xs">or send directly</span>
+                      <span className="text-text-muted text-xs">or pay via invoice</span>
                       <div className="flex-1 h-px bg-border" />
                     </div>
 
-                    {/* Deposit Address */}
-                    <div className="mb-6">
-                      <label className="block text-text-muted text-xs font-medium mb-2">Deposit Address</label>
-                      <div className="p-3.5 bg-background rounded-lg border border-border">
-                        <div className="flex items-center justify-between gap-2">
-                          <code className="text-text-primary text-xs truncate flex-1 font-mono">
-                            {depositAddress || 'Sign in to get your deposit address'}
-                          </code>
-                          {depositAddress && (
-                            <button onClick={copyAddress} className="p-1.5 text-text-muted hover:text-text-primary transition-colors">
-                              {copied ? <Check className="w-4 h-4 text-accent-green" /> : <Copy className="w-4 h-4" />}
-                            </button>
-                          )}
+                    {depositStatus === 'idle' ? (
+                      <>
+                        {/* Deposit amount */}
+                        <div className="mb-4">
+                          <label className="block text-text-muted text-xs font-medium mb-2">Deposit Amount (USD)</label>
+                          <input
+                            type="number"
+                            value={depositAmount}
+                            onChange={e => setDepositAmount(e.target.value)}
+                            placeholder="0.00"
+                            min="1"
+                            className="w-full p-3.5 bg-background border border-border rounded-lg text-text-primary text-lg font-bold placeholder:text-text-muted/40 focus:outline-none transition-colors"
+                          />
+                          <div className="grid grid-cols-4 gap-2 mt-2">
+                            {['10', '25', '50', '100'].map((v) => (
+                              <button
+                                key={v}
+                                onClick={() => setDepositAmount(v)}
+                                className={cn(
+                                  'py-1.5 rounded-lg text-xs font-semibold border transition-all',
+                                  depositAmount === v
+                                    ? 'bg-brand/15 border-brand/40 text-brand'
+                                    : 'bg-background border-border text-muted hover:text-text-primary hover:border-brand/30'
+                                )}
+                              >
+                                ${v}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    </div>
 
-                    {/* QR Code */}
-                    <div className="mb-6 flex justify-center">
-                      <div className="p-3 bg-white rounded-xl">
-                        <div className="w-36 h-36 bg-background rounded-lg flex items-center justify-center">
-                          <QrCode className="w-20 h-20 text-text-muted" />
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={createDepositInvoice}
+                          disabled={!depositAmount || depositLoading}
+                        >
+                          {depositLoading ? 'Creating invoice...' : `Pay ${selectedSymbol} via Invoice`}
+                        </Button>
+                      </>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="p-3.5 bg-background rounded-lg border border-border text-xs text-text-muted">
+                          Invoice created. Complete payment in the new tab. Funds will credit after confirmation.
                         </div>
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={() => invoiceUrl && window.open(invoiceUrl, '_blank')}
+                          disabled={!invoiceUrl}
+                        >
+                          Open Payment Page
+                        </Button>
+                        <Button
+                          className="w-full"
+                          variant="secondary"
+                          size="lg"
+                          onClick={resetDeposit}
+                        >
+                          New Deposit
+                        </Button>
                       </div>
-                    </div>
-
-                    {/* Warning */}
-                    <div className="p-3.5 bg-accent-amber/[0.06] border border-accent-amber/20 rounded-lg flex gap-3">
-                      <AlertCircle className="w-4 h-4 text-accent-amber flex-shrink-0 mt-0.5" />
-                      <p className="text-text-secondary text-xs leading-relaxed">
-                        Only send <strong className="text-text-primary">{selectedSymbol}</strong> to this address. Sending other assets may result in permanent loss.
-                      </p>
-                    </div>
+                    )}
                   </>
                 ) : (
                   <div className="relative">
@@ -529,7 +589,7 @@ export default function WalletPage() {
               onClick={e => e.stopPropagation()}
             >
               <iframe
-                src={`https://nonadawallet.com/embed/deposit?partnerId=demo&userId=${user?.id || 'guest'}&theme=dark`}
+                src={`https://nonadawallet.com/embed/deposit?partnerId=${process.env.NEXT_PUBLIC_NONADA_PARTNER_ID || ''}&userId=${user?.id || 'guest'}&theme=dark`}
                 className="w-full h-full border-none"
                 allow="payment"
               />

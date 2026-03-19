@@ -16,10 +16,15 @@ import {
   Trophy,
   Gift,
   ArrowRight,
+  ArrowUpRight,
   Crown,
   Flame,
   Star,
   Search,
+  Sparkles,
+  Users,
+  Check,
+  Gem,
 } from 'lucide-react'
 
 /* ------------------------------------------------------------------ */
@@ -315,6 +320,101 @@ function ChickenVisual() {
   )
 }
 
+function FlipVisual() {
+  return (
+    <div className="absolute inset-0 overflow-hidden flex items-center justify-center">
+      {/* Gold coin */}
+      <div className="relative">
+        <div className="w-24 h-24 rounded-full bg-gradient-to-br from-amber-300 via-yellow-400 to-amber-500 border-4 border-amber-200/40 shadow-[0_0_50px_rgba(251,191,36,0.5),inset_0_-4px_12px_rgba(0,0,0,0.3)] flex items-center justify-center">
+          <div className="absolute inset-3 rounded-full border-2 border-amber-200/30" />
+          <span className="text-4xl drop-shadow-lg">👑</span>
+        </div>
+        {/* Silver coin behind */}
+        <div className="absolute -top-3 -right-8 w-16 h-16 rounded-full bg-gradient-to-br from-slate-200 via-gray-300 to-slate-400 border-2 border-slate-100/30 shadow-[0_0_30px_rgba(148,163,184,0.3)] opacity-60 flex items-center justify-center rotate-[20deg]">
+          <span className="text-2xl">💎</span>
+        </div>
+      </div>
+      {/* Sparkle accents */}
+      {[{t:20,l:15},{t:25,l:80},{t:70,l:12},{t:65,l:85}].map((s,i) => (
+        <div key={i} className="absolute w-2 h-2 bg-amber-300/60 rounded-full shadow-[0_0_8px_rgba(251,191,36,0.6)]" style={{top:`${s.t}%`,left:`${s.l}%`}} />
+      ))}
+      {/* 1.96x badge */}
+      <div className="absolute bottom-[14%] left-1/2 -translate-x-1/2 px-3 py-1 bg-amber-500/30 rounded-full border border-amber-400/40">
+        <span className="text-[11px] font-extrabold text-amber-300 font-mono">50/50</span>
+      </div>
+    </div>
+  )
+}
+
+function HiloVisual() {
+  return (
+    <div className="absolute inset-0 overflow-hidden flex items-center justify-center">
+      {/* Two cards */}
+      <div className="relative scale-[1.1]">
+        {/* Left card (revealed) */}
+        <div className="-rotate-[12deg] w-14 h-20 bg-white/20 rounded-xl border-2 border-white/25 flex flex-col items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.3)] backdrop-blur-sm">
+          <span className="text-xl font-black text-blue-400">7</span>
+          <span className="text-blue-400 text-sm -mt-0.5">♠</span>
+        </div>
+        {/* Right card (face down) */}
+        <div className="absolute top-1 left-12 rotate-[10deg] w-14 h-20 rounded-xl border-2 border-blue-400/30 shadow-[0_4px_20px_rgba(0,0,0,0.3)]"
+          style={{ background: 'linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%)' }}>
+          <div className="absolute inset-2 rounded-lg border border-blue-400/20 flex items-center justify-center">
+            <span className="text-blue-400/50 text-xl font-bold">?</span>
+          </div>
+        </div>
+      </div>
+      {/* Up/Down arrows */}
+      <div className="absolute top-[18%] right-[15%] w-8 h-8 rounded-full bg-brand/30 border border-brand/40 flex items-center justify-center shadow-[0_0_12px_rgba(0,232,123,0.3)]">
+        <span className="text-brand text-lg font-bold">↑</span>
+      </div>
+      <div className="absolute bottom-[22%] right-[18%] w-8 h-8 rounded-full bg-accent-red/30 border border-accent-red/40 flex items-center justify-center shadow-[0_0_12px_rgba(255,71,87,0.3)]">
+        <span className="text-accent-red text-lg font-bold">↓</span>
+      </div>
+    </div>
+  )
+}
+
+function StairsVisual() {
+  return (
+    <div className="absolute inset-0 overflow-hidden">
+      {/* Ascending stair tiles */}
+      {[0,1,2,3,4,5,6].map(i => {
+        const isSafe = [0,1,2,3,4].includes(i)
+        const isTrap = i === 5
+        const isCurrent = i === 6
+        return (
+          <div key={i} className="absolute flex gap-1.5" style={{
+            bottom: `${10 + i * 11}%`, left: `${10 + i * 5}%`
+          }}>
+            {[0,1,2].map(j => {
+              const isActive = isCurrent && j === 1
+              const isTrapped = isTrap && j === 0
+              const isSafeCell = isSafe && j === (i % 3)
+              return (
+                <div key={j} className={`w-8 h-6 rounded-md border flex items-center justify-center text-[9px] ${
+                  isTrapped ? 'bg-accent-red/30 border-accent-red/40 shadow-[0_0_10px_rgba(255,71,87,0.3)]' :
+                  isSafeCell ? 'bg-brand/30 border-brand/40 shadow-[0_0_10px_rgba(0,232,123,0.3)]' :
+                  isActive ? 'bg-purple-500/30 border-purple-400/40 shadow-[0_0_10px_rgba(168,85,247,0.3)]' :
+                  'bg-white/8 border-white/10'
+                }`}>
+                  {isTrapped && '💀'}
+                  {isSafeCell && '⭐'}
+                  {isActive && '▲'}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+      {/* Top multiplier */}
+      <div className="absolute top-[8%] right-[8%]">
+        <span className="text-sm font-black text-purple-400/60 font-mono">755x</span>
+      </div>
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* Game Card Config                                                    */
 /* ------------------------------------------------------------------ */
@@ -422,6 +522,33 @@ const GAMES: GameCardData[] = [
     tag: 'NEW',
     playing: [450, 850],
   },
+  {
+    id: 'flip', name: 'Coin Flip', href: '/games/flip',
+    gradient: 'from-amber-400 via-yellow-500 to-amber-700',
+    glow: 'rgba(251,191,36,0.3)',
+    visual: FlipVisual,
+    tag: 'NEW',
+    maxMult: '1.96x',
+    playing: [1200, 2800],
+  },
+  {
+    id: 'hilo', name: 'HiLo', href: '/games/hilo',
+    gradient: 'from-blue-500 via-blue-600 to-indigo-900',
+    glow: 'rgba(59,130,246,0.3)',
+    visual: HiloVisual,
+    tag: 'NEW',
+    maxMult: '∞',
+    playing: [800, 1600],
+  },
+  {
+    id: 'stairs', name: 'Stairs', href: '/games/stairs',
+    gradient: 'from-purple-400 via-violet-600 to-purple-900',
+    glow: 'rgba(168,85,247,0.3)',
+    visual: StairsVisual,
+    tag: 'NEW',
+    maxMult: '755x',
+    playing: [600, 1100],
+  },
 ]
 
 /* ------------------------------------------------------------------ */
@@ -430,41 +557,42 @@ const GAMES: GameCardData[] = [
 const promos = [
   {
     id: 1,
+    title: 'VIP TRANSFER',
+    subtitle: 'Already VIP elsewhere? Transfer your status instantly. Keep your level, get better rewards.',
+    cta: 'Transfer Now',
+    href: '/vip',
+    bg: 'from-amber-500/25 via-yellow-900/30 to-background',
+    accent: 'text-amber-400',
+    border: 'border-amber-500/20',
+    icon: Crown,
+    glow: 'radial-gradient(ellipse at 20% 50%, rgba(251,191,36,0.18) 0%, rgba(245,158,11,0.06) 40%, transparent 70%)',
+    badge: '🔥 LIMITED TIME',
+  },
+  {
+    id: 2,
     title: 'NEONBET ORIGINALS',
-    subtitle: '11 provably fair games. Lightning fast. Beautiful design.',
+    subtitle: '15 provably fair games. Lightning fast. Built from scratch.',
     cta: 'Play Now',
     href: '/games/crash',
     bg: 'from-brand/20 via-emerald-900/30 to-background',
     accent: 'text-brand',
     border: 'border-brand/15',
     icon: Zap,
-    glow: 'radial-gradient(ellipse at 30% 50%, rgba(0,232,123,0.12) 0%, transparent 60%)',
-  },
-  {
-    id: 2,
-    title: '$10,000 DAILY RACE',
-    subtitle: 'Wager to climb the leaderboard. Win prizes every single day.',
-    cta: 'Join Race',
-    href: '/promotions',
-    bg: 'from-amber-500/15 via-amber-900/20 to-background',
-    accent: 'text-amber-400',
-    border: 'border-amber-500/15',
-    icon: Trophy,
-    glow: 'radial-gradient(ellipse at 30% 50%, rgba(245,158,11,0.1) 0%, transparent 60%)',
+    glow: 'radial-gradient(ellipse at 25% 50%, rgba(0,232,123,0.15) 0%, transparent 60%)',
   },
   {
     id: 3,
-    title: 'VIP PROGRAM',
-    subtitle: 'Exclusive perks, personal host, and up to 25% rakeback.',
-    cta: 'Learn More',
-    href: '/vip',
-    bg: 'from-purple-500/15 via-purple-900/20 to-background',
+    title: '$10,000 DAILY RACE',
+    subtitle: 'Wager to climb the leaderboard. Cash prizes every single day.',
+    cta: 'Join Race',
+    href: '/promotions',
+    bg: 'from-purple-500/20 via-purple-900/25 to-background',
     accent: 'text-purple-400',
     border: 'border-purple-500/15',
-    icon: Crown,
-    glow: 'radial-gradient(ellipse at 30% 50%, rgba(168,85,247,0.1) 0%, transparent 60%)',
+    icon: Trophy,
+    glow: 'radial-gradient(ellipse at 25% 50%, rgba(168,85,247,0.14) 0%, transparent 60%)',
   },
-]
+] as const
 
 /* ------------------------------------------------------------------ */
 /* Scrollable Row                                                      */
@@ -644,7 +772,7 @@ export default function HomePage() {
 
           {/* ═══════ Hero Promo Banner ═══════ */}
           <section className="px-3 sm:px-6 pt-4 sm:pt-5">
-            <div className="relative rounded-2xl overflow-hidden border border-white/[0.06]" style={{ minHeight: '140px' }}>
+            <div className="relative rounded-2xl overflow-hidden border border-white/[0.06]" style={{ minHeight: '160px' }}>
               {promos.map((promo, i) => {
                 const Icon = promo.icon
                 return (
@@ -652,18 +780,28 @@ export default function HomePage() {
                     'transition-all duration-700 ease-in-out',
                     i === activePromo ? 'opacity-100 relative' : 'opacity-0 absolute inset-0 pointer-events-none'
                   )}>
-                    <div className={cn('relative flex items-center gap-5 sm:gap-8 p-5 sm:p-8 bg-gradient-to-r overflow-hidden', promo.bg, 'border', promo.border, 'rounded-2xl')}>
+                    <div className={cn('relative flex items-center gap-5 sm:gap-8 p-5 sm:p-8 lg:p-10 bg-gradient-to-r overflow-hidden', promo.bg, 'border', promo.border, 'rounded-2xl')}>
                       <div className="absolute inset-0 pointer-events-none" style={{ background: promo.glow }} />
-                      <div className="hidden sm:flex relative z-10 w-14 h-14 rounded-2xl bg-white/[0.06] border border-white/[0.08] items-center justify-center shrink-0 backdrop-blur-sm">
-                        <Icon className={cn('w-7 h-7', promo.accent)} />
+                      {/* Animated accent orbs */}
+                      <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full opacity-20 blur-3xl pointer-events-none" style={{ background: promo.glow }} />
+                      <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full opacity-10 blur-2xl pointer-events-none" style={{ background: promo.glow }} />
+                      <div className="hidden sm:flex relative z-10 w-16 h-16 rounded-2xl bg-white/[0.07] border border-white/[0.1] items-center justify-center shrink-0 backdrop-blur-sm shadow-lg">
+                        <Icon className={cn('w-8 h-8', promo.accent)} />
                       </div>
                       <div className="flex-1 min-w-0 relative z-10">
-                        <div className={cn('text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] mb-1 opacity-80', promo.accent)}>Featured</div>
-                        <h2 className="text-lg sm:text-2xl font-extrabold text-white mb-1 tracking-tight">{promo.title}</h2>
-                        <p className="text-xs sm:text-sm text-white/50 max-w-md">{promo.subtitle}</p>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={cn('text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] opacity-90', promo.accent)}>Featured</span>
+                          {'badge' in promo && promo.badge && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/25 animate-pulse">
+                              {promo.badge}
+                            </span>
+                          )}
+                        </div>
+                        <h2 className="text-xl sm:text-3xl font-black text-white mb-1.5 tracking-tight">{promo.title}</h2>
+                        <p className="text-xs sm:text-sm text-white/55 max-w-lg leading-relaxed">{promo.subtitle}</p>
                       </div>
                       <Link href={promo.href}
-                        className="hidden sm:inline-flex relative z-10 items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm bg-white/[0.08] text-white hover:bg-white/[0.14] border border-white/[0.08] transition-all backdrop-blur-sm">
+                        className="hidden sm:inline-flex relative z-10 items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm bg-white/[0.08] text-white hover:bg-white/[0.16] border border-white/[0.1] transition-all backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98] shadow-lg">
                         {promo.cta} <ArrowRight className="w-4 h-4" />
                       </Link>
                     </div>
@@ -678,6 +816,59 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
+          </section>
+
+          {/* ═══════ VIP Transfer Banner ═══════ */}
+          <section className="px-3 sm:px-6 pt-4">
+            <Link href="/vip" className="group block">
+              <div className="relative rounded-2xl overflow-hidden border border-amber-500/15 bg-gradient-to-r from-amber-950/50 via-yellow-950/30 to-amber-950/40 hover:border-amber-500/25 transition-all">
+                {/* Glow effects */}
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute -top-24 left-[10%] w-72 h-72 rounded-full bg-amber-500/10 blur-3xl" />
+                  <div className="absolute -bottom-16 right-[15%] w-48 h-48 rounded-full bg-yellow-500/8 blur-2xl" />
+                </div>
+                <div className="relative z-10 flex items-center gap-4 sm:gap-6 p-4 sm:p-5">
+                  {/* Icon cluster */}
+                  <div className="relative shrink-0">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-amber-500/25 to-yellow-600/20 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-900/20">
+                      <Crown className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400" />
+                    </div>
+                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand flex items-center justify-center border-2 border-background">
+                      <ArrowUpRight className="w-3 h-3 text-background" />
+                    </div>
+                  </div>
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <h3 className="text-base sm:text-lg font-black text-white tracking-tight">VIP Transfer</h3>
+                      <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand/15 text-brand border border-brand/20">
+                        Instant
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-white/45 leading-relaxed">Already VIP on Stake, Rollbit, or another platform? Transfer your VIP status to NeonBet — keep your tier, get better rakeback.</p>
+                  </div>
+                  {/* Benefits */}
+                  <div className="hidden lg:flex items-center gap-6 shrink-0">
+                    {[
+                      { label: 'Up to 35%', sub: 'Rakeback' },
+                      { label: 'Personal', sub: 'VIP Host' },
+                      { label: '$10K+', sub: 'Level-up Bonus' },
+                    ].map((b, i) => (
+                      <div key={i} className="text-center">
+                        <p className="text-sm font-black text-amber-400">{b.label}</p>
+                        <p className="text-[9px] text-white/35 font-medium uppercase tracking-wider">{b.sub}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {/* CTA */}
+                  <div className="shrink-0">
+                    <div className="px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-500 to-yellow-500 text-background-deep hover:from-amber-400 hover:to-yellow-400 transition-all group-hover:scale-[1.03] group-hover:shadow-lg group-hover:shadow-amber-500/20 active:scale-[0.97]">
+                      Transfer Now →
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Link>
           </section>
 
           {/* ═══════ Search + Category Tabs ═══════ */}

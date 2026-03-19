@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from casino.models import (
     User, Currency, Deposit, LedgerEventType,
 )
-from casino.api.dependencies import get_db, get_current_user
+from casino.api.dependencies import get_db, get_current_user, require_admin
 from casino.services.ledger import LedgerService
 from casino.services.payment import (
     get_payment_service,
@@ -487,7 +487,7 @@ async def nowpayments_ipn_callback(
 @router.post("/payout/{withdrawal_id}")
 async def process_payout(
     withdrawal_id: str,
-    user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """

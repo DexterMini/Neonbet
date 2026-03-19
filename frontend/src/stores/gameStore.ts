@@ -5,7 +5,7 @@ import { useAuthStore } from './authStore'
 export type GameType = 'dice' | 'crash' | 'mines' | 'plinko' | 'limbo' | 'wheel' | 'keno' | 'twentyone'
 
 /** Supported game types with backend engines */
-const BACKEND_GAMES = new Set(['dice', 'limbo', 'mines', 'plinko', 'wheel', 'keno', 'twentyone'])
+const BACKEND_GAMES = new Set(['dice', 'limbo'])
 
 export interface BetResult {
   id: string
@@ -89,6 +89,7 @@ interface GameState {
     betAmount: string | number,
     currency: string,
     gameData: Record<string, any>,
+    twoFactorCode?: string,
   ) => Promise<ApiPlaceBetResponse>
 
   // Dice
@@ -186,7 +187,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   // ------- Place Bet (Backend API) -------
-  placeBet: async (gameType, betAmount, currency, gameData) => {
+  placeBet: async (gameType, betAmount, currency, gameData, twoFactorCode) => {
     const token = useAuthStore.getState().token
     if (!token) throw new Error('Not authenticated')
     if (!BACKEND_GAMES.has(gameType)) throw new Error(`Game "${gameType}" not supported by backend`)
@@ -205,6 +206,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           bet_amount: typeof betAmount === 'string' ? parseFloat(betAmount) : betAmount,
           currency: currency.toUpperCase(),
           game_data: gameData,
+          ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
         }),
       })
 

@@ -12,7 +12,7 @@ import { Circle, RotateCcw, TrendingUp, ChevronDown, Sparkles } from 'lucide-rea
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useRouter } from 'next/navigation'
 
 interface Ball { id: number; x: number; y: number; path: number[]; finalSlot: number; multiplier: number; done?: boolean }
 interface BetHistory { id: number; multiplier: number; payout: number; bet: number; risk: string; rows: number; timestamp: Date }
@@ -77,10 +77,10 @@ function FloatingBalls({ active }: { active: boolean }) {
 export default function PlinkoPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
-  const { balance: demoBalance, deduct, credit } = useDemoBalance()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [plinkoRows, setPlinkoRows] = useState<number>(12)
@@ -214,12 +214,16 @@ export default function PlinkoPage() {
 
   useEffect(() => { drawBoard() }, [drawBoard])
 
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
+
   // Drop ball — runs concurrently, multiple balls can fly at once
   const dropBall = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
     if (!initialized || isPlacing || bet <= 0 || isNaN(bet)) return { won: false, profit: -bet }
-    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return { won: false, profit: 0 } }
-    if (!isAuthenticated) deduct(bet)
     setIsDropping(true); setLastResult(null)
 
     const canvas = canvasRef.current
@@ -229,15 +233,10 @@ export default function PlinkoPage() {
 
     let path: number[]
     try {
-      if (isAuthenticated) {
-        const data = await placeBet('plinko', betAmount, 'usdt', { rows: plinkoRows, risk: plinkoRisk })
-        const rawPath: string[] = data.result_data?.path ?? []
-        path = rawPath.map(d => (d === 'R' ? 1 : 0))
-      } else {
-        const { result: pathResult } = await generateBet('plinko', { rows: plinkoRows })
-        path = pathResult as number[]
-      }
-    } catch (err: any) { toast.error(err?.message || 'Error placing bet'); if (!isAuthenticated) credit(bet); setIsDropping(false); return { won: false, profit: -bet } }
+      const data = await placeBet('plinko', betAmount, 'usdt', { rows: plinkoRows, risk: plinkoRisk })
+      const rawPath: string[] = data.result_data?.path ?? []
+      path = rawPath.map(d => (d === 'R' ? 1 : 0))
+    } catch (err: any) { toast.error(err?.message || 'Error placing bet'); setIsDropping(false); return { won: false, profit: -bet } }
 
     let position = 0
     path.forEach(dir => { position += dir === 0 ? -1 : 1 })
@@ -285,7 +284,6 @@ export default function PlinkoPage() {
 
     const payout = bet * multiplier
     const profit = payout - bet
-    if (!isAuthenticated) credit(payout)
     setLastResult({ multiplier, payout })
     setTotalProfit(prev => prev + profit)
     sessionStats.recordBet(multiplier >= 1, bet, profit, multiplier)
@@ -300,7 +298,7 @@ export default function PlinkoPage() {
     activeBallsRef.current--
     if (activeBallsRef.current <= 0) { activeBallsRef.current = 0; setIsDropping(false) }
     return { won, profit }
-  }, [betAmount, initialized, isPlacing, isAuthenticated, plinkoRows, plinkoRisk, multipliers, placeBet, generateBet, sessionStats])
+  }, [betAmount, initialized, isPlacing, plinkoRows, plinkoRisk, multipliers, placeBet, sessionStats])
 
   const autoBetHandler = useCallback(async (amount: number) => dropBall(amount), [dropBall])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)

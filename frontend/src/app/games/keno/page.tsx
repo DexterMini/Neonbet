@@ -1,15 +1,15 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GameLayout } from '@/components/GameLayout'
 import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { useDemoBalance, formatDemoBalance } from '@/stores/demoBalanceStore'
 import { toast } from 'sonner'
 import { Grid3X3, Shield, Sparkles, Zap, Trophy, X, RotateCcw, Play, RefreshCw, Gem } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
@@ -94,10 +94,10 @@ export default function KenoPage() {
     initialized, serverSeedHash, clientSeed, nonce, previousServerSeed,
     generateBet, rotateSeed, setClientSeed,
   } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
-  const { balance: demoBalance, deduct, credit, refill } = useDemoBalance()
   const sessionStats = useSessionStats()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([])
@@ -123,6 +123,12 @@ export default function KenoPage() {
     const table = payoutTables[riskLevel][picks] || []
     return table.map((mult, hits) => ({ hits, multiplier: mult, payout: mult * parseFloat(betAmount || '0') }))
   }, [riskLevel, selectedNumbers.length, betAmount])
+
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
 
   const handleNumberClick = (num: number) => {
     if (isPlaying) return
@@ -153,30 +159,14 @@ export default function KenoPage() {
     if (isPlaying || isPlacing || !initialized) return { won: false, profit: 0 }
     if (selectedNumbers.length === 0) { toast.error('Select at least 1 number'); return { won: false, profit: 0 } }
     if (bet <= 0 || isNaN(bet)) { toast.error('Invalid bet amount'); return { won: false, profit: 0 } }
-    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance! Click refill to get more funds.'); return { won: false, profit: 0 } }
 
-    if (!isAuthenticated) deduct(bet)
     setIsPlaying(true); setDrawnNumbers([]); setGameEnded(false)
 
     try {
-      let drawnResult: number[]
-      let hits: number
-      let multiplier: number
-
-      if (isAuthenticated) {
-        const data = await placeBet('keno', betAmount, 'usdt', { picks: selectedNumbers, risk: riskLevel })
-        drawnResult = data.result_data?.drawn ?? []
-        hits = data.result_data?.hits ?? 0
-        multiplier = data.result_data?.multiplier ?? 0
-      } else {
-        const { result, nonce: betNonce, clientSeed: betClientSeed, serverSeedHash: betHash } =
-          await generateBet('keno', { totalNumbers: TOTAL_NUMBERS, drawCount: DRAW_COUNT, picks: selectedNumbers.length })
-        setLastBetInfo({ nonce: betNonce, clientSeed: betClientSeed, serverSeedHash: betHash })
-        drawnResult = result as number[]
-        hits = selectedNumbers.filter(n => drawnResult.includes(n)).length
-        const payoutTable = payoutTables[riskLevel][selectedNumbers.length] || []
-        multiplier = parseFloat(((payoutTable[hits] || 0) * 0.98).toFixed(2)) // 3% house edge
-      }
+      const data = await placeBet('keno', betAmount, 'usdt', { picks: selectedNumbers, risk: riskLevel })
+      const drawnResult: number[] = data.result_data?.drawn ?? []
+      const hits: number = data.result_data?.hits ?? 0
+      const multiplier: number = data.result_data?.multiplier ?? 0
 
       for (let i = 0; i < drawnResult.length; i++) {
         await new Promise(r => setTimeout(r, 150))
@@ -188,7 +178,6 @@ export default function KenoPage() {
       const won = multiplier > 0
       const profit = won ? winnings - bet : -bet
       if (won) {
-        if (!isAuthenticated) credit(winnings)
         sessionStats.recordBet(true, bet, winnings - bet, multiplier)
         toast.success(`${hits} hits! Won $${winnings.toFixed(2)} (${multiplier}x)`)
       } else {
@@ -200,7 +189,7 @@ export default function KenoPage() {
       toast.error(error?.message || 'Error generating result')
       return { won: false, profit: -bet }
     } finally { setIsPlaying(false) }
-  }, [betAmount, isPlaying, isPlacing, initialized, selectedNumbers, isAuthenticated, riskLevel, placeBet, generateBet, sessionStats])
+  }, [betAmount, isPlaying, isPlacing, initialized, selectedNumbers, riskLevel, placeBet, sessionStats])
 
   const autoBetHandler = useCallback(async (amount: number) => handlePlay(amount), [handlePlay])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)
@@ -249,20 +238,6 @@ export default function KenoPage() {
                 </button>
               }
             >
-              {/* Demo Balance */}
-              {!isAuthenticated && (
-                <div className="flex items-center justify-between bg-surface/80 rounded-lg px-2.5 py-1.5 border border-border">
-                  <span className="text-[10px] text-muted uppercase tracking-wider">Demo</span>
-                  <span className="text-[12px] font-bold text-white font-mono">{formatDemoBalance(demoBalance)}</span>
-                  {demoBalance < 1 && (
-                    <button onClick={refill}
-                      className="flex items-center gap-1 px-2 py-1 bg-[rgba(0,210,190,0.1)] border border-[rgba(0,210,190,0.3)] rounded text-[rgb(0,210,190)] text-[10px] font-bold hover:bg-[rgba(0,210,190,0.2)] transition-all">
-                      <RefreshCw className="w-2.5 h-2.5" />Refill
-                    </button>
-                  )}
-                </div>
-              )}
-
               {/* Risk Level — horizontal row like Thrill */}
               <div>
                 <span className="text-[11px] font-bold text-muted uppercase tracking-wider block mb-1.5">Risk Level</span>
@@ -305,7 +280,7 @@ export default function KenoPage() {
                       min={1}
                       max={MAX_PICKS}
                       value={pickerCount}
-                      onChange={(e) => setPickerCount(parseInt(e.target.value))}
+                      onChange={(e) => { const v = parseInt(e.target.value); setPickerCount(v); handleQuickPick(v) }}
                       disabled={isPlaying}
                       className="w-full h-2 rounded-full appearance-none cursor-pointer disabled:opacity-40
                         [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLiveBetsStore, type LiveBet } from '@/stores/liveBetsStore'
 import { TrendingUp, TrendingDown } from 'lucide-react'
@@ -12,14 +12,74 @@ interface LiveBetsTableProps {
 
 type Tab = 'all' | 'my' | 'high'
 
+/* ── Simulated player names for realistic feed ──── */
+const FAKE_PLAYERS = [
+  { name: 'Hidden', avatar: '🎭' },
+  { name: 'CryptoK***', avatar: '🎲' },
+  { name: 'Moon***', avatar: '🌙' },
+  { name: 'Luck***', avatar: '🍀' },
+  { name: 'Dia***', avatar: '💎' },
+  { name: 'High***', avatar: '🔥' },
+  { name: 'Pro***', avatar: '⚡' },
+  { name: 'Bet***', avatar: '🎯' },
+  { name: 'VIP***', avatar: '👑' },
+  { name: 'Ace***', avatar: '🃏' },
+  { name: 'Gol***', avatar: '💰' },
+  { name: 'Sta***', avatar: '🌟' },
+  { name: 'Win***', avatar: '🏆' },
+  { name: 'Kin***', avatar: '♔' },
+  { name: 'Jet***', avatar: '🚀' },
+]
+
+const GAME_VARIANTS = ['crash', 'dice', 'mines', 'plinko', 'limbo', 'wheel', 'keno', 'slots', 'twentyone', 'snake', 'chicken', 'coinclimber']
+
+function generateFakeBet(game: string): LiveBet {
+  const player = FAKE_PLAYERS[Math.floor(Math.random() * FAKE_PLAYERS.length)]
+  const betAmount = parseFloat((Math.random() > 0.85 ? (50 + Math.random() * 450) : (0.5 + Math.random() * 49.5)).toFixed(2))
+  const won = Math.random() > 0.48
+  const multiplier = won ? parseFloat((1 + Math.random() * (Math.random() > 0.9 ? 20 : 4)).toFixed(2)) : 0
+  const profit = won ? parseFloat((betAmount * multiplier - betAmount).toFixed(2)) : -betAmount
+
+  return {
+    id: `sim-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    username: player.name,
+    avatar: player.avatar,
+    game: Math.random() > 0.6 ? game : GAME_VARIANTS[Math.floor(Math.random() * GAME_VARIANTS.length)],
+    betAmount,
+    multiplier,
+    profit,
+    currency: 'USD',
+    timestamp: Date.now(),
+  }
+}
+
 export function LiveBetsTable({ game }: LiveBetsTableProps) {
-  const { bets, myBets } = useLiveBetsStore()
+  const { bets, myBets, addBet } = useLiveBetsStore()
   const [tab, setTab] = useState<Tab>('all')
   const [mounted, setMounted] = useState(false)
+  const feedStarted = useRef(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Simulated live feed of other players
+  useEffect(() => {
+    if (feedStarted.current) return
+    feedStarted.current = true
+
+    // Seed initial bets
+    for (let i = 0; i < 8; i++) {
+      addBet(generateFakeBet(game))
+    }
+
+    // Add new bets periodically
+    const interval = setInterval(() => {
+      addBet(generateFakeBet(game))
+    }, 2000 + Math.random() * 3000)
+
+    return () => clearInterval(interval)
+  }, [game, addBet])
 
   const visibleBets = useMemo(() => {
     if (!mounted) return []

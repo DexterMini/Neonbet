@@ -62,38 +62,36 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [changingPw, setChangingPw] = useState(false)
+  const [newUsername, setNewUsername] = useState('')
+  const [changingUsername, setChangingUsername] = useState(false)
+  const [lastUsernameChange, setLastUsernameChange] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('lastUsernameChange')
+    return null
+  })
+
+  const authHeaders = useCallback((): Record<string, string> =>
+    token ? { Authorization: `Bearer ${token}` } : {}, [token])
 
   // Redirect if not authenticated (after hydration)
-  if (isHydrated && !isAuthenticated) {
-    router.push('/login')
-    return null
-  }
-
-  if (!user) return null
-
-  const userId = 'NB' + (user.id || '').slice(0, 8).toUpperCase()
-
-  const copyUserId = () => {
-    navigator.clipboard.writeText(userId)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const authHeaders = (): Record<string, string> =>
-    token ? { Authorization: `Bearer ${token}` } : {}
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
 
   // Fetch stats + recent bets
   useEffect(() => {
     if (!token) return
     setLoading(true)
+    const headers = authHeaders()
     Promise.all([
-      fetch('/api/v1/bets/stats/summary', { headers: authHeaders() }).then(r => r.ok ? r.json() : null),
-      fetch('/api/v1/bets/history?page=1&per_page=5', { headers: authHeaders() }).then(r => r.ok ? r.json() : null),
+      fetch('/api/v1/bets/stats/summary', { headers }).then(r => r.ok ? r.json() : null),
+      fetch('/api/v1/bets/history?page=1&per_page=5', { headers }).then(r => r.ok ? r.json() : null),
     ]).then(([s, h]) => {
       if (s) setStats(s)
       if (h?.bets) setRecentBets(h.bets)
     }).finally(() => setLoading(false))
-  }, [token])
+  }, [token, authHeaders])
 
   // Fetch full history when tab switches
   useEffect(() => {
@@ -101,7 +99,23 @@ export default function ProfilePage() {
     fetch('/api/v1/bets/history?page=1&per_page=50', { headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.bets) setAllBets(d.bets) })
-  }, [activeTab, token])
+  }, [activeTab, token, authHeaders])
+
+  // Show nothing while checking auth or if not authenticated
+  if (!isHydrated || (isHydrated && !isAuthenticated) || !user) {
+    return null
+  }
+
+  const userId = (() => {
+    const raw = user.id || ''
+    return `CE-${raw.replace(/-/g, '').slice(0, 8).toUpperCase()}`
+  })()
+
+  const copyUserId = () => {
+    navigator.clipboard.writeText(userId)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const statCards = [
     { label: 'Total Wagered', value: stats ? formatCurrency(parseFloat(stats.total_wagered)) : '—', icon: Wallet },
@@ -444,12 +458,65 @@ export default function ProfilePage() {
                       <div className="space-y-5">
                         <div>
                           <label className="block text-text-muted text-xs font-medium mb-2">Username</label>
-                          <input
-                            type="text"
-                            value={user.username}
-                            readOnly
-                            className="w-full bg-background border border-border rounded-lg py-2.5 px-4 text-text-secondary text-sm cursor-not-allowed opacity-70"
-                          />
+                          {(() => {
+                            const canChange = !lastUsernameChange || (Date.now() - new Date(lastUsernameChange).getTime()) > 365 * 24 * 60 * 60 * 1000
+                            const nextChangeDate = lastUsernameChange ? new Date(new Date(lastUsernameChange).getTime() + 365 * 24 * 60 * 60 * 1000) : null
+                            return (
+                              <div className="space-y-2">
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder={user.username}
+                                    value={newUsername}
+                                    onChange={e => setNewUsername(e.target.value)}
+                                    disabled={!canChange || changingUsername}
+                                    className={cn(
+                                      'flex-1 bg-background border border-border rounded-lg py-2.5 px-4 text-sm transition-colors',
+                                      canChange
+                                        ? 'text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/20'
+                                        : 'text-text-secondary cursor-not-allowed opacity-70'
+                                    )}
+                                  />
+                                  <button
+                                    onClick={async () => {
+                                      if (!newUsername.trim() || newUsername.trim() === user.username) { toast.error('Enter a new username'); return }
+                                      if (newUsername.trim().length < 3) { toast.error('Username must be at least 3 characters'); return }
+                                      if (newUsername.trim().length > 20) { toast.error('Username must be 20 characters or less'); return }
+                                      setChangingUsername(true)
+                                      try {
+                                        const res = await fetch('/api/v1/auth/change-username', {
+                                          method: 'POST',
+                                          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ new_username: newUsername.trim() }),
+                                        })
+                                        if (!res.ok) {
+                                          const err = await res.json().catch(() => null)
+                                          throw new Error(err?.detail || 'Failed to change username')
+                                        }
+                                        const now = new Date().toISOString()
+                                        localStorage.setItem('lastUsernameChange', now)
+                                        localStorage.setItem('displayUsername', newUsername.trim())
+                                        setLastUsernameChange(now)
+                                        toast.success(`Username changed to ${newUsername.trim()}`)
+                                        setNewUsername('')
+                                      } catch (err: any) { toast.error(err?.message || 'Failed to change username') }
+                                      finally { setChangingUsername(false) }
+                                    }}
+                                    disabled={!canChange || changingUsername || !newUsername.trim()}
+                                    className="px-4 py-2.5 bg-brand text-background rounded-lg text-sm font-semibold hover:bg-brand-light transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                                  >
+                                    {changingUsername ? 'Saving...' : 'Change'}
+                                  </button>
+                                </div>
+                                <p className="text-text-muted text-2xs">
+                                  {canChange
+                                    ? 'You can change your username once per year'
+                                    : `Next change available ${nextChangeDate?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                                  }
+                                </p>
+                              </div>
+                            )
+                          })()}
                         </div>
                         <div>
                           <label className="block text-text-muted text-xs font-medium mb-2">Email</label>
@@ -476,7 +543,7 @@ export default function ProfilePage() {
                             <option>BTC (&#x20BF;)</option>
                           </select>
                         </div>
-                        <p className="text-text-muted text-xs">Username and email changes are not yet supported. Language and currency preferences are stored locally.</p>
+                        <p className="text-text-muted text-xs mt-2">Language and currency preferences are stored locally.</p>
                       </div>
                     </motion.div>
                   )}

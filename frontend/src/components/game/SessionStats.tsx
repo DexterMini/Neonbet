@@ -6,7 +6,10 @@ import { cn } from '@/lib/utils'
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAutomationStore } from '@/stores/automationStore'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useLiveBetsStore } from '@/stores/liveBetsStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useProgressionStore } from '@/stores/progressionStore'
 
 /* ── Session stats store ──────────────────────────── */
 interface SessionStats {
@@ -56,6 +59,8 @@ export const useSessionStats = create<SessionStatsState>((set, get) => ({
     // ─── Forward to automation engine for autonomous tracking ───
     try {
       const automation = useAutomationStore.getState()
+      const authState = useAuthStore.getState()
+      const userId = authState.user?.id || 'unknown'
       const payout = won ? betAmount + profit : 0
       const houseProfit = betAmount - payout
 
@@ -65,22 +70,60 @@ export const useSessionStats = create<SessionStatsState>((set, get) => ({
         betAmount,
         payout,
         houseProfit,
-        userId: 'demo-user',
+        userId,
       })
 
       // ─── Instant cashback (auto-credit on loss) ──────────────
       if (!won && automation.cashback.enabled && automation.cashback.frequency === 'instant') {
-        const cashback = automation.calculateCashback('demo-user')
+        const cashback = automation.calculateCashback(userId)
         if (cashback > 0) {
-          automation.payCashback('demo-user')
-          // Credit cashback directly to demo balance
-          const demoBalance = useDemoBalance.getState()
-          demoBalance.credit(cashback)
+          automation.payCashback(userId)
+          // Cashback credited server-side via VIP rakeback system
         }
       }
     } catch {
       // Silently ignore if automation store is not available
     }
+
+    // ─── Push to live bets feed ────────────────────────────────
+    try {
+      const authState = useAuthStore.getState()
+      const username = authState.user?.username || 'Anonymous'
+      const avatarEmojis = ['🎲', '🎰', '🃏', '💎', '🔥', '⚡', '🎯', '🌟', '🏆', '💰']
+      const avatar = avatarEmojis[Math.abs(username.charCodeAt(0)) % avatarEmojis.length]
+
+      const liveBet = {
+        id: `bet-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        username,
+        avatar,
+        game: gameName,
+        betAmount,
+        multiplier: won ? multiplier : 0,
+        profit,
+        currency: 'USD',
+        timestamp: Date.now(),
+      }
+
+      useLiveBetsStore.getState().addMyBet(liveBet)
+    } catch {
+      // Silently ignore
+    }
+
+    // ── Notification for big wins ────────────────────────────────
+    if (won && multiplier >= 5) {
+      try {
+        useNotificationStore.getState().addNotification({
+          type: 'win',
+          title: `Big Win! ${multiplier.toFixed(1)}x 🎉`,
+          message: `You won $${profit.toFixed(2)} on ${gameName.charAt(0).toUpperCase() + gameName.slice(1)}!`,
+        })
+      } catch { /* ignore */ }
+    }
+
+    // ─── Record in progression / achievement system ───────────
+    try {
+      useProgressionStore.getState().recordBet(gameName, won, betAmount, profit, won ? multiplier : 0)
+    } catch { /* ignore */ }
 
     // ─── Update session stats as before ────────────────────────
     set((s) => {

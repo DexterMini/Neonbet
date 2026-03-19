@@ -38,6 +38,7 @@ class WalletSettings(BaseSettings):
     cold_storage_percent: float = Field(default=0.92)  # 92% of total
     
     hot_wallet_single_withdrawal_limit: float = Field(default=10000)
+    max_single_win: float = Field(default=1000000)
     daily_withdrawal_limit: float = Field(default=100000)
     
     low_watermark_multiplier: float = Field(default=0.20)  # 20% of daily avg

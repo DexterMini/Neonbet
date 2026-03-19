@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GameLayout } from '@/components/GameLayout'
 import { FairnessModal } from '@/components/FairnessModal'
+import { TwoFactorModal } from '@/components/TwoFactorModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
@@ -12,9 +13,10 @@ import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/us
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { toast } from 'sonner'
 import { Target, RefreshCw, TrendingUp, TrendingDown, Zap, Percent } from 'lucide-react'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useRouter } from 'next/navigation'
 import Decimal from 'decimal.js'
 
+const LARGE_BET_THRESHOLD = 1000
 /* ── Floating particles ───────────────────────────── */
 const LIMBO_PARTICLE_COLORS = ['#f43f5e', '#fb7185', '#fda4af', '#e11d48', '#be123c', '#fecdd3']
 function FloatingStars({ active }: { active: boolean }) {
@@ -36,10 +38,10 @@ function FloatingStars({ active }: { active: boolean }) {
 
 export default function LimboPage() {
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
-  const { balance: demoBalance, deduct, credit } = useDemoBalance()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [limboTarget, setLimboTarget] = useState(2)
@@ -50,32 +52,36 @@ export default function LimboPage() {
   const [showFairness, setShowFairness] = useState(false)
   const [history, setHistory] = useState<{ value: number; won: boolean }[]>([])
   const [autoBetConfig, setAutoBetConfig] = useState<AutoBetConfig>(defaultAutoBetConfig)
+  const [twoFactorOpen, setTwoFactorOpen] = useState(false)
+  const [pendingBet, setPendingBet] = useState<number | null>(null)
 
   const winChance = new Decimal(97).div(limboTarget).toDecimalPlaces(2).toNumber()
   const multiplier = new Decimal(97).div(100).mul(limboTarget).toDecimalPlaces(4).toNumber()
   const potentialProfit = parseFloat(betAmount) * multiplier - parseFloat(betAmount)
 
-  const handlePlay = useCallback(async (amount?: number): Promise<{ won: boolean; profit: number }> => {
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
+
+  const handlePlay = useCallback(async (amount?: number, twoFactorCode?: string): Promise<{ won: boolean; profit: number }> => {
     const bet = amount ?? parseFloat(betAmount)
     if (bet <= 0 || isNaN(bet) || !initialized) return { won: false, profit: -bet }
-    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return { won: false, profit: 0 } }
-    if (!isAuthenticated) deduct(bet)
+    if (bet >= LARGE_BET_THRESHOLD && !twoFactorCode) {
+      setPendingBet(bet)
+      setTwoFactorOpen(true)
+      return { won: false, profit: 0 }
+    }
     setIsPlaying(true); setShowResult(false)
     try {
-      let generatedMultiplier: number
-      if (isAuthenticated) {
-        const data = await placeBet('limbo', String(bet), 'usdt', { target_multiplier: limboTarget })
-        generatedMultiplier = data.result_data?.generated_multiplier ?? 1
-      } else {
-        const { result: gameResult } = await generateBet('limbo')
-        generatedMultiplier = gameResult as number
-      }
+      const data = await placeBet('limbo', String(bet), 'usdt', { target_multiplier: limboTarget }, twoFactorCode)
+      const generatedMultiplier = data.result_data?.generated_multiplier ?? 1
       for (let i = 0; i < 15; i++) { setResult(Math.random() * limboTarget * 2); await new Promise(r => setTimeout(r, 30)) }
       setResult(generatedMultiplier); setShowResult(true)
       const isWin = generatedMultiplier >= limboTarget
       setLastWin(isWin)
       const profit = isWin ? bet * multiplier - bet : -bet
-      if (isWin) credit(bet * multiplier)
       setHistory(prev => [{ value: generatedMultiplier, won: isWin }, ...prev.slice(0, 19)])
       sessionStats.recordBet(isWin, bet, profit, isWin ? generatedMultiplier : 0)
       if (isWin) {
@@ -83,12 +89,24 @@ export default function LimboPage() {
       } else toast.error(`${generatedMultiplier.toFixed(2)}x — Try again!`)
       return { won: isWin, profit }
     } catch (err: any) {
-      if (!isAuthenticated) credit(bet)
       toast.error(err?.message || 'Error placing bet')
       return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
     }
     finally { setIsPlaying(false) }
-  }, [betAmount, limboTarget, initialized, isAuthenticated, placeBet, generateBet, multiplier, sessionStats])
+  }, [betAmount, limboTarget, initialized, placeBet, multiplier, sessionStats])
+
+  const handleTwoFactorClose = useCallback(() => {
+    setTwoFactorOpen(false)
+    setPendingBet(null)
+  }, [])
+
+  const handleTwoFactorConfirm = useCallback(async (code: string) => {
+    if (pendingBet === null) return
+    setTwoFactorOpen(false)
+    const bet = pendingBet
+    setPendingBet(null)
+    await handlePlay(bet, code)
+  }, [pendingBet, handlePlay])
 
   const autoBetHandler = useCallback(async (amount: number) => handlePlay(amount), [handlePlay])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)
@@ -261,6 +279,13 @@ export default function LimboPage() {
           <FairnessModal isOpen={showFairness} onClose={() => setShowFairness(false)} game="limbo"
             serverSeedHash={serverSeedHash} clientSeed={clientSeed} nonce={nonce}
             previousServerSeed={previousServerSeed} onClientSeedChange={setClientSeed} onRotateSeed={rotateSeed} />
+          <TwoFactorModal
+            open={twoFactorOpen}
+            amount={pendingBet ?? Number(betAmount) || 0}
+            onClose={handleTwoFactorClose}
+            onConfirm={handleTwoFactorConfirm}
+            busy={isPlaying || isPlacing}
+          />
         </div>
       </div>
     </GameLayout>

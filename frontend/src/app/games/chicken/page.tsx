@@ -10,7 +10,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { Sparkles, RotateCcw, Zap, Bird, Car, Flag, User, XCircle, Trophy, Check, AlertTriangle, Shuffle, Square } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { toast } from 'sonner'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useRouter } from 'next/navigation'
 
 /* ── Config ────────────────────────────────────────── */
 const MAX_ROWS = 10
@@ -54,10 +54,10 @@ function FloatingParticles({ active, color }: { active: boolean; color: string }
 
 export default function ChickenPage() {
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
-  const { balance: demoBalance, deduct, credit } = useDemoBalance()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [difficulty, setDifficulty] = useState(1)
@@ -83,6 +83,12 @@ export default function ChickenPage() {
     if (scrollRef.current && currentRow > 0) scrollRef.current.scrollTop = 0
   }, [currentRow])
 
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
+
   const generateRows = useCallback(async (): Promise<Row[]> => {
     const r: Row[] = []
     for (let i = 0; i < MAX_ROWS; i++) {
@@ -95,13 +101,10 @@ export default function ChickenPage() {
 
   const startGame = async () => {
     if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
-    const bet = parseFloat(betAmount)
-    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return }
-    if (!isAuthenticated) deduct(bet)
     try {
       const nr = await generateRows()
       setRows(nr); setCurrentRow(0); setPicked([]); setHitCar(null); setCashedOut(false); setGameActive(true)
-    } catch (err: any) { if (!isAuthenticated) credit(parseFloat(betAmount)); toast.error(err?.message || 'Error starting game') }
+    } catch (err: any) { toast.error(err?.message || 'Error starting game') }
   }
 
   const pickLane = (row: number, lane: number) => {
@@ -115,7 +118,6 @@ export default function ChickenPage() {
     } else if (row + 1 >= MAX_ROWS) {
       setCurrentRow(row + 1); setGameActive(false); setCashedOut(true)
       const fm = getMultiplier(lanes, row + 1)
-      if (!isAuthenticated) credit(parseFloat(betAmount) * fm)
       sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * fm - parseFloat(betAmount), fm)
       toast.success(`Won $${(parseFloat(betAmount) * fm).toFixed(2)}!`)
     } else { setCurrentRow(row + 1) }
@@ -124,7 +126,6 @@ export default function ChickenPage() {
   const cashout = () => {
     if (!gameActive || currentRow === 0) return
     setCashedOut(true); setGameActive(false)
-    if (!isAuthenticated) credit(parseFloat(betAmount) * currentMult)
     sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * currentMult - parseFloat(betAmount), currentMult)
     toast.success(`Cashed out $${(parseFloat(betAmount) * currentMult).toFixed(2)}!`)
   }
@@ -137,14 +138,11 @@ export default function ChickenPage() {
 
   const startAutoGame = async () => {
     if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
-    const bet = parseFloat(betAmount)
-    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return }
-    if (!isAuthenticated) deduct(bet)
     try {
       const nr = await generateRows()
       setRows(nr); setCurrentRow(0); setPicked([]); setHitCar(null); setCashedOut(false); setGameActive(true)
       setAutoMode(true); autoModeRef.current = true
-    } catch (err: any) { if (!isAuthenticated) credit(bet); toast.error(err?.message || 'Error starting game') }
+    } catch (err: any) { toast.error(err?.message || 'Error starting game') }
   }
 
   const stopAuto = () => {

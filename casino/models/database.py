@@ -136,6 +136,9 @@ class User(Base):
     vip_level = Column(Integer, default=0, nullable=False)
     vip_xp = Column(BigInteger, default=0, nullable=False)
     
+    # Admin
+    is_admin = Column(Boolean, default=False, nullable=False)
+    
     # Risk
     risk_score = Column(Numeric(5, 4), default=0, nullable=False)
     
@@ -496,4 +499,33 @@ class SystemAlert(Base):
     __table_args__ = (
         Index("idx_alerts_type_severity", "alert_type", "severity"),
         Index("idx_alerts_unacknowledged", "acknowledged", "created_at"),
+    )
+
+
+# ============================================================================
+# GAME CONFIGURATION
+# ============================================================================
+
+class GameSettings(Base):
+    """Game RTP and house edge configuration"""
+    __tablename__ = "game_settings"
+    
+    id = Column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    
+    # Game reference
+    game_type = Column(SQLEnum(GameType, values_callable=lambda e: [x.value for x in e], create_constraint=False), nullable=False, unique=True, index=True)
+    
+    # RTP/House Edge
+    house_edge = Column(Numeric(5, 4), nullable=False, default=Decimal("0.05"))  # 5% default
+    
+    # Description
+    description = Column(Text, nullable=True)
+    
+    # Admin audit
+    updated_by = Column(PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    __table_args__ = (
+        Index("idx_game_settings_type", "game_type"),
     )

@@ -7,8 +7,8 @@ import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
 import { useGameStore } from '@/stores/gameStore'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
+import { useRouter } from 'next/navigation'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
 import { toast } from 'sonner'
@@ -346,10 +346,10 @@ const PAYLINES: number[][] = [
 
 export default function SlotsPage() {
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
-  const { balance: demoBalance, deduct, credit } = useDemoBalance()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('1.00')
   const [isSpinning, setIsSpinning] = useState(false)
@@ -371,6 +371,12 @@ export default function SlotsPage() {
       )
     )
   }, [])
+
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
 
   /* ── Win detection ───────────────────────────────── */
   const calcWin = useCallback((g: SlotSymbol[][], bet: number) => {
@@ -413,12 +419,7 @@ export default function SlotsPage() {
     const display = amount ?? parseFloat(betAmount)
     if (!initialized || isSpinning) return { won: false, profit: 0 }
     if (freeSpins <= 0 && (!display || display <= 0 || isNaN(display))) return { won: false, profit: 0 }
-    if (!isAuthenticated && bet > 0 && demoBalance < bet) {
-      toast.error('Insufficient balance!')
-      return { won: false, profit: 0 }
-    }
 
-    if (!isAuthenticated && bet > 0) deduct(bet)
     if (freeSpins > 0) setFreeSpins(p => p - 1)
     setIsSpinning(true)
     setLastWin(0)
@@ -444,7 +445,6 @@ export default function SlotsPage() {
       setWinPositions(pos)
 
       if (won) {
-        if (!isAuthenticated) credit(pay)
         setLastWin(pay)
         sessionStats.recordBet(true, bet, pay - bet, pay / display)
         if (pay / display >= 10) {
@@ -465,13 +465,12 @@ export default function SlotsPage() {
       setSpinHistory(p => [{ mult: won ? pay / display : 0, won }, ...p.slice(0, 19)])
       return { won, profit: won ? pay - bet : -bet }
     } catch (err: any) {
-      if (!isAuthenticated && bet > 0) credit(bet)
       toast.error(err?.message || 'Spin failed')
       return { won: false, profit: -bet }
     } finally {
       setIsSpinning(false)
     }
-  }, [betAmount, initialized, isSpinning, isAuthenticated, demoBalance, deduct, credit, generateBet, calcWin, sessionStats, freeSpins])
+  }, [betAmount, initialized, isSpinning, generateBet, calcWin, sessionStats, freeSpins])
 
   const autoBetHandler = useCallback(async (a: number) => handleSpin(a), [handleSpin])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)

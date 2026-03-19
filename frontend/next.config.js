@@ -1,5 +1,4 @@
 /** @type {import('next').NextConfig} */
-// Vercel production deployment
 const nextConfig = {
   reactStrictMode: true,
   async rewrites() {

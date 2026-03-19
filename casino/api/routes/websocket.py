@@ -2,9 +2,12 @@
 WebSocket routes for real-time game communication.
 """
 
+import hashlib
 import logging
+from datetime import datetime, UTC
 from uuid import uuid4
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
+from sqlalchemy import select
 from typing import Optional
 
 from casino.websocket.manager import manager
@@ -18,6 +21,40 @@ router = APIRouter(prefix="/ws", tags=["websocket"])
 crash_game = CrashGameManager(manager)
 
 
+async def _get_user_from_token(token: str) -> Optional[tuple]:
+    """
+    Validate a session token and return (user_id, username).
+    Returns None if token is invalid or expired.
+    """
+    from casino.models.session import async_session_factory
+    from casino.models import User, UserSession
+
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(UserSession).where(
+                UserSession.refresh_token_hash == token_hash,
+                UserSession.revoked_at.is_(None),
+                UserSession.expires_at > datetime.now(UTC),
+            )
+        )
+        session_row = result.scalar_one_or_none()
+
+        if not session_row:
+            return None
+
+        user_result = await db.execute(
+            select(User).where(User.id == session_row.user_id)
+        )
+        user = user_result.scalar_one_or_none()
+
+        if not user:
+            return None
+
+        return (user.id, user.username)
+
+
 @router.websocket("/crash")
 async def crash_websocket(
     websocket: WebSocket,
@@ -25,11 +62,13 @@ async def crash_websocket(
 ):
     """
     WebSocket endpoint for Crash game.
-    
+
+    Requires a valid session token as a query parameter.
+
     Messages from client:
     - {"type": "bet", "amount": "0.001", "auto_cashout": "2.0"}
     - {"type": "cashout"}
-    
+
     Messages from server:
     - {"type": "round_start", ...}
     - {"type": "countdown", "countdown": 3}
@@ -40,22 +79,29 @@ async def crash_websocket(
     - {"type": "cashout", "username": "...", "multiplier": "...", "profit": "..."}
     """
     connection_id = str(uuid4())
-    
-    # TODO: Validate token and get user info
-    # For now, allow anonymous connections
-    user_id = None
-    username = f"Guest_{connection_id[:8]}"
-    
+
+    # Authenticate user via session token
+    if not token:
+        await websocket.close(code=4001, reason="Authentication required")
+        return
+
+    user_info = await _get_user_from_token(token)
+    if not user_info:
+        await websocket.close(code=4001, reason="Invalid or expired session")
+        return
+
+    user_id, username = user_info
+
     try:
         # Connect and join crash room
-        client = await manager.connect(
+        await manager.connect(
             websocket=websocket,
             connection_id=connection_id,
             user_id=user_id,
             username=username,
         )
         await manager.join_room(connection_id, crash_game.ROOM_NAME)
-        
+
         # Send current state
         await manager.send_personal(connection_id, {
             "type": "connected",
@@ -64,55 +110,46 @@ async def crash_websocket(
             "state": crash_game.get_state(),
             "history": crash_game.get_history(),
         })
-        
+
         # Handle messages
         while True:
             data = await websocket.receive_json()
             msg_type = data.get("type")
-            
+
             if msg_type == "bet":
-                # Place bet
                 from decimal import Decimal
                 from uuid import UUID
-                
+
                 amount = Decimal(data.get("amount", "0"))
                 auto_cashout = data.get("auto_cashout")
                 if auto_cashout:
                     auto_cashout = Decimal(auto_cashout)
-                
-                # For demo, use random UUID if not authenticated
-                bet_user_id = user_id or uuid4()
-                
+
                 result = await crash_game.place_bet(
-                    user_id=bet_user_id,
+                    user_id=user_id,
                     username=username,
                     bet_amount=amount,
                     auto_cashout=auto_cashout,
                 )
-                
+
                 await manager.send_personal(connection_id, {
                     "type": "bet_result",
                     **result,
                 })
-            
+
             elif msg_type == "cashout":
-                # Manual cashout
                 from uuid import UUID
-                
-                # For demo, try to find player by username
+
                 if crash_game.current_round:
-                    for uid, player in crash_game.current_round.players.items():
-                        if player.username == username:
-                            result = await crash_game.cashout(UUID(uid))
-                            await manager.send_personal(connection_id, {
-                                "type": "cashout_result",
-                                **result,
-                            })
-                            break
-            
+                    result = await crash_game.cashout(user_id)
+                    await manager.send_personal(connection_id, {
+                        "type": "cashout_result",
+                        **result,
+                    })
+
             elif msg_type == "ping":
                 await manager.send_personal(connection_id, {"type": "pong"})
-    
+
     except WebSocketDisconnect:
         logger.info(f"Client disconnected: {connection_id}")
     except Exception as e:

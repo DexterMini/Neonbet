@@ -18,9 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from casino.models import (
     User, UserStatus, UserBalance, Bet, BetStatus,
     Deposit, Withdrawal, LedgerEventType,
-    AdminAction, SystemAlert,
+    AdminAction, SystemAlert, kyc_level_to_int,
 )
-from casino.api.dependencies import get_db, get_current_user
+from casino.api.dependencies import get_db, get_current_user, require_admin
 from casino.services.ledger import LedgerService
 
 
@@ -82,18 +82,18 @@ class ManualAdjustmentRequest(BaseModel):
     reason: str
 
 
-# ========================
-# Middleware/Dependencies
-# ========================
+class GameSettingsResponse(BaseModel):
+    game_type: str
+    house_edge: str
+    rtp: str  # Return to Player (100 - house_edge)
+    description: Optional[str]
+    updated_by: Optional[str]
+    updated_at: str
 
-async def verify_admin(
-    user: User = Depends(get_current_user),
-) -> User:
-    """Verify the caller has admin privileges (vip_level >= 99 used as admin flag)."""
-    # In a production system you'd have a proper role column.
-    # For now, any authenticated user can access admin endpoints
-    # (lock it down via vip_level or a dedicated is_admin flag later).
-    return user
+
+class UpdateGameRTPRequest(BaseModel):
+    house_edge: Decimal = Field(..., ge=Decimal("0"), le=Decimal("1"), decimal_places=4)
+    description: Optional[str] = None
 
 
 # ========================
@@ -106,7 +106,7 @@ async def search_users(
     status: Optional[str] = None,
     min_risk_score: Optional[int] = None,
     limit: int = 50,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -140,7 +140,7 @@ async def search_users(
                 "username": u.username,
                 "email": u.email,
                 "status": u.status.value if hasattr(u.status, "value") else str(u.status),
-                "kyc_level": 0,
+                "kyc_level": kyc_level_to_int(u.kyc_level),
                 "vip_level": u.vip_level,
                 "created_at": u.created_at.isoformat() if u.created_at else "",
                 "risk_score": float(u.risk_score) if u.risk_score else 0,
@@ -154,7 +154,7 @@ async def search_users(
 @router.get("/users/{user_id}")
 async def get_user_details(
     user_id: str,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -190,7 +190,7 @@ async def get_user_details(
         "username": target.username,
         "email": target.email,
         "status": target.status.value if hasattr(target.status, "value") else str(target.status),
-        "kyc_level": 0,
+        "kyc_level": kyc_level_to_int(target.kyc_level),
         "vip_level": target.vip_level,
         "created_at": target.created_at.isoformat() if target.created_at else "",
         "last_active": target.last_login_at.isoformat() if target.last_login_at else "",
@@ -206,7 +206,7 @@ async def get_user_details(
 @router.post("/users/action")
 async def user_action(
     request: UserActionRequest,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -258,7 +258,7 @@ async def user_action(
 @router.post("/users/adjust-balance")
 async def adjust_balance(
     request: ManualAdjustmentRequest,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -323,7 +323,7 @@ async def get_risk_alerts(
     risk_level: Optional[str] = None,
     alert_type: Optional[str] = None,
     limit: int = 50,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -364,7 +364,7 @@ async def resolve_alert(
     alert_id: str,
     action: str,
     notes: str,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -397,7 +397,7 @@ async def resolve_alert(
 @router.get("/risk/score/{user_id}")
 async def get_user_risk_score(
     user_id: str,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -435,7 +435,7 @@ async def get_pending_withdrawals(
     min_amount: Optional[Decimal] = None,
     flagged_only: bool = False,
     limit: int = 50,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -469,7 +469,7 @@ async def get_pending_withdrawals(
 @router.post("/withdrawals/{withdrawal_id}/approve")
 async def approve_withdrawal(
     withdrawal_id: str,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -502,7 +502,7 @@ async def approve_withdrawal(
 async def reject_withdrawal(
     withdrawal_id: str,
     reason: str,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -547,7 +547,7 @@ async def reject_withdrawal(
 
 @router.get("/stats/overview", response_model=SystemStatsResponse)
 async def get_system_stats(
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -596,7 +596,7 @@ async def get_system_stats(
 @router.get("/stats/games")
 async def get_game_stats(
     period: str = "24h",
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -631,7 +631,7 @@ async def get_game_stats(
 async def get_revenue_stats(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -666,7 +666,7 @@ async def get_audit_log(
     action_type: Optional[str] = None,
     target_user: Optional[str] = None,
     limit: int = 100,
-    admin: User = Depends(verify_admin),
+    admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -698,10 +698,223 @@ async def get_audit_log(
                 "action_type": a.action_type,
                 "target_type": a.target_type,
                 "target_id": str(a.target_id) if a.target_id else None,
-                "details": a.details,
                 "created_at": a.created_at.isoformat() if a.created_at else "",
             }
             for a in rows
         ],
         "total": len(rows),
     }
+
+
+# ========================
+# Game Settings & RTP
+# ========================
+
+@router.get("/games/settings", response_model=List[GameSettingsResponse])
+async def get_game_settings(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get all game RTP/house edge settings.
+    """
+    from casino.models import GameSettings
+    
+    result = await db.execute(select(GameSettings).order_by(GameSettings.game_type))
+    games = result.scalars().all()
+    
+    response = []
+    for game in games:
+        rtp = Decimal("100") - (Decimal(str(game.house_edge)) * Decimal("100"))
+        response.append(GameSettingsResponse(
+            game_type=game.game_type.value,
+            house_edge=f"{float(game.house_edge)*100:.2f}%",
+            rtp=f"{float(rtp):.2f}%",
+            description=game.description,
+            updated_by=str(game.updated_by) if game.updated_by else None,
+            updated_at=game.updated_at.isoformat() if game.updated_at else "",
+        ))
+    
+    return response
+
+
+@router.get("/games/settings/{game_type}", response_model=GameSettingsResponse)
+async def get_game_settings_by_type(
+    game_type: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get RTP/house edge for a specific game.
+    """
+    from casino.models import GameSettings, GameType
+    
+    try:
+        gt = GameType(game_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid game type: {game_type}")
+    
+    result = await db.execute(select(GameSettings).where(GameSettings.game_type == gt))
+    game = result.scalar_one_or_none()
+    
+    if not game:
+        raise HTTPException(status_code=404, detail=f"Settings not found for game: {game_type}")
+    
+    rtp = Decimal("100") - (Decimal(str(game.house_edge)) * Decimal("100"))
+    return GameSettingsResponse(
+        game_type=game.game_type.value,
+        house_edge=f"{float(game.house_edge)*100:.2f}%",
+        rtp=f"{float(rtp):.2f}%",
+        description=game.description,
+        updated_by=str(game.updated_by) if game.updated_by else None,
+        updated_at=game.updated_at.isoformat() if game.updated_at else "",
+    )
+
+
+@router.post("/games/settings/{game_type}")
+async def update_game_rtp(
+    game_type: str,
+    request: UpdateGameRTPRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update RTP/house edge for a specific game.
+    House edge should be between 0.00 (0%) and 1.00 (100%) in decimal format.
+    Example: 0.05 = 5% house edge = 95% RTP
+    """
+    from casino.models import GameSettings, GameType
+    
+    try:
+        gt = GameType(game_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid game type: {game_type}")
+    
+    result = await db.execute(select(GameSettings).where(GameSettings.game_type == gt))
+    game = result.scalar_one_or_none()
+    
+    if not game:
+        raise HTTPException(status_code=404, detail=f"Settings not found for game: {game_type}")
+    
+    # Update settings
+    old_house_edge = game.house_edge
+    game.house_edge = request.house_edge
+    game.description = request.description or game.description
+    game.updated_by = admin.id
+    game.updated_at = datetime.now(UTC)
+    
+    # Audit log
+    db.add(AdminAction(
+        admin_id=admin.id,
+        action_type="update_game_rtp",
+        target_type="game",
+        target_id=None,
+        details={
+            "game_type": game_type,
+            "old_house_edge": str(old_house_edge),
+            "new_house_edge": str(request.house_edge),
+            "description": request.description,
+        },
+        ip_address="system",
+    ))
+    
+    await db.commit()
+    
+    rtp = Decimal("100") - (Decimal(str(game.house_edge)) * Decimal("100"))
+    return {
+        "success": True,
+        "game_type": game_type,
+        "house_edge": f"{float(game.house_edge)*100:.2f}%",
+        "rtp": f"{float(rtp):.2f}%",
+        "updated_by": str(admin.id),
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+
+# ========================
+# Admin Grant / Revoke
+# ========================
+# ========================
+
+class AdminRoleRequest(BaseModel):
+    user_id: str
+    reason: str = ""
+
+
+@router.post("/grant-admin")
+async def grant_admin(
+    body: AdminRoleRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Grant admin privileges to a user. Only existing admins can do this."""
+    try:
+        target_id = _UUID(body.user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+
+    result = await db.execute(select(User).where(User.id == target_id))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if target.is_admin:
+        return {"message": f"{target.username} is already an admin"}
+
+    target.is_admin = True
+
+    db.add(AdminAction(
+        admin_id=admin.id,
+        action_type="grant_admin",
+        target_type="user",
+        target_id=target.id,
+        details={"reason": body.reason},
+    ))
+    await db.commit()
+
+    return {"message": f"Admin granted to {target.username}"}
+
+
+@router.post("/revoke-admin")
+async def revoke_admin(
+    body: AdminRoleRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revoke admin privileges from a user. Only existing admins can do this."""
+    try:
+        target_id = _UUID(body.user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+
+    if str(admin.id) == body.user_id:
+        raise HTTPException(status_code=400, detail="Cannot revoke your own admin privileges")
+
+    result = await db.execute(select(User).where(User.id == target_id))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not target.is_admin:
+        return {"message": f"{target.username} is not an admin"}
+
+    target.is_admin = False
+
+    db.add(AdminAction(
+        admin_id=admin.id,
+        action_type="revoke_admin",
+        target_type="user",
+        target_id=target.id,
+        details={"reason": body.reason},
+    ))
+    await db.commit()
+
+    return {"message": f"Admin revoked from {target.username}"}
+
+
+@router.get("/check-admin")
+async def check_admin(
+    user: User = Depends(get_current_user),
+):
+    """Check if the current user has admin privileges. No 403 — just returns the flag."""
+    return {"is_admin": getattr(user, 'is_admin', False)}

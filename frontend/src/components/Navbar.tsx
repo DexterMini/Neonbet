@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { Search, Menu, Bell, User, LogOut, Settings, X, Wallet, ChevronDown, Zap, MessageCircle, Copy, Check, ArrowDown, ArrowUp, ExternalLink } from 'lucide-react'
+import { Search, Menu, Bell, User, LogOut, Settings, X, Wallet, ChevronDown, Zap, MessageCircle, ArrowDown, ArrowUp } from 'lucide-react'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui'
 import {
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/Dropdown'
 import { useAuthStore } from '@/stores/authStore'
 import { useChatStore } from '@/stores/chatStore'
-import { QRCodeSVG } from 'qrcode.react'
+import { useNotificationStore, startNotificationSimulation, type NotificationType } from '@/stores/notificationStore'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'sonner'
 
@@ -39,11 +39,34 @@ const CRYPTO_META: { symbol: string; name: string; icon: string; color: string; 
   { symbol: 'LTC', name: 'Litecoin', icon: 'Ł', color: 'text-gray-300', address: '', network: 'Litecoin', minDeposit: '0.01 LTC' },
 ]
 
+// ── Notification styling per type ──
+const NOTIF_STYLES: Record<NotificationType, { bg: string; emoji: string }> = {
+  welcome: { bg: 'bg-brand/10', emoji: '⚡' },
+  win:     { bg: 'bg-brand/10', emoji: '🎉' },
+  deposit: { bg: 'bg-blue-500/10', emoji: '💰' },
+  withdraw:{ bg: 'bg-amber-500/10', emoji: '📤' },
+  vip:     { bg: 'bg-accent-purple/10', emoji: '👑' },
+  promo:   { bg: 'bg-amber-500/10', emoji: '🔥' },
+  game:    { bg: 'bg-accent-purple/10', emoji: '🎮' },
+  system:  { bg: 'bg-white/5', emoji: '🔔' },
+  bonus:   { bg: 'bg-brand/10', emoji: '🎁' },
+  cashback:{ bg: 'bg-emerald-500/10', emoji: '💸' },
+}
+
+function timeAgo(ts: number): string {
+  const diff = Math.floor((Date.now() - ts) / 1000)
+  if (diff < 60) return 'just now'
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
+}
+
 export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, token, isAuthenticated, isHydrated, logout } = useAuthStore()
+  const { user, token, isAuthenticated, isHydrated, logout, setUser } = useAuthStore()
   const { toggle: toggleChat, isOpen: chatOpen, onlineCount } = useChatStore()
+  const { notifications, unreadCount: notifUnread, markAsRead, markAllAsRead, clearAll } = useNotificationStore()
   const [wallet, setWallet] = useState<string | null>(null)
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -51,12 +74,10 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const [totalUsd, setTotalUsd] = useState(0)
   const [walletOpen, setWalletOpen] = useState(false)
   const [selectedCrypto, setSelectedCrypto] = useState(0)
-  const [copied, setCopied] = useState(false)
   const [walletTab, setWalletTab] = useState<'deposit' | 'withdraw'>('deposit')
   const [depositAmount, setDepositAmount] = useState('')
   const [depositLoading, setDepositLoading] = useState(false)
-  const [payAddress, setPayAddress] = useState('')
-  const [payAmount, setPayAmount] = useState('')
+  const [invoiceUrl, setInvoiceUrl] = useState('')
   const [depositStatus, setDepositStatus] = useState<'idle' | 'waiting' | 'confirming' | 'done'>('idle')
   const [withdrawAmount, setWithdrawAmount] = useState('')
   const [withdrawAddress, setWithdrawAddress] = useState('')
@@ -82,6 +103,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   useEffect(() => {
     const savedWallet = localStorage.getItem('wallet')
     if (savedWallet) setWallet(savedWallet)
+    startNotificationSimulation()
   }, [])
 
   useEffect(() => {
@@ -99,14 +121,6 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const copyAddress = () => {
-    const addr = payAddress || CRYPTO_META[selectedCrypto]?.address || ''
-    if (!addr) return
-    navigator.clipboard.writeText(addr)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   const createDeposit = async () => {
     const amount = parseFloat(depositAmount)
     if (!amount || amount < 1) {
@@ -116,7 +130,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
     setDepositLoading(true)
     try {
       const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
-      const res = await fetch(`${apiBase}/api/v1/payments/deposit`, {
+      const res = await fetch(`${apiBase}/api/v1/payments/deposit/invoice`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,16 +146,13 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
         throw new Error(err?.detail || 'Failed to create deposit')
       }
       const data = await res.json()
-      if (data.pay_address) {
-        setPayAddress(data.pay_address)
-        setPayAmount(data.pay_amount || '')
-        setDepositStatus('waiting')
-        toast.success(`Send ${data.pay_amount} ${CRYPTO_META[selectedCrypto].symbol} to the address below`)
-      } else if (data.invoice_url) {
-        window.open(data.invoice_url, '_blank')
-        toast.success('Payment page opened in new tab')
-        setDepositStatus('waiting')
+      if (!data.invoice_url) {
+        throw new Error('Payment provider did not return an invoice URL')
       }
+      setInvoiceUrl(data.invoice_url)
+      setDepositStatus('waiting')
+      window.open(data.invoice_url, '_blank')
+      toast.success('Payment page opened in new tab')
     } catch (e: any) {
       toast.error(e.message || 'Deposit failed')
     }
@@ -190,8 +201,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
   }
 
   const resetDepositState = () => {
-    setPayAddress('')
-    setPayAmount('')
+    setInvoiceUrl('')
     setDepositStatus('idle')
     setDepositAmount('')
   }
@@ -387,7 +397,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                               {CRYPTO_META.map((c, i) => (
                                 <button
                                   key={c.symbol}
-                                  onClick={() => { setSelectedCrypto(i); setCopied(false); resetDepositState() }}
+                                  onClick={() => { setSelectedCrypto(i); resetDepositState() }}
                                   className={cn(
                                     'flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all',
                                     selectedCrypto === i
@@ -470,7 +480,7 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                             </>
                           ) : (
                             <>
-                              {/* Payment created — show address + QR */}
+                              {/* Payment created — invoice flow */}
                               <div className="flex flex-col items-center gap-3">
                                 <div className="flex items-center gap-2 text-xs">
                                   <span className="relative flex h-2 w-2">
@@ -479,42 +489,25 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
                                   </span>
                                   <span className="text-amber-400 font-semibold">Awaiting payment...</span>
                                 </div>
-                                {payAddress && (
-                                  <div className="bg-white p-3 rounded-xl">
-                                    <QRCodeSVG
-                                      value={payAddress}
-                                      size={140}
-                                      bgColor="#ffffff"
-                                      fgColor="#000000"
-                                      level="H"
-                                      includeMargin={false}
-                                    />
-                                  </div>
-                                )}
-                                {payAmount && (
-                                  <div className="text-center">
-                                    <p className="text-white font-bold font-mono text-lg">{payAmount} {CRYPTO_META[selectedCrypto]?.symbol}</p>
-                                    <p className="text-muted text-[10px]">≈ ${depositAmount} USD</p>
-                                  </div>
-                                )}
+                                <div className="text-center">
+                                  <p className="text-white font-bold font-mono text-lg">${depositAmount} USD</p>
+                                  <p className="text-muted text-[10px]">Invoice created for {CRYPTO_META[selectedCrypto]?.symbol}</p>
+                                </div>
                               </div>
 
-                              {/* Address */}
-                              {payAddress && (
-                                <div>
-                                  <label className="text-[10px] text-muted uppercase tracking-wider font-bold mb-1.5 block">
-                                    Send to this address
-                                  </label>
-                                  <div className="flex items-center gap-2 bg-background rounded-lg border border-border p-2.5">
-                                    <span className="flex-1 text-[11px] text-white font-mono truncate">{payAddress}</span>
-                                    <button onClick={copyAddress}
-                                      className="shrink-0 p-1.5 rounded bg-brand/10 hover:bg-brand/20 text-brand transition-colors"
-                                    >
-                                      {copied ? <Check size={14} /> : <Copy size={14} />}
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
+                              {/* Open invoice */}
+                              <button
+                                onClick={() => invoiceUrl && window.open(invoiceUrl, '_blank')}
+                                disabled={!invoiceUrl}
+                                className={cn(
+                                  'w-full py-2.5 rounded-lg font-semibold text-xs transition-all',
+                                  invoiceUrl
+                                    ? 'bg-brand text-background-deep hover:brightness-110 shadow-glow-brand-sm'
+                                    : 'bg-surface border border-border text-muted cursor-not-allowed'
+                                )}
+                              >
+                                Open Payment Page
+                              </button>
 
                               {/* Back button */}
                               <button
@@ -636,10 +629,75 @@ export function Navbar({ onMenuClick }: { onMenuClick?: () => void }) {
               </div>
 
               {/* Notifications */}
-              <button className="relative p-2 rounded-lg text-muted hover:text-white hover:bg-white/[0.04] transition-colors">
-                <Bell className="w-4 h-4" />
-                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-accent-red rounded-full" />
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="relative p-2 rounded-lg text-muted hover:text-white hover:bg-white/[0.04] transition-colors">
+                    <Bell className="w-4 h-4" />
+                    {notifUnread > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-accent-red text-[9px] font-bold text-white">
+                        {notifUnread > 9 ? '9+' : notifUnread}
+                      </span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  <div className="flex items-center justify-between px-3 py-2">
+                    <span className="text-xs font-semibold text-white tracking-wide uppercase">Notifications</span>
+                    {notifUnread > 0 && (
+                      <button
+                        onClick={() => markAllAsRead()}
+                        className="text-[10px] text-brand hover:text-brand-dark transition-colors"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <DropdownMenuSeparator />
+                  <div className="max-h-80 overflow-y-auto scrollbar-thin">
+                    {notifications.length === 0 ? (
+                      <div className="px-3 py-6 text-center">
+                        <Bell className="w-8 h-8 text-muted/30 mx-auto mb-2" />
+                        <p className="text-[11px] text-muted">No notifications yet</p>
+                      </div>
+                    ) : (
+                      notifications.slice(0, 15).map((n) => {
+                        const style = NOTIF_STYLES[n.type] || NOTIF_STYLES.system
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => markAsRead(n.id)}
+                            className={cn(
+                              'px-3 py-2 flex items-start gap-2.5 cursor-pointer hover:bg-white/[0.03] transition-colors border-l-2',
+                              n.read ? 'border-transparent opacity-60' : 'border-brand'
+                            )}
+                          >
+                            <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5', style.bg)}>
+                              <span className="text-sm">{style.emoji}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[12px] text-white font-medium truncate">{n.title}</p>
+                              <p className="text-[10px] text-muted mt-0.5 line-clamp-2">{n.message}</p>
+                              <p className="text-[9px] text-muted/50 mt-1">{timeAgo(n.timestamp)}</p>
+                            </div>
+                            {!n.read && <span className="w-2 h-2 bg-brand rounded-full shrink-0 mt-2" />}
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                  {notifications.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <button
+                        onClick={() => clearAll()}
+                        className="w-full px-3 py-2 text-[10px] text-muted hover:text-accent-red text-center transition-colors"
+                      >
+                        Clear all notifications
+                      </button>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* User Dropdown */}
               <DropdownMenu>

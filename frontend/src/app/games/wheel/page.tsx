@@ -12,7 +12,7 @@ import { CircleDot, RefreshCw, Shield, Zap, TrendingUp, Sparkles } from 'lucide-
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { useAutoBet, defaultAutoBetConfig, type AutoBetConfig } from '@/hooks/useAutoBet'
 import { useHotkeys } from '@/hooks/useHotkeys'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useRouter } from 'next/navigation'
 
 interface WheelSegment {
   value: number
@@ -538,10 +538,10 @@ export default function WheelPage() {
     initialized, serverSeedHash, clientSeed, nonce, previousServerSeed,
     generateBet, rotateSeed, setClientSeed,
   } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { placeBet, isPlacing, fetchBalances, balances, balancesLoaded } = useGameStore()
   const sessionStats = useSessionStats()
-  const { balance: demoBalance, deduct, credit } = useDemoBalance()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [wheelSegments, setWheelSegments] = useState(10)
@@ -569,12 +569,16 @@ export default function WheelPage() {
   }, [segments])
 
   useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
+
+  useEffect(() => {
     if (isAuthenticated) fetchBalances()
   }, [isAuthenticated, fetchBalances])
 
-  const displayBalance = isAuthenticated
-    ? (balances['btc']?.available ?? 0)
-    : demoBalance
+  const displayBalance = balances['btc']?.available ?? 0
 
   // Draw wheel
   useEffect(() => {
@@ -696,24 +700,16 @@ export default function WheelPage() {
 
     setIsSpinning(true)
     setShowResult(false)
-    if (!isAuthenticated) deduct(bet)
 
     let resultSegment: WheelSegment
     let resultIdx: number
 
     try {
-      if (isAuthenticated) {
-        const data = await placeBet('wheel', betAmount, 'usdt', {})
-        resultIdx = data.result_data?.segment_index ?? 0
-        resultSegment = segments[resultIdx % segments.length]
-      } else {
-        const { result: ri } = await generateBet('wheel', { segments: segments.length })
-        resultIdx = (ri as number) % segments.length
-        resultSegment = segments[resultIdx]
-      }
+      const data = await placeBet('wheel', betAmount, 'usdt', {})
+      resultIdx = data.result_data?.segment_index ?? 0
+      resultSegment = segments[resultIdx % segments.length]
     } catch (err: any) {
       toast.error(err?.message || 'Error placing bet')
-      if (!isAuthenticated) credit(bet)
       setIsSpinning(false)
       return { won: false, profit: -bet }
     }
@@ -746,7 +742,6 @@ export default function WheelPage() {
           const won = resultSegment.value > 0
           const profit = won ? payout - bet : -bet
           if (won) {
-            if (!isAuthenticated) credit(payout)
             sessionStats.recordBet(true, bet, payout - bet, resultSegment.value)
             toast.success(`${resultSegment.value}x! Won $${payout.toFixed(2)}`)
           } else {
@@ -758,7 +753,7 @@ export default function WheelPage() {
       }
       requestAnimationFrame(animate)
     })
-  }, [betAmount, isSpinning, isPlacing, initialized, displayBalance, isAuthenticated, placeBet, generateBet, segments, rotation, sessionStats])
+  }, [betAmount, isSpinning, isPlacing, initialized, displayBalance, placeBet, segments, rotation, sessionStats])
 
   const autoBetHandler = useCallback(async (amount: number) => handleSpin(amount), [handleSpin])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)

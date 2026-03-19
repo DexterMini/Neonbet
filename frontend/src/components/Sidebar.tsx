@@ -6,10 +6,11 @@ import { usePathname } from 'next/navigation'
 import {
   X, Home, Star, Clock, Zap, Gamepad2, Tv, Spade,
   Gift, Crown, MessageCircle, ChevronRight,
-  Flame, Trophy, TrendingUp, Bomb, Dices, CircleDot,
-  Target, RotateCcw, Grid3X3, Layers, Gem, Bird, Shield,
+  Flame, Trophy, Dices, Target, Shield,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/stores/authStore'
+import { VIPModal } from '@/components/VIPModal'
 
 /* ── Navigation items ───────────────────────────────── */
 const mainNav = [
@@ -27,24 +28,17 @@ const gameCategories = [
 ]
 
 const originalGames = [
-  { id: 'crash', name: 'Crash', href: '/games/crash', icon: TrendingUp, color: 'text-emerald-400', hot: true },
   { id: 'dice', name: 'Dice', href: '/games/dice', icon: Dices, color: 'text-red-400' },
-  { id: 'mines', name: 'Mines', href: '/games/mines', icon: Bomb, color: 'text-cyan-400', hot: true },
-  { id: 'plinko', name: 'Plinko', href: '/games/plinko', icon: CircleDot, color: 'text-violet-400' },
   { id: 'limbo', name: 'Limbo', href: '/games/limbo', icon: Target, color: 'text-sky-400' },
-  { id: 'wheel', name: 'Wheel', href: '/games/wheel', icon: RotateCcw, color: 'text-amber-400' },
-  { id: 'keno', name: 'Keno', href: '/games/keno', icon: Grid3X3, color: 'text-green-400' },
-  { id: 'twentyone', name: 'Twenty One', href: '/games/twentyone', icon: Spade, color: 'text-fuchsia-400' },
-  { id: 'coinclimber', name: 'Coin Climber', href: '/games/coinclimber', icon: Layers, color: 'text-yellow-400', isNew: true },
-  { id: 'snake', name: 'Snake', href: '/games/snake', icon: Gem, color: 'text-lime-400', isNew: true },
-  { id: 'chicken', name: 'Chicken Road', href: '/games/chicken', icon: Bird, color: 'text-orange-400', isNew: true },
 ]
 
 const bottomNav = [
+  { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
+  { name: 'Achievements', href: '/achievements', icon: Star },
   { name: 'Promotions', href: '/promotions', icon: Gift, badge: 3 },
-  { name: 'VIP Club', href: '/vip', icon: Crown },
-  { name: 'Admin', href: '/admin', icon: Shield },
 ]
+
+const adminNav = { name: 'Admin', href: '/admin', icon: Shield }
 
 /* ── Component ───────────────────────────────────────── */
 interface SidebarProps {
@@ -56,6 +50,9 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname()
   const [mounted, setMounted] = useState(false)
   const [showGames, setShowGames] = useState(true)
+  const [showVIP, setShowVIP] = useState(false)
+  const user = useAuthStore((s) => s.user)
+  const isAdmin = user?.is_admin === true
 
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => { if (onClose) onClose() }, [pathname])
@@ -218,6 +215,32 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
               </Link>
             )
           })}
+
+          {/* VIP Club — opens modal */}
+          <button
+            onClick={() => { setShowVIP(true); onClose?.() }}
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group text-muted-light hover:text-white hover:bg-white/[0.04]"
+          >
+            <Crown className="w-[18px] h-[18px] text-muted group-hover:text-white" />
+            <span className="text-[13px] font-medium flex-1 text-left">VIP Club</span>
+          </button>
+
+          {/* Admin — only visible to admins */}
+          {isAdmin && (
+            <Link
+              href={adminNav.href}
+              onClick={onClose}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-150 group',
+                isActive(adminNav.href)
+                  ? 'bg-brand/10 text-brand'
+                  : 'text-muted-light hover:text-white hover:bg-white/[0.04]'
+              )}
+            >
+              <adminNav.icon className={cn('w-[18px] h-[18px]', isActive(adminNav.href) ? 'text-brand' : 'text-muted group-hover:text-white')} />
+              <span className="text-[13px] font-medium flex-1">{adminNav.name}</span>
+            </Link>
+          )}
         </div>
 
         {/* Promo card */}
@@ -269,6 +292,9 @@ export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
           </aside>
         </div>
       )}
+
+      {/* VIP Modal */}
+      <VIPModal open={showVIP} onClose={() => setShowVIP(false)} />
     </>
   )
 }

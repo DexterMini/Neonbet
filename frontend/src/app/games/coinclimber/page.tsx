@@ -10,7 +10,7 @@ import { useGameStore } from '@/stores/gameStore'
 import { Sparkles, RotateCcw, Zap, TrendingUp, Coins, Skull, Crown, CircleDot } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
 import { toast } from 'sonner'
-import { useDemoBalance } from '@/stores/demoBalanceStore'
+import { useRouter } from 'next/navigation'
 
 /* ── Config ────────────────────────────────────────── */
 const MAX_LEVELS = 10
@@ -84,10 +84,10 @@ function HeightMeter({ level, maxLevel, active }: { level: number; maxLevel: num
 
 export default function CoinClimberPage() {
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isHydrated } = useAuthStore()
   const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
-  const { balance: demoBalance, deduct, credit } = useDemoBalance()
+  const router = useRouter()
 
   const [betAmount, setBetAmount] = useState('10.00')
   const [difficulty, setDifficulty] = useState(1)
@@ -111,6 +111,12 @@ export default function CoinClimberPage() {
     if (scrollRef.current && currentLevel > 0) scrollRef.current.scrollTop = 0
   }, [currentLevel])
 
+  useEffect(() => {
+    if (isHydrated && !isAuthenticated) {
+      router.push('/login')
+    }
+  }, [isHydrated, isAuthenticated, router])
+
   const generateLevels = useCallback(async (): Promise<Level[]> => {
     const r: Level[] = []
     for (let i = 0; i < MAX_LEVELS; i++) {
@@ -123,13 +129,10 @@ export default function CoinClimberPage() {
 
   const startGame = async () => {
     if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
-    const bet = parseFloat(betAmount)
-    if (!isAuthenticated && demoBalance < bet) { toast.error('Insufficient balance!'); return }
-    if (!isAuthenticated) deduct(bet)
     try {
       const nl = await generateLevels()
       setLevels(nl); setCurrentLevel(0); setPicked([]); setHitWrong(null); setCashedOut(false); setGameActive(true)
-    } catch (err: any) { if (!isAuthenticated) credit(parseFloat(betAmount)); toast.error(err?.message || 'Error starting game') }
+    } catch (err: any) { toast.error(err?.message || 'Error starting game') }
   }
 
   const pickTile = (level: number, col: number) => {
@@ -143,7 +146,6 @@ export default function CoinClimberPage() {
     } else if (level + 1 >= MAX_LEVELS) {
       setCurrentLevel(level + 1); setGameActive(false); setCashedOut(true)
       const fm = getMultiplier(cols, level + 1)
-      if (!isAuthenticated) credit(parseFloat(betAmount) * fm)
       sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * fm - parseFloat(betAmount), fm)
       toast.success(`Summit! Won $${(parseFloat(betAmount) * fm).toFixed(2)}!`)
     } else { setCurrentLevel(level + 1) }
@@ -152,7 +154,6 @@ export default function CoinClimberPage() {
   const cashout = () => {
     if (!gameActive || currentLevel === 0) return
     setCashedOut(true); setGameActive(false)
-    if (!isAuthenticated) credit(parseFloat(betAmount) * currentMult)
     sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * currentMult - parseFloat(betAmount), currentMult)
     toast.success(`Cashed out $${(parseFloat(betAmount) * currentMult).toFixed(2)}!`)
   }

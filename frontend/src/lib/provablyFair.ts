@@ -116,9 +116,9 @@ export async function generateCrashResult(
   // House edge of 3%
   const houseEdge = 0.97
   
-  // Calculate crash point
-  const result = Math.floor((houseEdge * e) / (e - h))
-  return Math.max(1, result / 100)
+  // Calculate crash point — ratio gives the multiplier directly
+  const crashPoint = (houseEdge * e) / (e - h)
+  return Math.max(1, Math.floor(crashPoint * 100) / 100)
 }
 
 // Mines: Returns array of mine positions

@@ -38,6 +38,10 @@ class BaseGame(ABC):
     min_bet: Decimal = Decimal("0.10")
     max_bet: Decimal = Decimal("10000")
     
+    def set_house_edge(self, house_edge: Decimal) -> None:
+        """Set house edge for this game instance"""
+        self.house_edge = Decimal(str(house_edge))
+    
     @abstractmethod
     def calculate_result(
         self,
@@ -875,11 +879,6 @@ class BlackjackGame(BaseGame):
 GAMES: Dict[str, BaseGame] = {
     "dice": DiceGame(),
     "limbo": LimboGame(),
-    "mines": MinesGame(),
-    "plinko": PlinkoGame(),
-    "wheel": WheelGame(),
-    "keno": KenoGame(),
-    "twentyone": BlackjackGame(),
 }
 
 

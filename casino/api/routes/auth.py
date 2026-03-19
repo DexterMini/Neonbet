@@ -14,11 +14,12 @@ import re
 
 from fastapi import APIRouter, HTTPException, Depends, Header, Request, status
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
+import pyotp
 
 from casino.config import settings
-from casino.models import User, UserBalance, UserSession, UserStatus, KYCLevel, Currency
+from casino.models import User, UserBalance, UserSession, UserStatus, KYCLevel, Currency, kyc_level_to_int
 from casino.api.dependencies import get_db, get_current_user
 
 
@@ -151,12 +152,17 @@ async def register(
     stored_hash = f"{salt}${password_hash}"
 
     # Create user row
+    # Auto-grant admin to the very first registered user (bootstrap)
+    user_count = await db.scalar(select(func.count()).select_from(User))
+    is_first_user = (user_count or 0) == 0
+
     user = User(
         email=request.email,
         username=request.username,
         password_hash=stored_hash,
         status=UserStatus.ACTIVE,
         kyc_level=KYCLevel.NONE,
+        is_admin=is_first_user,
     )
     db.add(user)
     await db.flush()  # get user.id
@@ -193,8 +199,9 @@ async def register(
             "username": user.username,
             "email": user.email,
             "created_at": user.created_at.isoformat() if user.created_at else datetime.now(UTC).isoformat(),
-            "kyc_level": 0,
+            "kyc_level": kyc_level_to_int(user.kyc_level),
             "vip_level": user.vip_level,
+            "is_admin": user.is_admin,
         },
         expires_at=expires_at,
     )
@@ -279,8 +286,9 @@ async def login(
             "username": user.username,
             "email": user.email,
             "created_at": user.created_at.isoformat() if user.created_at else "",
-            "kyc_level": 0,
+            "kyc_level": kyc_level_to_int(user.kyc_level),
             "vip_level": user.vip_level,
+            "is_admin": user.is_admin,
         },
         expires_at=expires_at,
     )
@@ -419,7 +427,7 @@ async def get_me(
         "username": user.username,
         "email": user.email,
         "created_at": user.created_at.isoformat() if user.created_at else "",
-        "kyc_level": 0,
+        "kyc_level": kyc_level_to_int(user.kyc_level),
         "vip_level": user.vip_level,
         "balances": balances,
         "stats": stats,
@@ -440,16 +448,21 @@ async def setup_two_factor(
         raise HTTPException(status_code=400, detail="2FA is already enabled")
 
     # Generate TOTP secret
-    secret = secrets.token_hex(20)
+    secret = pyotp.random_base32()
     backup_codes = [secrets.token_hex(4).upper() for _ in range(10)]
 
     # Persist secret (will be confirmed in /2fa/verify)
     user.totp_secret = secret
     await db.commit()
 
+    totp = pyotp.TOTP(secret)
+
     return TwoFactorSetupResponse(
         secret=secret,
-        qr_code_url=f"otpauth://totp/Casino:{user.username}?secret={secret}&issuer=Casino",
+        qr_code_url=totp.provisioning_uri(
+            name=user.username,
+            issuer_name="NeonBet",
+        ),
         backup_codes=backup_codes,
     )
 
@@ -466,8 +479,13 @@ async def verify_two_factor(
     if not user.totp_secret:
         raise HTTPException(status_code=400, detail="Run /2fa/setup first")
 
-    # TODO: validate TOTP code with pyotp against user.totp_secret
-    # For now, accept any code to enable 2FA
+    if not code or not code.isdigit():
+        raise HTTPException(status_code=400, detail="Invalid 2FA code")
+
+    totp = pyotp.TOTP(user.totp_secret)
+    if not totp.verify(code, valid_window=1):
+        raise HTTPException(status_code=400, detail="Invalid or expired 2FA code")
+
     user.totp_enabled = True
     await db.commit()
 
