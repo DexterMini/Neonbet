@@ -111,6 +111,7 @@ class TestGameResult:
         """Test GameResult can be created"""
         result = GameResult(
             raw_hash="a" * 64,
+            raw_value=int("aaaaaaaa", 16),
             normalized=0.5,
             server_seed_hash="hash123",
             client_seed="client123",
@@ -125,6 +126,7 @@ class TestGameResult:
         """Test converting normalized value to dice roll"""
         result = GameResult(
             raw_hash="8" * 64,
+            raw_value=int("88888888", 16),
             normalized=0.5,
             server_seed_hash="hash",
             client_seed="client",

@@ -127,8 +127,9 @@ class CrashEngine:
         """Initialize a new crash round"""
         round_id = str(uuid.uuid4())
         
-        # Generate server seed
-        server_seed = hashlib.sha256(f"{round_id}:{datetime.now(UTC).timestamp()}".encode()).hexdigest()
+        # Generate cryptographically secure server seed
+        import secrets
+        server_seed = secrets.token_hex(32)
         server_seed_hash = hashlib.sha256(server_seed.encode()).hexdigest()
         
         # Pre-determine crash point (hidden until round ends)

@@ -267,13 +267,15 @@ class MinesGame(BaseGame):
         mine_count: int
     ) -> List[int]:
         """Generate mine positions using provably fair hash"""
+        import hashlib as _hashlib
         positions = list(range(self.grid_size))
         hash_full = game_result.raw_hash
         
-        # Fisher-Yates shuffle using hash
+        # Fisher-Yates shuffle using hash with extended randomness
         for i in range(self.grid_size - 1, 0, -1):
-            hash_segment = hash_full[(i % 32) * 2: (i % 32) * 2 + 2]
-            j = int(hash_segment, 16) % (i + 1)
+            # Generate unique 2-byte segment for each step via HMAC chain
+            step_hash = _hashlib.sha256(f"{hash_full}:{i}".encode()).hexdigest()
+            j = int(step_hash[:4], 16) % (i + 1)
             positions[i], positions[j] = positions[j], positions[i]
         
         return sorted(positions[:mine_count])
@@ -378,25 +380,57 @@ class PlinkoGame(BaseGame):
     """
     
     game_type = "plinko"
-    available_rows = [8, 12, 16]
+    available_rows = [8, 9, 10, 11, 12, 13, 14, 15, 16]
     risk_levels = ["low", "medium", "high"]
     
     # Multipliers for each risk level and row count
+    # All tables have N+1 elements for N rows (positions 0..N)
+    # RTP ≈ 96% for all configurations — must match frontend display exactly
     MULTIPLIERS = {
         16: {
-            "low": [5.6, 2.1, 1.1, 1, 0.5, 1, 0.3, 0.5, 0.3, 0.5, 0.3, 1, 0.5, 1, 1.1, 2.1, 5.6],
-            "medium": [13, 3, 1.3, 0.7, 0.4, 0.3, 0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.4, 0.7, 1.3, 3, 13],
-            "high": [110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110]
+            "low": [15.5, 8.7, 1.94, 1.36, 1.36, 1.16, 1.07, 0.97, 0.48, 0.97, 1.07, 1.16, 1.36, 1.36, 1.94, 8.7, 15.5],
+            "medium": [107, 39.8, 9.7, 4.8, 2.9, 1.46, 0.97, 0.48, 0.29, 0.48, 0.97, 1.46, 2.9, 4.8, 9.7, 39.8, 107],
+            "high": [970, 126.1, 25.2, 8.7, 3.9, 1.94, 0.19, 0.19, 0.19, 0.19, 0.19, 1.94, 3.9, 8.7, 25.2, 126.1, 970]
+        },
+        15: {
+            "low": [14.5, 7.8, 2.9, 1.94, 1.46, 1.07, 0.97, 0.68, 0.68, 0.97, 1.07, 1.46, 1.94, 2.9, 7.8, 14.5],
+            "medium": [85.4, 17.5, 10.7, 4.8, 2.9, 1.26, 0.48, 0.29, 0.29, 0.48, 1.26, 2.9, 4.8, 10.7, 17.5, 85.4],
+            "high": [601.4, 80.5, 26.2, 7.8, 2.9, 0.48, 0.19, 0.19, 0.19, 0.19, 0.48, 2.9, 7.8, 26.2, 80.5, 601.4]
+        },
+        14: {
+            "low": [6.9, 3.9, 1.84, 1.36, 1.26, 1.07, 0.97, 0.48, 0.97, 1.07, 1.26, 1.36, 1.84, 3.9, 6.9],
+            "medium": [56.3, 14.5, 6.8, 3.9, 1.84, 0.97, 0.48, 0.19, 0.48, 0.97, 1.84, 3.9, 6.8, 14.5, 56.3],
+            "high": [407.4, 54.3, 17.5, 4.8, 1.84, 0.29, 0.19, 0.19, 0.19, 0.29, 1.84, 4.8, 17.5, 54.3, 407.4]
+        },
+        13: {
+            "low": [7.8, 3.9, 2.9, 1.84, 1.16, 0.87, 0.68, 0.68, 0.87, 1.16, 1.84, 2.9, 3.9, 7.8],
+            "medium": [41.7, 12.6, 5.8, 2.9, 1.26, 0.68, 0.39, 0.39, 0.68, 1.26, 2.9, 5.8, 12.6, 41.7],
+            "high": [252.2, 35.9, 10.7, 3.9, 0.97, 0.19, 0.19, 0.19, 0.19, 0.97, 3.9, 10.7, 35.9, 252.2]
         },
         12: {
-            "low": [3.2, 1.6, 1.2, 1, 0.7, 0.5, 0.5, 0.7, 1, 1.2, 1.6, 3.2],
-            "medium": [8.1, 3, 1.4, 0.9, 0.4, 0.2, 0.2, 0.4, 0.9, 1.4, 3, 8.1],
-            "high": [43, 13, 6, 2.5, 1, 0.4, 0.4, 1, 2.5, 6, 13, 43]
+            "low": [9.7, 2.9, 1.55, 1.36, 1.07, 0.97, 0.48, 0.97, 1.07, 1.36, 1.55, 2.9, 9.7],
+            "medium": [32, 10.7, 3.9, 1.94, 1.07, 0.58, 0.29, 0.58, 1.07, 1.94, 3.9, 10.7, 32],
+            "high": [165, 23.3, 7.8, 1.94, 0.68, 0.19, 0.19, 0.19, 0.68, 1.94, 7.8, 23.3, 165]
+        },
+        11: {
+            "low": [8.1, 2.9, 1.84, 1.26, 0.97, 0.68, 0.68, 0.97, 1.26, 1.84, 2.9, 8.1],
+            "medium": [23.3, 5.8, 2.9, 1.75, 0.68, 0.48, 0.48, 0.68, 1.75, 2.9, 5.8, 23.3],
+            "high": [116.4, 13.6, 5, 1.36, 0.39, 0.19, 0.19, 0.39, 1.36, 5, 13.6, 116.4]
+        },
+        10: {
+            "low": [8.6, 2.9, 1.36, 1.07, 0.97, 0.48, 0.97, 1.07, 1.36, 2.9, 8.6],
+            "medium": [21.3, 4.8, 1.94, 1.36, 0.58, 0.39, 0.58, 1.36, 1.94, 4.8, 21.3],
+            "high": [73.8, 9.7, 2.9, 0.87, 0.29, 0.19, 0.29, 0.87, 2.9, 9.7, 73.8]
+        },
+        9: {
+            "low": [5.4, 1.9, 1.55, 0.97, 0.68, 0.68, 0.97, 1.55, 1.9, 5.4],
+            "medium": [17.5, 3.9, 1.65, 0.87, 0.48, 0.48, 0.87, 1.65, 3.9, 17.5],
+            "high": [41.7, 6.8, 1.94, 0.58, 0.19, 0.19, 0.58, 1.94, 6.8, 41.7]
         },
         8: {
-            "low": [2.1, 1.3, 1, 0.6, 0.6, 1, 1.3, 2.1],
-            "medium": [4.1, 1.6, 0.9, 0.4, 0.4, 0.9, 1.6, 4.1],
-            "high": [14, 3.6, 1.4, 0.4, 0.4, 1.4, 3.6, 14]
+            "low": [5.4, 2, 1.07, 0.97, 0.48, 0.97, 1.07, 2, 5.4],
+            "medium": [12.6, 2.9, 1.26, 0.68, 0.39, 0.68, 1.26, 2.9, 12.6],
+            "high": [28.1, 3.9, 1.46, 0.29, 0.19, 0.29, 1.46, 3.9, 28.1]
         }
     }
     
@@ -475,14 +509,15 @@ class WheelGame(BaseGame):
     game_type = "wheel"
     
     # Wheel configuration (50 segments)
+    # RTP = (25*0.2 + 15*0.5 + 7*2 + 2*5 + 1*12) / 50 = 0.97 (97%)
     WHEEL_CONFIG = {
         "segments": 50,
         "colors": {
-            "gray": {"count": 25, "multiplier": 1.2},
-            "blue": {"count": 15, "multiplier": 2},
-            "green": {"count": 7, "multiplier": 5},
-            "purple": {"count": 2, "multiplier": 25},
-            "gold": {"count": 1, "multiplier": 50}
+            "gray": {"count": 25, "multiplier": 0.2},
+            "blue": {"count": 15, "multiplier": 0.5},
+            "green": {"count": 7, "multiplier": 2},
+            "purple": {"count": 2, "multiplier": 5},
+            "gold": {"count": 1, "multiplier": 12}
         }
     }
     
@@ -708,11 +743,12 @@ class BlackjackGame(BaseGame):
 
     def _build_deck(self, hash_full: str) -> List[Dict[str, str]]:
         """Build and shuffle a 52-card deck using the provably fair hash."""
+        import hashlib as _hashlib
         deck = [{"rank": r, "suit": s} for s in self.SUITS for r in self.RANKS]
-        # Fisher-Yates shuffle seeded by hash
+        # Fisher-Yates shuffle with extended hash chain for unbiased randomness
         for i in range(len(deck) - 1, 0, -1):
-            seg = hash_full[(i % 32) * 2: (i % 32) * 2 + 2]
-            j = int(seg, 16) % (i + 1)
+            step_hash = _hashlib.sha256(f"{hash_full}:{i}".encode()).hexdigest()
+            j = int(step_hash[:4], 16) % (i + 1)
             deck[i], deck[j] = deck[j], deck[i]
         return deck
 
@@ -879,6 +915,11 @@ class BlackjackGame(BaseGame):
 GAMES: Dict[str, BaseGame] = {
     "dice": DiceGame(),
     "limbo": LimboGame(),
+    "mines": MinesGame(),
+    "plinko": PlinkoGame(),
+    "wheel": WheelGame(),
+    "keno": KenoGame(),
+    "twentyone": BlackjackGame(),
 }
 
 

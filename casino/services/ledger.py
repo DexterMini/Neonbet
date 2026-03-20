@@ -286,21 +286,21 @@ class LedgerService:
         bet_amount: Decimal,
         bet_id: UUID
     ) -> LedgerEvent:
-        """Settle a losing bet - deduct from locked balance"""
+        """Settle a losing bet - remove from locked balance (already deducted from available by lock_balance)"""
         balance = await self.get_or_create_balance(user_id, currency)
         
-        # Move from locked (already deducted from available when bet was placed)
+        # Remove from locked (funds are forfeit)
         balance.locked -= bet_amount
         
-        # Record the loss event
+        # Record the loss event with zero amount (balance already adjusted by lock_balance)
         return await self.record_event(
             user_id=user_id,
             event_type=LedgerEventType.BET_LOST,
             currency=currency,
-            amount=-bet_amount,
+            amount=Decimal("0"),
             reference_type="bet",
             reference_id=bet_id,
-            metadata={"settlement": "loss"}
+            metadata={"settlement": "loss", "bet_amount": str(bet_amount)}
         )
     
     async def settle_bet_win(

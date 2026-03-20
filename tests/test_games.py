@@ -31,6 +31,7 @@ def game_result_win():
     """Game result that should produce a win for most games"""
     return GameResult(
         raw_hash="a" * 64,  # High values
+        raw_value=int("aaaaaaaa", 16),
         normalized=0.75,
         server_seed_hash="hash123",
         client_seed="client123",
@@ -43,6 +44,7 @@ def game_result_lose():
     """Game result that should produce a loss for most games"""
     return GameResult(
         raw_hash="1" * 64,  # Low values
+        raw_value=int("11111111", 16),
         normalized=0.25,
         server_seed_hash="hash123",
         client_seed="client123",
@@ -96,9 +98,9 @@ class TestDiceGame:
     def test_dice_multiplier_calculation(self):
         """Test multiplier calculation"""
         game = DiceGame()
-        # 50% win chance with 2% edge = ~1.96x
+        # 50% win chance with 3% house edge = (97/50) = 1.94x
         multiplier = game.calculate_multiplier(Decimal("50"))
-        assert Decimal("1.95") < multiplier < Decimal("1.97")
+        assert Decimal("1.93") < multiplier < Decimal("1.95")
     
     def test_dice_win_over(self, game_result_win):
         """Test dice win when betting over"""
@@ -167,6 +169,7 @@ class TestLimboGame:
         result = game.calculate_result(
             GameResult(
                 raw_hash="5" * 64,
+                raw_value=int("55555555", 16),
                 normalized=0.5,
                 server_seed_hash="hash",
                 client_seed="client",
@@ -187,6 +190,7 @@ class TestLimboGame:
         result = game.calculate_result(
             GameResult(
                 raw_hash="1" * 64,
+                raw_value=int("11111111", 16),
                 normalized=0.1,
                 server_seed_hash="hash",
                 client_seed="client",
@@ -226,6 +230,7 @@ class TestMinesGame:
         game = MinesGame()
         result = GameResult(
             raw_hash="abcd1234" * 8,
+            raw_value=int("abcd1234", 16),
             normalized=0.5,
             server_seed_hash="hash",
             client_seed="client",
@@ -257,6 +262,7 @@ class TestMinesGame:
         game = MinesGame()
         result = GameResult(
             raw_hash="00" * 32,
+            raw_value=0,
             normalized=0,
             server_seed_hash="hash",
             client_seed="client",
@@ -295,7 +301,7 @@ class TestPlinkoGame:
         assert game.validate_game_data({"rows": 12, "risk": "low"})
         assert game.validate_game_data({"rows": 8, "risk": "high"})
         assert not game.validate_game_data({})
-        assert not game.validate_game_data({"rows": 10, "risk": "medium"})  # Invalid rows
+        assert not game.validate_game_data({"rows": 7, "risk": "medium"})  # Invalid rows
         assert not game.validate_game_data({"rows": 16, "risk": "extreme"})  # Invalid risk
     
     def test_plinko_path_deterministic(self):
@@ -303,6 +309,7 @@ class TestPlinkoGame:
         game = PlinkoGame()
         result = GameResult(
             raw_hash="abcdef12" * 8,
+            raw_value=int("abcdef12", 16),
             normalized=0.5,
             server_seed_hash="hash",
             client_seed="client",
@@ -320,6 +327,7 @@ class TestPlinkoGame:
         result = game.calculate_result(
             GameResult(
                 raw_hash="ff" * 32,  # All R
+                raw_value=int("ffffffff", 16),
                 normalized=0.5,
                 server_seed_hash="hash",
                 client_seed="client",
@@ -364,6 +372,7 @@ class TestWheelGame:
         result1 = game.calculate_result(
             GameResult(
                 raw_hash="abcd" * 16,
+                raw_value=int("abcdabcd", 16),
                 normalized=0.5,
                 server_seed_hash="hash",
                 client_seed="client",
@@ -375,6 +384,7 @@ class TestWheelGame:
         result2 = game.calculate_result(
             GameResult(
                 raw_hash="abcd" * 16,
+                raw_value=int("abcdabcd", 16),
                 normalized=0.5,
                 server_seed_hash="hash",
                 client_seed="client",

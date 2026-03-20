@@ -10,6 +10,7 @@ from decimal import Decimal
 from typing import Optional, Dict, Any
 from uuid import uuid4
 import hashlib
+import hmac
 
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel, Field, field_validator
@@ -17,7 +18,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import pyotp
 
-from casino.games import get_game, GAMES, BetResult, GameOutcome, DiceGame, LimboGame
+from casino.games import get_game, GAMES, BetResult, GameOutcome, DiceGame, LimboGame, MinesGame, PlinkoGame, WheelGame, KenoGame, BlackjackGame
 from casino.config import settings
 from casino.services.provably_fair import ProvablyFairEngine, GameResult
 from casino.services.ledger import LedgerService, InsufficientBalanceError
@@ -256,16 +257,6 @@ async def place_bet(
     bet_id = uuid4()
     await ledger.lock_balance(user.id, cur_enum, request.bet_amount, bet_id)
 
-    # Record bet_placed ledger event
-    await ledger.record_event(
-        user_id=user.id,
-        event_type=LedgerEventType.BET_PLACED,
-        currency=cur_enum,
-        amount=-request.bet_amount,
-        reference_type="bet",
-        reference_id=bet_id,
-    )
-
     # Provably fair outcome
     pf = ProvablyFairEngine(db)
 
@@ -438,14 +429,20 @@ async def verify_bet(request: VerifyBetRequest):
     if not game:
         raise HTTPException(status_code=400, detail="Invalid game type")
     
-    # Recreate the hash
-    combined = f"{request.server_seed}:{request.client_seed}:{request.nonce}"
-    raw_hash = hashlib.sha256(combined.encode()).hexdigest()
-    normalized = int(raw_hash[:8], 16) / (16**8)
+    # Recreate the hash using HMAC-SHA256 (must match generate_outcome in provably_fair.py)
+    message = f"{request.client_seed}:{request.nonce}"
+    raw_hash = hmac.new(
+        request.server_seed.encode(),
+        message.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    raw_value = int(raw_hash[:8], 16)
+    normalized = raw_value / 0xFFFFFFFF
     server_seed_hash = hashlib.sha256(request.server_seed.encode()).hexdigest()
     
     game_result = GameResult(
         raw_hash=raw_hash,
+        raw_value=raw_value,
         normalized=normalized,
         server_seed_hash=server_seed_hash,
         client_seed=request.client_seed,
