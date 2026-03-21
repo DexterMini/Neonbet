@@ -8,6 +8,7 @@ Create Date: 2026-03-21
 from typing import Sequence, Union
 
 from alembic import op
+from sqlalchemy import text
 
 # revision identifiers, used by Alembic.
 revision: str = '004_add_new_game_types'
@@ -18,13 +19,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Add new enum values to gametype
-    op.execute("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'keno'")
-    op.execute("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'flip'")
-    op.execute("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'hilo'")
-    op.execute("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'stairs'")
-    op.execute("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'chicken'")
-    op.execute("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'coinclimber'")
-    op.execute("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'snake'")
+    # Must run outside transaction for PostgreSQL
+    op.execute(text("COMMIT"))
+    op.execute(text("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'keno'"))
+    op.execute(text("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'flip'"))
+    op.execute(text("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'hilo'"))
+    op.execute(text("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'stairs'"))
+    op.execute(text("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'chicken'"))
+    op.execute(text("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'coinclimber'"))
+    op.execute(text("ALTER TYPE gametype ADD VALUE IF NOT EXISTS 'snake'"))
+    op.execute(text("BEGIN"))
 
     # Insert default game settings for new game types
     op.execute("""
