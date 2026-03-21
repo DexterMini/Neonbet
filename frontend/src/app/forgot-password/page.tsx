@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { Mail, ArrowLeft, KeyRound, CheckCircle } from 'lucide-react'
 import { Button, Input } from '@/components/ui'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API = process.env.NEXT_PUBLIC_API_URL || ''
 
 export default function ForgotPasswordPage() {
   const [step, setStep] = useState<'email' | 'reset' | 'done'>('email')

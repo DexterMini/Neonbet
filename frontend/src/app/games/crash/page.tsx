@@ -80,8 +80,11 @@ export default function CrashPage() {
   useEffect(() => {
     if (!isHydrated || !isAuthenticated || !token) return
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-    const wsUrl = apiUrl.replace(/^http/, 'ws') + `/ws/crash?token=${encodeURIComponent(token)}`
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+    const wsBase = apiUrl
+      ? apiUrl.replace(/^http/, 'ws')
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`
+    const wsUrl = wsBase + `/ws/crash?token=${encodeURIComponent(token)}`
 
     let ws: WebSocket
     let reconnectTimer: ReturnType<typeof setTimeout>

@@ -14,7 +14,7 @@ import {
   Save, ArrowLeft, CheckCircle
 } from 'lucide-react'
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API = process.env.NEXT_PUBLIC_API_URL || ''
 
 interface Limits {
   daily_deposit_limit: number | null
