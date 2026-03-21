@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { Navbar } from '@/components/Navbar'
@@ -14,19 +14,7 @@ import {
   ChevronRight, Star, Zap, Award, ArrowUp, ArrowDown,
 } from 'lucide-react'
 
-/* ── Fake leaderboard data generator ─────────────── */
-const PLAYER_NAMES = [
-  'CryptoKing', 'LuckyDegen', 'MoonShot', 'DiamondHands', 'WhaleBet',
-  'NeonStar', 'GoldenRush', 'IceBreaker', 'PhantomX', 'TurboSpin',
-  'HighRoller', 'NightOwl', 'BetMaster', 'RocketMan', 'ShadowPlay',
-  'VegasKid', 'MaxWager', 'PixelPunk', 'ZenTrader', 'FlashBet',
-  'SilverFox', 'GhostRider', 'BlitzWin', 'CosmicBet', 'ThunderStrike',
-  'AceHigh', 'WildCard', 'JackpotJoe', 'StarDust', 'BigBluff',
-  'CashFlow', 'DegenKing', 'PlatinumPay', 'BullRunner', 'AlphaWin',
-  'ChainBet', 'DarkHorse', 'EliteSpin', 'FortuneFox', 'GemHunter',
-  'HotStreak', 'InfinityBet', 'KingPin', 'LavaLuck', 'MagicMike',
-  'OmegaBet', 'ProdigyX', 'QuantumBet', 'RubyRidge', 'SupremeBet',
-]
+const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 const AVATARS = ['🎯', '🔥', '💎', '🚀', '⚡', '🎲', '🪙', '👑', '🦁', '🎰', '🌟', '🃏', '💰', '🏆', '🎪']
 
@@ -36,14 +24,9 @@ const VIP_COLORS: Record<string, string> = {
   Platinum: 'text-cyan-300', Diamond: 'text-blue-400', VIP: 'text-purple-400', SVIP: 'text-red-400',
 }
 
-function seededRandom(seed: number) {
-  let x = Math.sin(seed) * 10000
-  return x - Math.floor(x)
-}
-
 interface LeaderboardEntry {
   rank: number
-  name: string
+  username: string
   avatar: string
   wagered: number
   profit: number
@@ -51,45 +34,6 @@ interface LeaderboardEntry {
   bets: number
   winRate: number
   vipTier: string
-  change: number // rank change from previous period
-  bestMulti: number
-}
-
-function generateLeaderboard(seed: number, count: number = 50): LeaderboardEntry[] {
-  const entries: LeaderboardEntry[] = []
-  for (let i = 0; i < count; i++) {
-    const r = seededRandom(seed + i * 137)
-    const r2 = seededRandom(seed + i * 293)
-    const r3 = seededRandom(seed + i * 457)
-    const r4 = seededRandom(seed + i * 619)
-
-    const wagered = Math.floor(
-      i < 3 ? 50000 + r * 150000 :
-      i < 10 ? 10000 + r * 60000 :
-      i < 25 ? 2000 + r * 15000 :
-      200 + r * 5000
-    )
-
-    const profitPct = (r2 - 0.4) * 0.3 // -12% to +18% profit margin
-    const profit = Math.floor(wagered * profitPct)
-    const bets = Math.floor(wagered / (5 + r3 * 45))
-    const winRate = 35 + r4 * 30
-
-    entries.push({
-      rank: i + 1,
-      name: PLAYER_NAMES[i % PLAYER_NAMES.length],
-      avatar: AVATARS[Math.floor(r * AVATARS.length)],
-      wagered,
-      profit,
-      wins: Math.floor(bets * winRate / 100),
-      bets,
-      winRate: Math.round(winRate * 10) / 10,
-      vipTier: VIP_TIERS[Math.min(6, Math.floor(Math.sqrt(wagered / 500)))],
-      change: Math.floor((r3 - 0.5) * 10),
-      bestMulti: +(1 + r2 * (i < 5 ? 500 : i < 15 ? 100 : 30)).toFixed(2),
-    })
-  }
-  return entries.sort((a, b) => b.wagered - a.wagered).map((e, i) => ({ ...e, rank: i + 1 }))
 }
 
 /* ── Podium Component ────────────────────────────── */
@@ -119,7 +63,7 @@ function Podium({ entries }: { entries: LeaderboardEntry[] }) {
             <div className="absolute -bottom-1 -right-1 text-lg">{medal}</div>
           </div>
           {/* Name */}
-          <span className="text-white font-bold text-xs sm:text-sm mb-1 truncate max-w-[80px] sm:max-w-[100px]">{entry.name}</span>
+          <span className="text-white font-bold text-xs sm:text-sm mb-1 truncate max-w-[80px] sm:max-w-[100px]">{entry.username}</span>
           <span className={`text-[10px] font-semibold ${VIP_COLORS[entry.vipTier] || 'text-muted'}`}>{entry.vipTier}</span>
           {/* Podium block */}
           <div className={`${height} w-20 sm:w-24 mt-2 rounded-t-xl bg-gradient-to-t ${color} border ${borderColor} border-b-0 flex flex-col items-center justify-start pt-3`}>
@@ -175,35 +119,39 @@ const PRIZES = {
 }
 
 type Period = 'daily' | 'weekly' | 'monthly'
-type SortKey = 'wagered' | 'profit' | 'wins' | 'bestMulti'
+type SortKey = 'wagered' | 'profit' | 'wins'
 
 export default function LeaderboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [period, setPeriod] = useState<Period>('daily')
+  const [period, setPeriod] = useState<Period>('weekly')
   const [sortKey, setSortKey] = useState<SortKey>('wagered')
   const [showPrizes, setShowPrizes] = useState(false)
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [loading, setLoading] = useState(true)
   const user = useAuthStore(s => s.user)
 
-  // Generate deterministic leaderboard based on period + date seed
-  const dateSeed = useMemo(() => {
-    const d = new Date()
-    return period === 'daily' ? d.getDate() * 100 + d.getMonth() :
-           period === 'weekly' ? Math.floor(d.getTime() / 604800000) :
-           d.getMonth() * 100 + d.getFullYear()
-  }, [period])
-
-  const leaderboard = useMemo(() => {
-    const entries = generateLeaderboard(dateSeed, 50)
-    // Apply sort
-    return [...entries].sort((a, b) => {
-      switch (sortKey) {
-        case 'profit': return b.profit - a.profit
-        case 'wins': return b.wins - a.wins
-        case 'bestMulti': return b.bestMulti - a.bestMulti
-        default: return b.wagered - a.wagered
-      }
-    }).map((e, i) => ({ ...e, rank: i + 1 }))
-  }, [dateSeed, sortKey])
+  // Fetch leaderboard from API
+  useEffect(() => {
+    setLoading(true)
+    fetch(`${API}/api/v1/leaderboard/top?period=${period}&sort=${sortKey}&limit=50`)
+      .then(res => res.json())
+      .then(data => {
+        const entries: LeaderboardEntry[] = (data.players || []).map((p: any) => ({
+          rank: p.rank,
+          username: p.username,
+          avatar: AVATARS[p.username.charCodeAt(0) % AVATARS.length],
+          wagered: p.wagered,
+          profit: p.profit,
+          wins: p.wins,
+          bets: p.bets,
+          winRate: p.bets > 0 ? Math.round((p.wins / p.bets) * 1000) / 10 : 0,
+          vipTier: VIP_TIERS[Math.min(6, p.vip_level || 0)],
+        }))
+        setLeaderboard(entries)
+      })
+      .catch(() => setLeaderboard([]))
+      .finally(() => setLoading(false))
+  }, [period, sortKey])
 
   // Countdown timer
   const [timeLeft, setTimeLeft] = useState('')
@@ -231,9 +179,6 @@ export default function LeaderboardPage() {
     const iv = setInterval(tick, 1000)
     return () => clearInterval(iv)
   }, [period])
-
-  // Find user rank (fake — put near bottom)
-  const userRank = user ? Math.floor(Math.random() * 20) + 30 : null
 
   const prizes = PRIZES[period]
 
@@ -324,7 +269,6 @@ export default function LeaderboardPage() {
                 { key: 'wagered' as SortKey, label: 'Wagered', icon: TrendingUp },
                 { key: 'profit' as SortKey, label: 'Profit', icon: Flame },
                 { key: 'wins' as SortKey, label: 'Wins', icon: Star },
-                { key: 'bestMulti' as SortKey, label: 'Best Multi', icon: Zap },
               ]).map(({ key, label, icon: Icon }) => (
                 <button key={key} onClick={() => setSortKey(key)}
                   className={cn(
@@ -346,15 +290,14 @@ export default function LeaderboardPage() {
                 <div className="col-span-3">Player</div>
                 <div className="col-span-2 text-right">Wagered</div>
                 <div className="col-span-2 text-right">Profit</div>
-                <div className="col-span-1 text-right hidden sm:block">Wins</div>
-                <div className="col-span-1 text-right hidden sm:block">Win %</div>
-                <div className="col-span-2 text-right">Best Multi</div>
+                <div className="col-span-2 text-right hidden sm:block">Wins</div>
+                <div className="col-span-2 text-right">Win %</div>
               </div>
 
               {/* Rows */}
               {leaderboard.map((entry, idx) => {
                 const isTop3 = entry.rank <= 3
-                const isUser = user && entry.name === user.username
+                const isUser = user && entry.username === user.username
 
                 return (
                   <motion.div
@@ -381,15 +324,9 @@ export default function LeaderboardPage() {
                     <div className="col-span-3 flex items-center gap-2 min-w-0">
                       <span className="text-base">{entry.avatar}</span>
                       <div className="min-w-0">
-                        <div className="text-[13px] font-semibold text-white truncate">{entry.name}</div>
+                        <div className="text-[13px] font-semibold text-white truncate">{entry.username}</div>
                         <div className={`text-[9px] font-bold ${VIP_COLORS[entry.vipTier] || 'text-muted'}`}>{entry.vipTier}</div>
                       </div>
-                      {entry.change !== 0 && (
-                        <span className={`flex items-center text-[9px] font-bold ${entry.change > 0 ? 'text-brand' : 'text-accent-red'}`}>
-                          {entry.change > 0 ? <ArrowUp className="w-2.5 h-2.5" /> : <ArrowDown className="w-2.5 h-2.5" />}
-                          {Math.abs(entry.change)}
-                        </span>
-                      )}
                     </div>
 
                     {/* Wagered */}
@@ -407,45 +344,23 @@ export default function LeaderboardPage() {
                     </div>
 
                     {/* Wins */}
-                    <div className="col-span-1 text-right hidden sm:block">
+                    <div className="col-span-2 text-right hidden sm:block">
                       <span className="text-[12px] text-muted font-mono">{entry.wins}</span>
                     </div>
 
                     {/* Win % */}
-                    <div className="col-span-1 text-right hidden sm:block">
-                      <span className="text-[12px] text-muted font-mono">{entry.winRate}%</span>
-                    </div>
-
-                    {/* Best Multi */}
                     <div className="col-span-2 text-right">
-                      <span className="text-[12px] font-bold text-amber-400 font-mono">{entry.bestMulti}x</span>
+                      <span className="text-[12px] text-muted font-mono">{entry.winRate}%</span>
                     </div>
                   </motion.div>
                 )
               })}
 
-              {/* User position (if logged in and not in top 50) */}
-              {user && userRank && userRank > 50 && (
-                <>
-                  <div className="px-4 py-2 text-center text-[10px] text-muted border-b border-white/[0.03]">• • •</div>
-                  <div className="grid grid-cols-12 px-4 py-2.5 items-center bg-brand/[0.05] border-t border-brand/20">
-                    <div className="col-span-1">
-                      <span className="text-sm font-bold text-brand font-mono">{userRank}</span>
-                    </div>
-                    <div className="col-span-3 flex items-center gap-2">
-                      <span className="text-base">⭐</span>
-                      <div>
-                        <div className="text-[13px] font-semibold text-brand">{user.username} (You)</div>
-                        <div className="text-[9px] font-bold text-muted">{VIP_TIERS[Math.min(6, user.vip_level || 0)]}</div>
-                      </div>
-                    </div>
-                    <div className="col-span-2 text-right"><span className="text-[13px] font-bold text-white font-mono">$0</span></div>
-                    <div className="col-span-2 text-right"><span className="text-[13px] font-bold text-muted font-mono">$0</span></div>
-                    <div className="col-span-1 text-right hidden sm:block"><span className="text-[12px] text-muted font-mono">0</span></div>
-                    <div className="col-span-1 text-right hidden sm:block"><span className="text-[12px] text-muted font-mono">0%</span></div>
-                    <div className="col-span-2 text-right"><span className="text-[12px] text-muted font-mono">—</span></div>
-                  </div>
-                </>
+              {leaderboard.length === 0 && !loading && (
+                <div className="px-4 py-8 text-center text-muted text-sm">No data yet. Start playing to appear on the leaderboard!</div>
+              )}
+              {loading && (
+                <div className="px-4 py-8 text-center text-muted text-sm">Loading leaderboard...</div>
               )}
             </div>
 

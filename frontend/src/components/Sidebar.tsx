@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import {
   X, Home, Star, Clock, Zap, Gamepad2, Tv, Spade,
   Gift, Crown, MessageCircle, ChevronRight,
-  Flame, Trophy, Dices, Target, Shield,
+  Flame, Trophy, Dices, Target, Shield, ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
@@ -36,6 +36,7 @@ const bottomNav = [
   { name: 'Leaderboard', href: '/leaderboard', icon: Trophy },
   { name: 'Achievements', href: '/achievements', icon: Star },
   { name: 'Promotions', href: '/promotions', icon: Gift, badge: 3 },
+  { name: 'Responsible Play', href: '/settings/responsible-gambling', icon: ShieldCheck },
 ]
 
 const adminNav = { name: 'Admin', href: '/admin', icon: Shield }

@@ -19,6 +19,12 @@ from .manager import ConnectionManager
 logger = logging.getLogger(__name__)
 
 
+async def _get_db_session():
+    """Get a new async DB session for ledger operations."""
+    from casino.models.session import async_session_factory
+    return async_session_factory()
+
+
 class GameState(str, Enum):
     WAITING = "waiting"
     STARTING = "starting"
@@ -296,6 +302,32 @@ class CrashGameManager:
             auto_cashout=auto_cashout,
         )
         
+        # Debit balance via ledger
+        try:
+            from casino.services.ledger import LedgerService, InsufficientBalanceError
+            from casino.models import Currency, LedgerEventType
+            async with await _get_db_session() as db:
+                ledger = LedgerService(db)
+                cur_enum = Currency(currency.lower())
+                balance_info = await ledger.get_balance(user_id, cur_enum)
+                if balance_info["available"] < bet_amount:
+                    return {"success": False, "error": "Insufficient balance"}
+                await ledger.debit(
+                    user_id=user_id,
+                    currency=cur_enum,
+                    amount=bet_amount,
+                    event_type=LedgerEventType.BET_PLACED,
+                    reference_type="crash_bet",
+                    reference_id=self.current_round.round_id,
+                    metadata={"game": "crash", "round_id": str(self.current_round.round_id)},
+                )
+                await db.commit()
+        except InsufficientBalanceError:
+            return {"success": False, "error": "Insufficient balance"}
+        except Exception as e:
+            logger.error(f"Failed to debit balance for crash bet: {e}")
+            return {"success": False, "error": "Balance error"}
+
         self.current_round.players[str(user_id)] = player
         
         # Broadcast new bet
@@ -338,6 +370,27 @@ class CrashGameManager:
         player.cashed_out = True
         player.cashout_multiplier = multiplier
         player.profit = player.bet_amount * multiplier - player.bet_amount
+        payout = player.bet_amount * multiplier
+        
+        # Credit winnings via ledger
+        try:
+            from casino.services.ledger import LedgerService
+            from casino.models import Currency, LedgerEventType
+            async with await _get_db_session() as db:
+                ledger = LedgerService(db)
+                cur_enum = Currency(player.currency.lower())
+                await ledger.credit(
+                    user_id=player.user_id,
+                    currency=cur_enum,
+                    amount=payout,
+                    event_type=LedgerEventType.BET_WON,
+                    reference_type="crash_cashout",
+                    reference_id=self.current_round.round_id,
+                    metadata={"game": "crash", "multiplier": str(multiplier), "round_id": str(self.current_round.round_id)},
+                )
+                await db.commit()
+        except Exception as e:
+            logger.error(f"Failed to credit crash cashout for {player.username}: {e}")
         
         # Broadcast cashout
         await self._broadcast({

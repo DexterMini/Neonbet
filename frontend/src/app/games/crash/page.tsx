@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GameLayout } from '@/components/GameLayout'
 import { FairnessModal } from '@/components/FairnessModal'
 import { useProvablyFair } from '@/hooks/useProvablyFair'
 import { useAuthStore } from '@/stores/authStore'
+import { useGameStore } from '@/stores/gameStore'
 import { toast } from 'sonner'
 import { TrendingUp, Users, Clock, Zap, Rocket } from 'lucide-react'
 import { BetControls, LiveBetsTable, SessionStatsBar, useSessionStats, GameSettingsDropdown } from '@/components/game'
@@ -13,10 +14,18 @@ import { useRouter } from 'next/navigation'
 
 interface GameRound {
   roundId: string
-  status: 'waiting' | 'running' | 'crashed'
+  status: 'waiting' | 'starting' | 'running' | 'crashed'
   multiplier: number
   crashPoint?: number
-  startTime?: number
+  hash?: string
+  serverSeed?: string
+}
+
+interface CrashPlayer {
+  username: string
+  bet_amount: string
+  cashed_out: boolean
+  cashout_multiplier?: string
 }
 
 /* ── Floating particles ───────────────────────────── */
@@ -40,8 +49,10 @@ function FloatingRockets({ active }: { active: boolean }) {
 
 export default function CrashPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
-  const { isAuthenticated, isHydrated } = useAuthStore()
+  const wsRef = useRef<WebSocket | null>(null)
+  const { serverSeedHash, clientSeed, nonce, previousServerSeed, rotateSeed, setClientSeed } = useProvablyFair()
+  const { isAuthenticated, isHydrated, token } = useAuthStore()
+  const { fetchBalance } = useGameStore()
   const sessionStats = useSessionStats()
   const router = useRouter()
 
@@ -49,13 +60,15 @@ export default function CrashPage() {
   const [autoCashout, setAutoCashout] = useState(2.0)
   const [autoCashoutEnabled, setAutoCashoutEnabled] = useState(true)
   const [showFairness, setShowFairness] = useState(false)
+  const [connected, setConnected] = useState(false)
 
   const [gameRound, setGameRound] = useState<GameRound>({ roundId: '', status: 'waiting', multiplier: 1.0 })
   const [hasBet, setHasBet] = useState(false)
   const [hasCashedOut, setHasCashedOut] = useState(false)
   const [myBet, setMyBet] = useState<number | null>(null)
   const [countdown, setCountdown] = useState<number | null>(null)
-  const [history, setHistory] = useState<number[]>([2.34, 1.12, 5.67, 1.89, 3.21, 1.01, 8.45, 15.23, 1.45, 3.89])
+  const [history, setHistory] = useState<number[]>([])
+  const [players, setPlayers] = useState<CrashPlayer[]>([])
 
   useEffect(() => {
     if (isHydrated && !isAuthenticated) {
@@ -63,52 +76,132 @@ export default function CrashPage() {
     }
   }, [isHydrated, isAuthenticated, router])
 
-  // Simulate game rounds
+  // WebSocket connection
   useEffect(() => {
-    let animationFrame: number
-    let startTime: number
-    let isMounted = true
+    if (!isHydrated || !isAuthenticated || !token) return
 
-    const runGame = async () => {
-      if (!isMounted || !initialized) return
-      setGameRound(prev => ({ ...prev, status: 'waiting', multiplier: 1.0 }))
-      setHasBet(false); setHasCashedOut(false); setMyBet(null)
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+    const wsUrl = apiUrl.replace(/^http/, 'ws') + `/ws/crash?token=${encodeURIComponent(token)}`
 
-      let count = 5
-      setCountdown(count)
-      await new Promise<void>((resolve) => {
-        const ci = setInterval(() => { count--; setCountdown(count); if (count <= 0) { clearInterval(ci); setCountdown(null); resolve() } }, 1000)
-      })
-      if (!isMounted) return
+    let ws: WebSocket
+    let reconnectTimer: ReturnType<typeof setTimeout>
 
-      const { result: crashPoint } = await generateBet('crash')
-      setGameRound(prev => ({ ...prev, status: 'running', crashPoint, startTime: Date.now() }))
-      startTime = Date.now()
-      const e = 2.718281828
+    const connect = () => {
+      ws = new WebSocket(wsUrl)
+      wsRef.current = ws
 
-      const animate = () => {
-        if (!isMounted) return
-        const elapsed = (Date.now() - startTime) / 1000
-        const currentMultiplier = Math.pow(e, 0.06 * elapsed)
-        if (currentMultiplier >= crashPoint) {
-          setGameRound(prev => ({ ...prev, status: 'crashed', multiplier: crashPoint }))
-          setHistory(prev => [crashPoint, ...prev.slice(0, 19)])
-          if (hasBet && !hasCashedOut && myBet) {
-            toast.error(`Crashed at ${crashPoint.toFixed(2)}x! You lost $${myBet.toFixed(2)}`)
-            sessionStats.recordBet(false, myBet, -myBet, 0)
-          }
-          setTimeout(() => { if (isMounted) runGame() }, 3000)
-        } else {
-          setGameRound(prev => ({ ...prev, multiplier: currentMultiplier }))
-          animationFrame = requestAnimationFrame(animate)
+      ws.onopen = () => {
+        setConnected(true)
+      }
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+
+        switch (data.type) {
+          case 'connected':
+            if (data.history) {
+              setHistory(data.history.map((h: any) => parseFloat(h.crash_point)))
+            }
+            if (data.state) {
+              setGameRound(prev => ({
+                ...prev,
+                status: data.state.state || 'waiting',
+                roundId: data.state.round_id || '',
+                multiplier: parseFloat(data.state.multiplier || '1.00'),
+                hash: data.state.hash,
+              }))
+              if (data.state.players) setPlayers(data.state.players)
+            }
+            break
+
+          case 'round_start':
+            setGameRound({ roundId: data.round_id, status: 'waiting', multiplier: 1.0, hash: data.hash })
+            setHasBet(false)
+            setHasCashedOut(false)
+            setMyBet(null)
+            setPlayers([])
+            setCountdown(null)
+            break
+
+          case 'countdown':
+            setCountdown(data.countdown)
+            setGameRound(prev => ({ ...prev, status: 'starting' }))
+            break
+
+          case 'game_running':
+            setGameRound(prev => ({ ...prev, status: 'running' }))
+            setCountdown(null)
+            break
+
+          case 'multiplier':
+            setGameRound(prev => ({ ...prev, multiplier: parseFloat(data.multiplier), status: 'running' }))
+            break
+
+          case 'crashed':
+            setGameRound(prev => ({
+              ...prev,
+              status: 'crashed',
+              multiplier: parseFloat(data.crash_point),
+              crashPoint: parseFloat(data.crash_point),
+              serverSeed: data.server_seed,
+            }))
+            setHistory(prev => [parseFloat(data.crash_point), ...prev.slice(0, 19)])
+            if (hasBet && !hasCashedOut && myBet) {
+              toast.error(`Crashed at ${parseFloat(data.crash_point).toFixed(2)}x! You lost $${myBet.toFixed(2)}`)
+              sessionStats.recordBet(false, myBet, -myBet, 0)
+            }
+            fetchBalance()
+            break
+
+          case 'new_bet':
+            setPlayers(prev => [...prev, { username: data.username, bet_amount: data.bet_amount, cashed_out: false }])
+            break
+
+          case 'cashout':
+            setPlayers(prev => prev.map(p =>
+              p.username === data.username ? { ...p, cashed_out: true, cashout_multiplier: data.multiplier } : p
+            ))
+            break
+
+          case 'bet_result':
+            if (!data.success) {
+              toast.error(data.error || 'Bet failed')
+              setHasBet(false)
+              setMyBet(null)
+            }
+            break
+
+          case 'cashout_result':
+            if (data.success) {
+              setHasCashedOut(true)
+              const mult = parseFloat(data.multiplier)
+              const profit = parseFloat(data.profit)
+              sessionStats.recordBet(true, myBet!, profit, mult)
+              toast.success(`Cashed out at ${mult.toFixed(2)}x! Won $${parseFloat(data.payout).toFixed(2)}`)
+              fetchBalance()
+            }
+            break
         }
       }
-      animationFrame = requestAnimationFrame(animate)
+
+      ws.onclose = () => {
+        setConnected(false)
+        wsRef.current = null
+        reconnectTimer = setTimeout(connect, 3000)
+      }
+
+      ws.onerror = () => {
+        ws.close()
+      }
     }
 
-    if (initialized) runGame()
-    return () => { isMounted = false; if (animationFrame) cancelAnimationFrame(animationFrame) }
-  }, [initialized])
+    connect()
+
+    return () => {
+      clearTimeout(reconnectTimer)
+      if (ws && ws.readyState <= 1) ws.close()
+    }
+  }, [isHydrated, isAuthenticated, token])
 
   // Draw crash graph
   useEffect(() => {
@@ -159,20 +252,28 @@ export default function CrashPage() {
     }
   }, [gameRound.multiplier, gameRound.status])
 
-  const handleBet = () => {
+  const handleBet = useCallback(() => {
     if (gameRound.status !== 'waiting') { toast.error('Wait for next round'); return }
     const bet = parseFloat(betAmount)
     if (bet <= 0 || isNaN(bet)) { toast.error('Invalid bet amount'); return }
-    setHasBet(true); setMyBet(bet); toast.success(`Bet placed: $${bet.toFixed(2)}`)
-  }
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) { toast.error('Not connected to server'); return }
 
-  const handleCashout = () => {
+    wsRef.current.send(JSON.stringify({
+      type: 'bet',
+      amount: bet.toString(),
+      auto_cashout: autoCashoutEnabled ? autoCashout.toString() : undefined,
+    }))
+    setHasBet(true)
+    setMyBet(bet)
+    toast.success(`Bet placed: $${bet.toFixed(2)}`)
+  }, [gameRound.status, betAmount, autoCashout, autoCashoutEnabled])
+
+  const handleCashout = useCallback(() => {
     if (!hasBet || hasCashedOut || gameRound.status !== 'running') return
-    const payout = myBet! * gameRound.multiplier
-    setHasCashedOut(true)
-    sessionStats.recordBet(true, myBet!, payout - myBet!, gameRound.multiplier)
-    toast.success(`Cashed out at ${gameRound.multiplier.toFixed(2)}x! Won $${payout.toFixed(2)}`)
-  }
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
+
+    wsRef.current.send(JSON.stringify({ type: 'cashout' }))
+  }, [hasBet, hasCashedOut, gameRound.status])
 
   const getMultiplierColor = (mult: number) => { if (mult >= 10) return 'text-amber-400'; if (mult >= 2) return 'text-brand'; return 'text-accent-red' }
   const potentialProfit = parseFloat(betAmount) * autoCashout - parseFloat(betAmount)
@@ -203,20 +304,20 @@ export default function CrashPage() {
               betAmount={betAmount}
               onBetAmountChange={setBetAmount}
               disabled={hasBet}
-              serverSeedHash={serverSeedHash}
+              serverSeedHash={gameRound.hash || serverSeedHash}
               nonce={nonce}
               onShowFairness={() => setShowFairness(true)}
               showAutoTab={false}
               actionButton={
                 !hasBet ? (
-                  <motion.button onClick={handleBet} disabled={gameRound.status !== 'waiting' || !initialized}
-                    whileHover={{ scale: gameRound.status === 'waiting' && initialized ? 1.02 : 1 }}
-                    whileTap={{ scale: gameRound.status === 'waiting' && initialized ? 0.98 : 1 }}
+                  <motion.button onClick={handleBet} disabled={gameRound.status !== 'waiting' || !connected}
+                    whileHover={{ scale: gameRound.status === 'waiting' && connected ? 1.02 : 1 }}
+                    whileTap={{ scale: gameRound.status === 'waiting' && connected ? 0.98 : 1 }}
                     className={`w-full py-3.5 rounded-xl font-bold text-[14px] transition-all ${
-                      gameRound.status !== 'waiting' || !initialized ? 'bg-surface cursor-not-allowed text-muted'
+                      gameRound.status !== 'waiting' || !connected ? 'bg-surface cursor-not-allowed text-muted'
                         : 'bg-gradient-to-r from-brand to-emerald-400 text-background-deep shadow-lg shadow-brand/30 hover:brightness-110'
                     }`}>
-                    <span className="flex items-center justify-center gap-2"><Rocket className="w-4 h-4" />{gameRound.status === 'waiting' ? 'Place Bet' : 'Wait for next round...'}</span>
+                    <span className="flex items-center justify-center gap-2"><Rocket className="w-4 h-4" />{!connected ? 'Connecting...' : gameRound.status === 'waiting' ? 'Place Bet' : 'Wait for next round...'}</span>
                   </motion.button>
                 ) : !hasCashedOut && gameRound.status === 'running' ? (
                   <motion.button onClick={handleCashout}
@@ -354,16 +455,16 @@ export default function CrashPage() {
                     <Users className="w-3.5 h-3.5 text-white/20" />
                     <span className="text-[11px] text-white/30 font-medium">Players</span>
                     <div className="flex-1 flex gap-1.5 overflow-x-auto">
-                      {hasBet ? (
-                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
+                      {players.length > 0 ? players.map((p, i) => (
+                        <motion.div key={i} initial={{ scale: 0 }} animate={{ scale: 1 }}
                           className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold ring-1 ${
-                            hasCashedOut ? 'bg-brand/10 text-brand ring-brand/20'
+                            p.cashed_out ? 'bg-brand/10 text-brand ring-brand/20'
                               : gameRound.status === 'crashed' ? 'bg-accent-red/10 text-accent-red ring-accent-red/20'
                               : 'bg-white/[0.04] text-white ring-white/[0.06]'
                           }`}>
-                          You: ${myBet?.toFixed(2)}{hasCashedOut && ` @ ${gameRound.multiplier.toFixed(2)}×`}
+                          {p.username}: ${parseFloat(p.bet_amount).toFixed(2)}{p.cashed_out && p.cashout_multiplier && ` @ ${parseFloat(p.cashout_multiplier).toFixed(2)}×`}
                         </motion.div>
-                      ) : (
+                      )) : (
                         <span className="text-[11px] text-white/20">Place a bet to join</span>
                       )}
                     </div>

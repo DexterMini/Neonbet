@@ -9,8 +9,11 @@ from datetime import datetime, timedelta, UTC
 from decimal import Decimal
 from typing import Optional
 import hashlib
+import logging
 import secrets
 import re
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, HTTPException, Depends, Header, Request, status
 from pydantic import BaseModel, Field, field_validator
@@ -79,6 +82,26 @@ class AuthResponse(BaseModel):
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
+    new_password: str = Field(..., min_length=8)
+
+
+class ChangeUsernameRequest(BaseModel):
+    new_username: str = Field(..., min_length=3, max_length=20)
+
+    @field_validator("new_username")
+    @classmethod
+    def validate_new_username(cls, v):
+        if not re.match(r"^[a-zA-Z0-9_]+$", v):
+            raise ValueError("Username can only contain letters, numbers, and underscores")
+        return v.lower()
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
     new_password: str = Field(..., min_length=8)
 
 
@@ -521,3 +544,112 @@ async def disable_two_factor(
     await db.commit()
 
     return {"success": True, "message": "2FA disabled successfully"}
+
+
+@router.post("/change-username")
+async def change_username(
+    request: ChangeUsernameRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Change username for authenticated user.
+    Username must be unique. Limited to once per year (enforced client-side).
+    """
+    if request.new_username == user.username:
+        raise HTTPException(status_code=400, detail="New username is the same as current")
+
+    # Check uniqueness
+    existing = await db.execute(
+        select(User).where(User.username == request.new_username)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Username already taken")
+
+    user.username = request.new_username
+    await db.commit()
+
+    return {"success": True, "message": "Username changed successfully", "username": request.new_username}
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    _rate_limit=Depends(rate_limit_auth),
+):
+    """
+    Request a password reset token.
+    
+    Always returns success to avoid email enumeration.
+    In production, this would send an email with the reset link.
+    """
+    result = await db.execute(
+        select(User).where(User.email == request.email.lower())
+    )
+    user = result.scalar_one_or_none()
+
+    if user:
+        # Generate reset token and store as a short-lived session
+        reset_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(reset_token.encode()).hexdigest()
+        expires_at = datetime.now(UTC) + timedelta(hours=1)
+
+        db.add(UserSession(
+            user_id=user.id,
+            refresh_token_hash=token_hash,
+            ip_address="password_reset",
+            user_agent="password_reset",
+            expires_at=expires_at,
+        ))
+        await db.commit()
+
+        # In production: send email with reset_token
+        # For dev, log the token
+        logger.info(f"Password reset token for {user.email}: {reset_token}")
+
+    # Always return success to prevent email enumeration
+    return {"success": True, "message": "If that email exists, a reset link has been sent"}
+
+
+@router.post("/reset-password")
+async def reset_password(
+    request: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    _rate_limit=Depends(rate_limit_auth),
+):
+    """
+    Reset password using a valid reset token.
+    """
+    token_hash = hashlib.sha256(request.token.encode()).hexdigest()
+
+    result = await db.execute(
+        select(UserSession).where(
+            UserSession.refresh_token_hash == token_hash,
+            UserSession.ip_address == "password_reset",
+            UserSession.revoked_at.is_(None),
+            UserSession.expires_at > datetime.now(UTC),
+        )
+    )
+    session_row = result.scalar_one_or_none()
+
+    if not session_row:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    # Get user
+    user_result = await db.execute(
+        select(User).where(User.id == session_row.user_id)
+    )
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found")
+
+    # Update password
+    new_hash, new_salt = hash_password(request.new_password)
+    user.password_hash = f"{new_salt}${new_hash}"
+
+    # Revoke the reset token
+    session_row.revoked_at = datetime.now(UTC)
+    await db.commit()
+
+    return {"success": True, "message": "Password has been reset successfully"}
