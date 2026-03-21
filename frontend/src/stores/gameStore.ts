@@ -163,6 +163,15 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   // ------- Balance -------
   fetchBalances: async () => {
+    // Wait for auth store hydration
+    if (!useAuthStore.getState().isHydrated) {
+      await new Promise<void>((resolve) => {
+        const unsub = useAuthStore.subscribe((state) => {
+          if (state.isHydrated) { unsub(); resolve() }
+        })
+        if (useAuthStore.getState().isHydrated) { unsub(); resolve() }
+      })
+    }
     const token = useAuthStore.getState().token
     if (!token) return
     try {
@@ -200,6 +209,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   // ------- Place Bet (Backend API) -------
   placeBet: async (gameType, betAmount, currency, gameData, twoFactorCode) => {
+    // Wait for auth store hydration if not yet complete
+    if (!useAuthStore.getState().isHydrated) {
+      await new Promise<void>((resolve) => {
+        const unsub = useAuthStore.subscribe((state) => {
+          if (state.isHydrated) { unsub(); resolve() }
+        })
+        // Resolve immediately if it hydrated between the check and subscribe
+        if (useAuthStore.getState().isHydrated) { unsub(); resolve() }
+      })
+    }
     let token = useAuthStore.getState().token
     if (!token) throw new Error('Not authenticated')
     if (!BACKEND_GAMES.has(gameType)) throw new Error(`Game "${gameType}" not supported by backend`)
