@@ -21,6 +21,7 @@ import pyotp
 from casino.config import settings
 from casino.models import User, UserBalance, UserSession, UserStatus, KYCLevel, Currency, kyc_level_to_int
 from casino.api.dependencies import get_db, get_current_user
+from casino.api.middleware.rate_limit import rate_limit_auth
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -127,6 +128,7 @@ async def register(
     request: RegisterRequest,
     client_request: Request,
     db: AsyncSession = Depends(get_db),
+    _rate_limit=Depends(rate_limit_auth),
 ):
     """
     Register a new user account.
@@ -212,6 +214,7 @@ async def login(
     request: LoginRequest,
     client_request: Request,
     db: AsyncSession = Depends(get_db),
+    _rate_limit=Depends(rate_limit_auth),
 ):
     """
     Login with username/email and password.

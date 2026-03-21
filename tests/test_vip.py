@@ -196,7 +196,7 @@ class TestRakeback:
         
         # Should level up from Bronze to Silver
         assert result["leveled_up"] == True
-        assert result["new_level"] == "Silver"
+        assert result["new_level"] == "SILVER"
         assert Decimal(result["level_up_bonus"]) == Decimal("25")
 
 

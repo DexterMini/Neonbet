@@ -150,15 +150,18 @@ export default function TwentyOnePage() {
     setCards([]); setTotal(0); setWinMultiplier(0); setGameState('revealing')
 
     try {
-      const { result: shuffled } = await generateBet('twentyone')
-      const fullDeck = buildDeck(shuffled as number[])
-      const drawn = fullDeck.slice(0, numCards)
-      const handTotal = calcTotal(drawn)
+      const data = await placeBet('twentyone', String(bet), 'usdt', { num_cards: numCards })
+      const resultCards: Card[] = (data.result_data.cards || []).map((c: any) => ({
+        suit: c.suit,
+        value: c.rank || c.value,
+        num: c.rank === 'A' ? 11 : ['J','Q','K'].includes(c.rank) ? 10 : parseInt(c.rank) || 0,
+      }))
+      const handTotal = data.result_data.total ?? calcTotal(resultCards)
       const table = MULTIPLIER_TABLES[numCards]
       const mult = table[handTotal] || 0
-      const won = handTotal >= 16 && handTotal <= 21
+      const won = data.outcome === 'win'
 
-      setCards(drawn); setTotal(handTotal); setWinMultiplier(mult)
+      setCards(resultCards); setTotal(handTotal); setWinMultiplier(mult)
 
       return new Promise<{ won: boolean; profit: number }>((resolve) => {
         setTimeout(() => {
@@ -177,12 +180,12 @@ export default function TwentyOnePage() {
           resolve({ won, profit })
         }, numCards * 180 + 700)
       })
-    } catch {
-      toast.error('Failed to place bet')
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to place bet')
       setGameState('betting')
       return { won: false, profit: -(amount ?? parseFloat(betAmount)) }
     }
-  }, [betAmount, initialized, generateBet, buildDeck, calcTotal, numCards, sessionStats])
+  }, [betAmount, initialized, placeBet, calcTotal, numCards, sessionStats])
 
   const autoBetHandler = useCallback(async (amount: number) => handleBet(amount), [handleBet])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)

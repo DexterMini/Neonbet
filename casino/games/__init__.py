@@ -16,6 +16,13 @@ from casino.games.engines import (
     WheelGame,
     KenoGame,
     BlackjackGame,
+    FlipGame,
+    HiLoGame,
+    StairsGame,
+    ChickenGame,
+    CoinClimberGame,
+    SnakeGame,
+    SlotsGame,
     GAMES,
     get_game,
 )

@@ -92,6 +92,13 @@ class GameType(str, Enum):
     BLACKJACK = "blackjack"
     ROULETTE = "roulette"
     SLOTS = "slots"
+    KENO = "keno"
+    FLIP = "flip"
+    HILO = "hilo"
+    STAIRS = "stairs"
+    CHICKEN = "chicken"
+    COINCLIMBER = "coinclimber"
+    SNAKE = "snake"
 
 
 class BetStatus(str, Enum):

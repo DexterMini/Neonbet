@@ -347,7 +347,7 @@ const PAYLINES: number[][] = [
 export default function SlotsPage() {
   const { initialized, serverSeedHash, clientSeed, nonce, previousServerSeed, generateBet, rotateSeed, setClientSeed } = useProvablyFair()
   const { isAuthenticated, isHydrated } = useAuthStore()
-  const { isPlacing } = useGameStore()
+  const { placeBet, isPlacing } = useGameStore()
   const sessionStats = useSessionStats()
   const router = useRouter()
 
@@ -427,16 +427,20 @@ export default function SlotsPage() {
     setBigWinAnim(false)
 
     try {
-      const newGrid: SlotSymbol[][] = []
-      for (let reel = 0; reel < NUM_REELS; reel++) {
-        const col: SlotSymbol[] = []
-        for (let row = 0; row < NUM_ROWS; row++) {
-          const { result } = await generateBet('slots', { reel, row })
-          const val = typeof result === 'number' ? result : Array.isArray(result) ? (result as number[])[0] : 0
-          col.push(SYMBOLS[Math.floor(Math.abs(val) * SYMBOLS.length) % SYMBOLS.length])
-        }
-        newGrid.push(col)
-      }
+      const data = await placeBet('slots', String(display), 'usdt', {})
+
+      // Map backend grid (symbol ids) to frontend SYMBOLS objects
+      const backendGrid: string[][] = data.result_data.grid || []
+      const symMap = Object.fromEntries(SYMBOLS.map(s => [s.id, s]))
+      const fallback = SYMBOLS[SYMBOLS.length - 1]
+
+      // Backend grid is [row][reel], we need [reel][row]
+      const newGrid: SlotSymbol[][] = Array.from({ length: NUM_REELS }, (_, reel) =>
+        Array.from({ length: NUM_ROWS }, (_, row) => {
+          const id = backendGrid[row]?.[reel] ?? 'ruby'
+          return symMap[id] ?? fallback
+        })
+      )
 
       setGrid(newGrid)
       await new Promise(r => setTimeout(r, 800 + NUM_REELS * 150))
@@ -470,7 +474,7 @@ export default function SlotsPage() {
     } finally {
       setIsSpinning(false)
     }
-  }, [betAmount, initialized, isSpinning, generateBet, calcWin, sessionStats, freeSpins])
+  }, [betAmount, initialized, isSpinning, placeBet, calcWin, sessionStats, freeSpins])
 
   const autoBetHandler = useCallback(async (a: number) => handleSpin(a), [handleSpin])
   const { state: autoBetState, start: autoBetStart, stop: autoBetStop } = useAutoBet(autoBetConfig, betAmount, autoBetHandler)

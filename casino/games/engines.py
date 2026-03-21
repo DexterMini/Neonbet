@@ -251,7 +251,7 @@ class MinesGame(BaseGame):
     max_mines = 24
     
     def validate_game_data(self, game_data: Dict[str, Any]) -> bool:
-        mine_count = game_data.get("mine_count")
+        mine_count = game_data.get("mine_count") or game_data.get("mines")
         
         if mine_count is None:
             return False
@@ -317,7 +317,7 @@ class MinesGame(BaseGame):
         bet_amount: Decimal,
         game_data: Dict[str, Any]
     ) -> BetResult:
-        mine_count = game_data["mine_count"]
+        mine_count = game_data.get("mine_count") or game_data.get("mines")
         revealed_tiles = game_data.get("revealed_tiles", [])
         cashed_out = game_data.get("cashed_out", False)
         
@@ -706,23 +706,35 @@ class KenoGame(BaseGame):
 
 class BlackjackGame(BaseGame):
     """
-    Blackjack (Twenty-One) Game
+    Twenty-One Game
 
-    Single-deck, player vs dealer.
+    Player draws N cards (2-7) from a shuffled deck.
+    If total is 16-21, wins with a multiplier from the payout table.
+    If total < 16 or > 21, loses.
     Uses provably fair hash to shuffle the deck.
-    Standard rules: dealer stands on 17, blackjack pays 3:2,
-    double-down on any first two cards, split not supported in v1.
     """
 
     game_type = "twentyone"
     house_edge = Decimal("0.005")  # ~0.5%
 
-    RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
+    RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
     SUITS = ["♠", "♥", "♦", "♣"]
 
+    # Payout multiplier tables by num_cards and hand total
+    MULTIPLIER_TABLES: Dict[int, Dict[int, float]] = {
+        2: {16: 1.5, 17: 1.7, 18: 2.1, 19: 2.5, 20: 2.3, 21: 3.8},
+        3: {16: 1.4, 17: 1.6, 18: 1.9, 19: 2.2, 20: 2.1, 21: 3.5},
+        4: {16: 3.0, 17: 3.4, 18: 4.1, 19: 4.8, 20: 4.5, 21: 7.5},
+        5: {16: 10.0, 17: 11.5, 18: 13.5, 19: 16.1, 20: 15.0, 21: 25.1},
+        6: {16: 47.0, 17: 54.0, 18: 63.3, 19: 75.1, 20: 70.4, 21: 117.3},
+        7: {16: 281.1, 17: 323.3, 18: 379.4, 19: 449.7, 20: 421.6, 21: 702.7},
+    }
+
     def validate_game_data(self, game_data: Dict[str, Any]) -> bool:
-        action = game_data.get("action", "deal")
-        return action in ("deal",)
+        num_cards = game_data.get("num_cards", 2)
+        if not isinstance(num_cards, int) or num_cards < 2 or num_cards > 7:
+            return False
+        return True
 
     @staticmethod
     def _card_value(rank: str) -> int:
@@ -745,7 +757,6 @@ class BlackjackGame(BaseGame):
         """Build and shuffle a 52-card deck using the provably fair hash."""
         import hashlib as _hashlib
         deck = [{"rank": r, "suit": s} for s in self.SUITS for r in self.RANKS]
-        # Fisher-Yates shuffle with extended hash chain for unbiased randomness
         for i in range(len(deck) - 1, 0, -1):
             step_hash = _hashlib.sha256(f"{hash_full}:{i}".encode()).hexdigest()
             j = int(step_hash[:4], 16) % (i + 1)
@@ -758,157 +769,642 @@ class BlackjackGame(BaseGame):
         bet_amount: Decimal,
         game_data: Dict[str, Any],
     ) -> BetResult:
+        num_cards = int(game_data.get("num_cards", 2))
         deck = self._build_deck(game_result.raw_hash)
-        idx = 0
+        hand = deck[:num_cards]
+        total = self._hand_value(hand)
 
-        def draw() -> Dict[str, str]:
-            nonlocal idx
-            card = deck[idx]
-            idx += 1
-            return card
+        table = self.MULTIPLIER_TABLES.get(num_cards, self.MULTIPLIER_TABLES[2])
+        mult_value = table.get(total, 0)
+        won = 16 <= total <= 21 and mult_value > 0
+        bust = total > 21
 
-        # Initial deal: player-dealer-player-dealer
-        player_hand = [draw(), draw()]
-        dealer_hand = [draw(), draw()]
-
-        # Swap second draw order for proper alternation
-        player_hand = [deck[0], deck[2]]
-        dealer_hand = [deck[1], deck[3]]
-        idx = 4
-
-        player_total = self._hand_value(player_hand)
-        dealer_total = self._hand_value(dealer_hand)
-
-        # Check naturals
-        player_bj = player_total == 21 and len(player_hand) == 2
-        dealer_bj = dealer_total == 21 and len(dealer_hand) == 2
-
-        if player_bj and dealer_bj:
-            return BetResult(
-                outcome=GameOutcome.PUSH,
-                multiplier=Decimal("1"),
-                payout=bet_amount,
-                profit=Decimal("0"),
-                result_data={
-                    "player_hand": player_hand,
-                    "dealer_hand": dealer_hand,
-                    "player_total": 21,
-                    "dealer_total": 21,
-                    "blackjack": True,
-                },
-            )
-        if player_bj:
-            payout = bet_amount * Decimal("2.5")
+        if won:
+            multiplier = Decimal(str(mult_value))
+            payout = bet_amount * multiplier
+            profit = payout - bet_amount
             return BetResult(
                 outcome=GameOutcome.WIN,
-                multiplier=Decimal("2.5"),
+                multiplier=multiplier,
                 payout=payout,
-                profit=payout - bet_amount,
+                profit=profit,
                 result_data={
-                    "player_hand": player_hand,
-                    "dealer_hand": dealer_hand,
-                    "player_total": 21,
-                    "dealer_total": dealer_total,
-                    "blackjack": True,
+                    "cards": hand,
+                    "total": total,
+                    "num_cards": num_cards,
+                    "multiplier": mult_value,
                 },
             )
-        if dealer_bj:
+
+        return BetResult(
+            outcome=GameOutcome.LOSE,
+            multiplier=Decimal("0"),
+            payout=Decimal("0"),
+            profit=-bet_amount,
+            result_data={
+                "cards": hand,
+                "total": total,
+                "num_cards": num_cards,
+                "bust": bust,
+            },
+        )
+
+
+class FlipGame(BaseGame):
+    """
+    Coin Flip Game
+
+    Player picks heads or tails. Fair coin flip with house edge.
+    """
+
+    game_type = "flip"
+    house_edge = Decimal("0.03")
+
+    def validate_game_data(self, game_data: Dict[str, Any]) -> bool:
+        choice = game_data.get("choice")
+        return choice in ("heads", "tails")
+
+    def calculate_result(
+        self,
+        game_result: GameResult,
+        bet_amount: Decimal,
+        game_data: Dict[str, Any],
+    ) -> BetResult:
+        choice = game_data["choice"]
+        # Use normalized value: < 0.5 = heads, >= 0.5 = tails
+        result = "heads" if game_result.normalized < 0.5 else "tails"
+        won = result == choice
+
+        effective_rtp = Decimal("1") - self.house_edge
+        multiplier = effective_rtp * Decimal("2")  # ~1.94x
+
+        if won:
+            payout = bet_amount * multiplier
+            profit = payout - bet_amount
+            return BetResult(
+                outcome=GameOutcome.WIN,
+                multiplier=multiplier,
+                payout=payout,
+                profit=profit,
+                result_data={"result": result, "choice": choice},
+            )
+        return BetResult(
+            outcome=GameOutcome.LOSE,
+            multiplier=Decimal("0"),
+            payout=Decimal("0"),
+            profit=-bet_amount,
+            result_data={"result": result, "choice": choice},
+        )
+
+
+class HiLoGame(BaseGame):
+    """
+    Hi-Lo Card Game
+
+    Player guesses whether the next card is higher, lower, or same.
+    Card values: 1 (Ace) to 13 (King).
+    """
+
+    game_type = "hilo"
+    house_edge = Decimal("0.04")
+
+    def validate_game_data(self, game_data: Dict[str, Any]) -> bool:
+        guess = game_data.get("guess")
+        current_value = game_data.get("current_value")
+        if guess not in ("higher", "lower", "same"):
+            return False
+        if not isinstance(current_value, (int, float)) or not (1 <= current_value <= 13):
+            return False
+        return True
+
+    def calculate_result(
+        self,
+        game_result: GameResult,
+        bet_amount: Decimal,
+        game_data: Dict[str, Any],
+    ) -> BetResult:
+        guess = game_data["guess"]
+        current_value = int(game_data["current_value"])
+
+        # Generate next card 1-13
+        next_value = int(game_result.normalized * 13) + 1
+        next_value = min(13, max(1, next_value))
+
+        if guess == "higher":
+            won = next_value > current_value
+            # Probability of higher
+            higher_count = 13 - current_value
+            win_prob = Decimal(str(higher_count)) / Decimal("13")
+        elif guess == "lower":
+            won = next_value < current_value
+            lower_count = current_value - 1
+            win_prob = Decimal(str(lower_count)) / Decimal("13")
+        else:  # same
+            won = next_value == current_value
+            win_prob = Decimal("1") / Decimal("13")
+
+        if win_prob <= 0:
+            win_prob = Decimal("1") / Decimal("13")
+
+        effective_rtp = Decimal("1") - self.house_edge
+        multiplier = (effective_rtp / win_prob).quantize(Decimal("0.01"))
+
+        if won:
+            payout = bet_amount * multiplier
+            profit = payout - bet_amount
+            return BetResult(
+                outcome=GameOutcome.WIN,
+                multiplier=multiplier,
+                payout=payout,
+                profit=profit,
+                result_data={"card_value": next_value, "current_value": current_value, "guess": guess},
+            )
+        return BetResult(
+            outcome=GameOutcome.LOSE,
+            multiplier=Decimal("0"),
+            payout=Decimal("0"),
+            profit=-bet_amount,
+            result_data={"card_value": next_value, "current_value": current_value, "guess": guess},
+        )
+
+
+class StairsGame(BaseGame):
+    """
+    Stairs Game
+
+    Player climbs rows, choosing a column each step.
+    One column per row is a trap. Survive = multiplier grows.
+    Cash out anytime.
+    Difficulty sets number of columns (easy=4, medium=3, hard=2).
+    """
+
+    game_type = "stairs"
+    house_edge = Decimal("0.04")
+
+    COLUMNS = {"easy": 4, "medium": 3, "hard": 2}
+
+    def validate_game_data(self, game_data: Dict[str, Any]) -> bool:
+        difficulty = game_data.get("difficulty", "medium")
+        if difficulty not in self.COLUMNS:
+            return False
+        row = game_data.get("row")
+        col = game_data.get("col")
+        if not isinstance(row, int) or row < 0:
+            return False
+        cols = self.COLUMNS[difficulty]
+        if not isinstance(col, int) or col < 0 or col >= cols:
+            return False
+        return True
+
+    def _get_trap_columns(self, game_result: GameResult, num_rows: int, num_cols: int) -> List[int]:
+        """Generate trap column for each row."""
+        import hashlib as _hashlib
+        traps = []
+        for i in range(num_rows):
+            step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{i}".encode()).hexdigest()
+            trap_col = int(step_hash[:4], 16) % num_cols
+            traps.append(trap_col)
+        return traps
+
+    def calculate_result(
+        self,
+        game_result: GameResult,
+        bet_amount: Decimal,
+        game_data: Dict[str, Any],
+    ) -> BetResult:
+        difficulty = game_data.get("difficulty", "medium")
+        num_cols = self.COLUMNS[difficulty]
+        row = game_data["row"]
+        col = game_data["col"]
+        cashed_out = game_data.get("cashed_out", False)
+
+        traps = self._get_trap_columns(game_result, row + 1, num_cols)
+        hit_trap = traps[row] == col
+
+        # Multiplier: each safe step multiplies by cols/(cols-1) * (1-edge)
+        safe_ratio = Decimal(str(num_cols)) / Decimal(str(num_cols - 1))
+        effective_rtp = Decimal("1") - self.house_edge
+        step_multiplier = safe_ratio * effective_rtp
+
+        if hit_trap:
             return BetResult(
                 outcome=GameOutcome.LOSE,
                 multiplier=Decimal("0"),
                 payout=Decimal("0"),
                 profit=-bet_amount,
-                result_data={
-                    "player_hand": player_hand,
-                    "dealer_hand": dealer_hand,
-                    "player_total": player_total,
-                    "dealer_total": 21,
-                    "blackjack": True,
-                },
+                result_data={"trap_col": traps[row], "row": row, "col": col, "hit": True},
             )
 
-        # Simple automated strategy: stand on 17+, hit below 17
-        while self._hand_value(player_hand) < 17:
-            player_hand.append(draw())
+        multiplier = step_multiplier ** (row + 1)
+        multiplier = multiplier.quantize(Decimal("0.01"))
 
-        player_total = self._hand_value(player_hand)
-        if player_total > 21:
+        if cashed_out:
+            payout = bet_amount * multiplier
+            profit = payout - bet_amount
+            return BetResult(
+                outcome=GameOutcome.WIN,
+                multiplier=multiplier,
+                payout=payout,
+                profit=profit,
+                result_data={"trap_col": traps[row], "row": row, "col": col, "hit": False, "multiplier": float(multiplier)},
+            )
+
+        return BetResult(
+            outcome=GameOutcome.PUSH,
+            multiplier=multiplier,
+            payout=Decimal("0"),
+            profit=Decimal("0"),
+            result_data={"trap_col": traps[row], "row": row, "col": col, "hit": False, "multiplier": float(multiplier)},
+        )
+
+
+class ChickenGame(BaseGame):
+    """
+    Chicken Road Game
+
+    Player crosses lanes. Each lane has a car in one position.
+    Survive each crossing to increase multiplier. Cash out anytime.
+    Lanes = number of positions (2-4).
+    """
+
+    game_type = "chicken"
+    house_edge = Decimal("0.04")
+
+    def validate_game_data(self, game_data: Dict[str, Any]) -> bool:
+        lanes = game_data.get("lanes", 3)
+        row = game_data.get("row")
+        col = game_data.get("col")
+        if not isinstance(lanes, int) or lanes < 2 or lanes > 4:
+            return False
+        if not isinstance(row, int) or row < 0:
+            return False
+        if not isinstance(col, int) or col < 0 or col >= lanes:
+            return False
+        return True
+
+    def _get_car_positions(self, game_result: GameResult, num_rows: int, lanes: int) -> List[int]:
+        import hashlib as _hashlib
+        positions = []
+        for i in range(num_rows):
+            step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{i}".encode()).hexdigest()
+            pos = int(step_hash[:4], 16) % lanes
+            positions.append(pos)
+        return positions
+
+    def calculate_result(
+        self,
+        game_result: GameResult,
+        bet_amount: Decimal,
+        game_data: Dict[str, Any],
+    ) -> BetResult:
+        lanes = game_data.get("lanes", 3)
+        row = game_data["row"]
+        col = game_data["col"]
+        cashed_out = game_data.get("cashed_out", False)
+
+        car_positions = self._get_car_positions(game_result, row + 1, lanes)
+        hit_car = car_positions[row] == col
+
+        safe_ratio = Decimal(str(lanes)) / Decimal(str(lanes - 1))
+        effective_rtp = Decimal("1") - self.house_edge
+        step_multiplier = safe_ratio * effective_rtp
+
+        if hit_car:
             return BetResult(
                 outcome=GameOutcome.LOSE,
                 multiplier=Decimal("0"),
                 payout=Decimal("0"),
                 profit=-bet_amount,
-                result_data={
-                    "player_hand": player_hand,
-                    "dealer_hand": dealer_hand,
-                    "player_total": player_total,
-                    "dealer_total": dealer_total,
-                    "bust": "player",
-                },
+                result_data={"car_position": car_positions[row], "row": row, "col": col, "hit": True},
             )
 
-        # Dealer plays: hit until 17+
-        while self._hand_value(dealer_hand) < 17:
-            dealer_hand.append(draw())
+        multiplier = (step_multiplier ** (row + 1)).quantize(Decimal("0.01"))
 
-        dealer_total = self._hand_value(dealer_hand)
-
-        if dealer_total > 21:
-            payout = bet_amount * Decimal("2")
+        if cashed_out:
+            payout = bet_amount * multiplier
+            profit = payout - bet_amount
             return BetResult(
                 outcome=GameOutcome.WIN,
-                multiplier=Decimal("2"),
+                multiplier=multiplier,
                 payout=payout,
-                profit=payout - bet_amount,
-                result_data={
-                    "player_hand": player_hand,
-                    "dealer_hand": dealer_hand,
-                    "player_total": player_total,
-                    "dealer_total": dealer_total,
-                    "bust": "dealer",
-                },
+                profit=profit,
+                result_data={"car_position": car_positions[row], "row": row, "col": col, "hit": False, "multiplier": float(multiplier)},
             )
 
-        if player_total > dealer_total:
-            payout = bet_amount * Decimal("2")
+        return BetResult(
+            outcome=GameOutcome.PUSH,
+            multiplier=multiplier,
+            payout=Decimal("0"),
+            profit=Decimal("0"),
+            result_data={"car_position": car_positions[row], "row": row, "col": col, "hit": False, "multiplier": float(multiplier)},
+        )
+
+
+class CoinClimberGame(BaseGame):
+    """
+    Coin Climber Game
+
+    Player climbs levels, choosing a column each step.
+    One column per level is correct. Wrong = lose. Cash out anytime.
+    Cols = difficulty (2-4).
+    """
+
+    game_type = "coinclimber"
+    house_edge = Decimal("0.04")
+
+    def validate_game_data(self, game_data: Dict[str, Any]) -> bool:
+        cols = game_data.get("cols", 3)
+        level = game_data.get("level")
+        choice = game_data.get("choice")
+        if not isinstance(cols, int) or cols < 2 or cols > 4:
+            return False
+        if not isinstance(level, int) or level < 0:
+            return False
+        if not isinstance(choice, int) or choice < 0 or choice >= cols:
+            return False
+        return True
+
+    def _get_correct_positions(self, game_result: GameResult, num_levels: int, cols: int) -> List[int]:
+        import hashlib as _hashlib
+        positions = []
+        for i in range(num_levels):
+            step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{i}".encode()).hexdigest()
+            pos = int(step_hash[:4], 16) % cols
+            positions.append(pos)
+        return positions
+
+    def calculate_result(
+        self,
+        game_result: GameResult,
+        bet_amount: Decimal,
+        game_data: Dict[str, Any],
+    ) -> BetResult:
+        cols = game_data.get("cols", 3)
+        level = game_data["level"]
+        choice = game_data["choice"]
+        cashed_out = game_data.get("cashed_out", False)
+
+        correct_positions = self._get_correct_positions(game_result, level + 1, cols)
+        wrong = correct_positions[level] != choice
+
+        safe_ratio = Decimal(str(cols))
+        effective_rtp = Decimal("1") - self.house_edge
+        step_multiplier = safe_ratio * effective_rtp
+
+        if wrong:
+            return BetResult(
+                outcome=GameOutcome.LOSE,
+                multiplier=Decimal("0"),
+                payout=Decimal("0"),
+                profit=-bet_amount,
+                result_data={"correct_position": correct_positions[level], "level": level, "choice": choice, "hit": True},
+            )
+
+        multiplier = (step_multiplier ** (level + 1)).quantize(Decimal("0.01"))
+
+        if cashed_out:
+            payout = bet_amount * multiplier
+            profit = payout - bet_amount
             return BetResult(
                 outcome=GameOutcome.WIN,
-                multiplier=Decimal("2"),
+                multiplier=multiplier,
                 payout=payout,
-                profit=payout - bet_amount,
-                result_data={
-                    "player_hand": player_hand,
-                    "dealer_hand": dealer_hand,
-                    "player_total": player_total,
-                    "dealer_total": dealer_total,
-                },
+                profit=profit,
+                result_data={"correct_position": correct_positions[level], "level": level, "choice": choice, "hit": False, "multiplier": float(multiplier)},
             )
-        elif player_total == dealer_total:
-            return BetResult(
-                outcome=GameOutcome.PUSH,
-                multiplier=Decimal("1"),
-                payout=bet_amount,
-                profit=Decimal("0"),
-                result_data={
-                    "player_hand": player_hand,
-                    "dealer_hand": dealer_hand,
-                    "player_total": player_total,
-                    "dealer_total": dealer_total,
-                },
-            )
+
+        return BetResult(
+            outcome=GameOutcome.PUSH,
+            multiplier=multiplier,
+            payout=Decimal("0"),
+            profit=Decimal("0"),
+            result_data={"correct_position": correct_positions[level], "level": level, "choice": choice, "hit": False, "multiplier": float(multiplier)},
+        )
+
+
+class SnakeGame(BaseGame):
+    """
+    Snake Game
+
+    Provably fair: pre-generates a sequence of gem values.
+    Player navigates snake to collect gems. Each gem has a random multiplier.
+    The total multiplier is the sum of collected gems.
+    Player cashes out with accumulated multiplier.
+    """
+
+    game_type = "snake"
+    house_edge = Decimal("0.04")
+
+    def validate_game_data(self, game_data: Dict[str, Any]) -> bool:
+        gems_collected = game_data.get("gems_collected", 0)
+        if not isinstance(gems_collected, int) or gems_collected < 0:
+            return False
+        return True
+
+    def _generate_gem_values(self, game_result: GameResult, count: int = 50) -> List[float]:
+        """Generate a sequence of gem multiplier values."""
+        import hashlib as _hashlib
+        values = []
+        for i in range(count):
+            step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{i}".encode()).hexdigest()
+            # Value 0.1x to 3.0x per gem
+            raw = int(step_hash[:4], 16)
+            value = round(0.1 + (raw / 65535) * 2.9, 2)
+            values.append(value)
+        return values
+
+    def calculate_result(
+        self,
+        game_result: GameResult,
+        bet_amount: Decimal,
+        game_data: Dict[str, Any],
+    ) -> BetResult:
+        gems_collected = game_data.get("gems_collected", 0)
+        cashed_out = game_data.get("cashed_out", False)
+
+        gem_values = self._generate_gem_values(game_result)
+        effective_rtp = Decimal("1") - self.house_edge
+
+        # Total multiplier = sum of first N gems * RTP factor
+        if gems_collected == 0:
+            multiplier = Decimal("0")
         else:
+            total = sum(Decimal(str(v)) for v in gem_values[:gems_collected])
+            multiplier = (total * effective_rtp).quantize(Decimal("0.01"))
+
+        if cashed_out and gems_collected > 0:
+            payout = bet_amount * multiplier
+            profit = payout - bet_amount
+            outcome = GameOutcome.WIN if profit > 0 else GameOutcome.LOSE
+            return BetResult(
+                outcome=outcome,
+                multiplier=multiplier,
+                payout=payout,
+                profit=profit,
+                result_data={"gem_values": gem_values[:gems_collected], "multiplier": float(multiplier)},
+            )
+
+        # Death (no cashout, game over)
+        if not cashed_out and gems_collected > 0:
             return BetResult(
                 outcome=GameOutcome.LOSE,
                 multiplier=Decimal("0"),
                 payout=Decimal("0"),
                 profit=-bet_amount,
-                result_data={
-                    "player_hand": player_hand,
-                    "dealer_hand": dealer_hand,
-                    "player_total": player_total,
-                    "dealer_total": dealer_total,
-                },
+                result_data={"gem_values": gem_values[:gems_collected], "died": True},
             )
+
+        return BetResult(
+            outcome=GameOutcome.LOSE,
+            multiplier=Decimal("0"),
+            payout=Decimal("0"),
+            profit=-bet_amount,
+            result_data={"gem_values": [], "died": True},
+        )
+
+
+class SlotsGame(BaseGame):
+    """
+    Slot Machine Game
+
+    5 reels, 4 rows. 10 symbols with equal probability.
+    Wild substitutes. Scatter triggers bonus.
+    Matching 3+ symbols on a payline pays out.
+    Payout = bet * symbol_mult / 10 per winning line.
+    """
+
+    game_type = "slots"
+    house_edge = Decimal("0.05")
+
+    # Matches the frontend symbol set exactly
+    SYMBOLS = ["wild", "scatter", "zeus", "crown", "ring", "chalice", "hourglass", "sapphire", "emerald", "ruby"]
+
+    # Payouts per symbol for 3, 4, 5 consecutive matches (before /10 divisor)
+    SYMBOL_PAYOUTS: Dict[str, Dict[int, float]] = {
+        "wild":      {3: 50,  4: 250, 5: 1000},
+        "scatter":   {3: 5,   4: 20,  5: 100},
+        "zeus":      {3: 50,  4: 150, 5: 500},
+        "crown":     {3: 10,  4: 100, 5: 200},
+        "ring":      {3: 8,   4: 40,  5: 150},
+        "chalice":   {3: 5,   4: 30,  5: 100},
+        "hourglass": {3: 3,   4: 15,  5: 60},
+        "sapphire":  {3: 2,   4: 8,   5: 30},
+        "emerald":   {3: 2,   4: 8,   5: 30},
+        "ruby":      {3: 1,   4: 5,   5: 20},
+    }
+
+    # 20 paylines across 5 reels (row indices per reel)
+    PAYLINES = [
+        [0,0,0,0,0],[1,1,1,1,1],[2,2,2,2,2],[3,3,3,3,3],
+        [0,1,2,1,0],[3,2,1,2,3],
+        [0,1,2,3,3],[3,2,1,0,0],
+        [0,2,0,2,0],[3,1,3,1,3],
+        [1,0,1,0,1],[2,3,2,3,2],
+        [0,0,1,2,2],[3,3,2,1,1],
+        [1,0,0,0,1],[2,3,3,3,2],
+        [0,1,1,2,2],[3,2,2,1,1],
+        [1,1,0,1,1],[2,2,3,2,2],
+    ]
+
+    def validate_game_data(self, game_data: Dict[str, Any]) -> bool:
+        return True
+
+    def _generate_grid(self, game_result: GameResult) -> List[List[str]]:
+        """Generate 5 reels x 4 rows grid of symbol ids using provably fair hash."""
+        import hashlib as _hashlib
+        grid: List[List[str]] = []
+        num_symbols = len(self.SYMBOLS)
+        for reel in range(5):
+            column: List[str] = []
+            for row in range(4):
+                idx = reel * 4 + row
+                step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{idx}".encode()).hexdigest()
+                val = int(step_hash[:4], 16) % num_symbols
+                column.append(self.SYMBOLS[val])
+            grid.append(column)
+        return grid
+
+    def calculate_result(
+        self,
+        game_result: GameResult,
+        bet_amount: Decimal,
+        game_data: Dict[str, Any],
+    ) -> BetResult:
+        grid = self._generate_grid(game_result)
+
+        total_pay = Decimal("0")
+        winning_lines: List[Dict] = []
+        win_positions: List[List[int]] = []
+
+        # Count scatters
+        scatter_count = 0
+        for reel in range(5):
+            for row in range(4):
+                if grid[reel][row] == "scatter":
+                    scatter_count += 1
+
+        for line_idx, payline in enumerate(self.PAYLINES):
+            line_syms = [grid[reel][payline[reel]] for reel in range(5)]
+
+            # Determine first non-wild symbol
+            first = line_syms[0]
+            count = 1
+            for i in range(1, 5):
+                cur = line_syms[i]
+                if cur == first or cur == "wild" or first == "wild":
+                    count += 1
+                    # If first was wild, adopt the next non-wild symbol
+                    if first == "wild" and cur != "wild":
+                        first = cur
+                else:
+                    break
+
+            if count >= 3:
+                pay_sym = first if first != "wild" else "wild"
+                sym_payouts = self.SYMBOL_PAYOUTS.get(pay_sym, {})
+                mult = sym_payouts.get(count, 0)
+                if mult > 0:
+                    line_pay = bet_amount * Decimal(str(mult)) / Decimal("10")
+                    total_pay += line_pay
+                    winning_lines.append({
+                        "line": line_idx,
+                        "symbol": pay_sym,
+                        "count": count,
+                        "multiplier": mult,
+                    })
+                    for i in range(count):
+                        win_positions.append([payline[i], i])  # [row, reel]
+
+        # Scatter bonus
+        if scatter_count >= 3:
+            scatter_pay = bet_amount * Decimal(str(scatter_count)) * Decimal("3")
+            total_pay += scatter_pay
+
+        total_multiplier = (total_pay / bet_amount).quantize(Decimal("0.01")) if bet_amount > 0 else Decimal("0")
+        profit = total_pay - bet_amount
+
+        if profit > 0:
+            outcome = GameOutcome.WIN
+        elif total_multiplier > 0:
+            outcome = GameOutcome.PUSH
+        else:
+            outcome = GameOutcome.LOSE
+
+        # Return grid as [row][reel] for frontend compatibility
+        grid_flat = [[grid[reel][row] for reel in range(5)] for row in range(4)]
+
+        return BetResult(
+            outcome=outcome,
+            multiplier=total_multiplier,
+            payout=total_pay,
+            profit=profit,
+            result_data={
+                "grid": grid_flat,
+                "winning_lines": winning_lines,
+                "multiplier": float(total_multiplier),
+                "scatter_count": scatter_count,
+            },
+        )
 
 
 # Game registry
@@ -920,6 +1416,13 @@ GAMES: Dict[str, BaseGame] = {
     "wheel": WheelGame(),
     "keno": KenoGame(),
     "twentyone": BlackjackGame(),
+    "flip": FlipGame(),
+    "hilo": HiLoGame(),
+    "stairs": StairsGame(),
+    "chicken": ChickenGame(),
+    "coinclimber": CoinClimberGame(),
+    "snake": SnakeGame(),
+    "slots": SlotsGame(),
 }
 
 

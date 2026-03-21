@@ -18,7 +18,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 import pyotp
 
-from casino.games import get_game, GAMES, BetResult, GameOutcome, DiceGame, LimboGame, MinesGame, PlinkoGame, WheelGame, KenoGame, BlackjackGame
+from casino.games import get_game, GAMES, BetResult, GameOutcome, DiceGame, LimboGame, MinesGame, PlinkoGame, WheelGame, KenoGame, BlackjackGame, FlipGame, HiLoGame, StairsGame, ChickenGame, CoinClimberGame, SnakeGame, SlotsGame
 from casino.config import settings
 from casino.services.provably_fair import ProvablyFairEngine, GameResult
 from casino.services.ledger import LedgerService, InsufficientBalanceError
@@ -125,9 +125,26 @@ async def place_bet(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid currency")
 
+    # ── Responsible gambling checks ──
+    from casino.api.routes.responsible_gambling import ResponsibleGamblingSettings
+    rg_result = await db.execute(
+        select(ResponsibleGamblingSettings).where(ResponsibleGamblingSettings.user_id == user.id)
+    )
+    rg = rg_result.scalar_one_or_none()
+    if rg:
+        from datetime import datetime, UTC as _UTC
+        now = datetime.now(_UTC)
+        if rg.self_excluded and rg.self_exclusion_until and now < rg.self_exclusion_until:
+            raise HTTPException(status_code=403, detail="Account is self-excluded")
+        if rg.cool_off_until and now < rg.cool_off_until:
+            raise HTTPException(status_code=403, detail="Cool-off period active")
+
     # Resolve game type enum
+    # Map engine names to DB enum values where they differ
+    GAME_TYPE_MAP = {"twentyone": "blackjack"}
+    db_game_type = GAME_TYPE_MAP.get(request.game_type, request.game_type)
     try:
-        game_type_enum = GameType(request.game_type)
+        game_type_enum = GameType(db_game_type)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid game type")
 

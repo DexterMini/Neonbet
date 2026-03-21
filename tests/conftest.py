@@ -28,16 +28,21 @@ def event_loop():
 @pytest.fixture
 def mock_redis():
     """Mock Redis client"""
-    mock = AsyncMock(spec=redis.Redis)
+    mock = AsyncMock()
     mock.get.return_value = None
     mock.setex.return_value = True
     mock.incr.return_value = 1
     mock.expire.return_value = True
-    mock.pipeline.return_value = mock
-    mock.execute.return_value = [1, True]
     mock.lpush.return_value = 1
     mock.lrange.return_value = []
     mock.sadd.return_value = 1
+    mock.sismember.return_value = False
+    mock.smembers.return_value = set()
+    pipe = AsyncMock()
+    pipe.incr.return_value = pipe
+    pipe.expire.return_value = pipe
+    pipe.execute.return_value = [1, True]
+    mock.pipeline = MagicMock(return_value=pipe)
     return mock
 
 

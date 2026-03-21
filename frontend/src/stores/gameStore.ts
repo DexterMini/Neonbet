@@ -2,10 +2,13 @@ import { create } from 'zustand'
 import Decimal from 'decimal.js'
 import { useAuthStore } from './authStore'
 
-export type GameType = 'dice' | 'crash' | 'mines' | 'plinko' | 'limbo' | 'wheel' | 'keno' | 'twentyone'
+export type GameType = 'dice' | 'crash' | 'mines' | 'plinko' | 'limbo' | 'wheel' | 'keno' | 'twentyone' | 'flip' | 'hilo' | 'stairs' | 'chicken' | 'coinclimber' | 'snake' | 'slots'
 
 /** Supported game types with backend engines */
-const BACKEND_GAMES = new Set(['dice', 'limbo'])
+const BACKEND_GAMES = new Set([
+  'dice', 'limbo', 'mines', 'plinko', 'wheel', 'keno', 'twentyone',
+  'flip', 'hilo', 'stairs', 'chicken', 'coinclimber', 'snake', 'slots',
+])
 
 export interface BetResult {
   id: string
