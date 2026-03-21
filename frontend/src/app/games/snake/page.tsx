@@ -312,6 +312,9 @@ export default function SnakePage() {
   const startGame = async () => {
     if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
     try {
+      // Place bet on backend to deduct balance
+      await placeBet('snake', betAmount, 'usdt', { action: 'start' })
+
       // Pre-generate provably fair random values for gem placements
       const PF_GEM_COUNT = 50
       const randoms: number[] = []
@@ -330,7 +333,7 @@ export default function SnakePage() {
     } catch (err: any) { toast.error(err?.message || 'Error starting game') }
   }
 
-  const cashout = () => {
+  const cashout = async () => {
     if (!gameActive || score < 3) return
     gameActiveRef.current = false
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null }
@@ -338,6 +341,7 @@ export default function SnakePage() {
     const mult = getSnakeMultiplier(score)
     const winAmount = (parseFloat(betAmount) * mult).toFixed(2)
     setHistory(prev => [mult, ...prev.slice(0, 9)])
+    try { await placeBet('snake', betAmount, 'usdt', { action: 'cashout', multiplier: mult, score }) } catch {}
     sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * mult - parseFloat(betAmount), mult)
     toast.success(`Cashed out $${winAmount}!`)
   }

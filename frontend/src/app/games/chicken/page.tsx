@@ -102,12 +102,13 @@ export default function ChickenPage() {
   const startGame = async () => {
     if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
     try {
+      await placeBet('chicken', betAmount, 'usdt', { action: 'start', lanes })
       const nr = await generateRows()
       setRows(nr); setCurrentRow(0); setPicked([]); setHitCar(null); setCashedOut(false); setGameActive(true)
     } catch (err: any) { toast.error(err?.message || 'Error starting game') }
   }
 
-  const pickLane = (row: number, lane: number) => {
+  const pickLane = async (row: number, lane: number) => {
     if (!gameActive || row !== currentRow || hitCar || cashedOut) return
     const isSafe = rows[row].carIndex !== lane
     setPicked(p => [...p, { row, lane }])
@@ -118,14 +119,16 @@ export default function ChickenPage() {
     } else if (row + 1 >= MAX_ROWS) {
       setCurrentRow(row + 1); setGameActive(false); setCashedOut(true)
       const fm = getMultiplier(lanes, row + 1)
+      try { await placeBet('chicken', betAmount, 'usdt', { action: 'cashout', multiplier: fm, rows_completed: row + 1 }) } catch {}
       sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * fm - parseFloat(betAmount), fm)
       toast.success(`Won $${(parseFloat(betAmount) * fm).toFixed(2)}!`)
     } else { setCurrentRow(row + 1) }
   }
 
-  const cashout = () => {
+  const cashout = async () => {
     if (!gameActive || currentRow === 0) return
     setCashedOut(true); setGameActive(false)
+    try { await placeBet('chicken', betAmount, 'usdt', { action: 'cashout', multiplier: currentMult, rows_completed: currentRow }) } catch {}
     sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * currentMult - parseFloat(betAmount), currentMult)
     toast.success(`Cashed out $${(parseFloat(betAmount) * currentMult).toFixed(2)}!`)
   }

@@ -978,7 +978,7 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* ═══════ Popular Slots placeholder ═══════ */}
+          {/* ═══════ Featured Games Row ═══════ */}
           <section className="px-3 sm:px-6 pt-6 pb-2">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2.5">
@@ -986,27 +986,24 @@ export default function HomePage() {
                   <Flame className="w-4.5 h-4.5 text-purple-400" />
                 </div>
                 <div>
-                  <h2 className="text-base sm:text-lg font-black text-white tracking-tight">Popular Slots</h2>
-                  <p className="text-[11px] text-muted">Top providers &bull; Exclusive titles</p>
+                  <h2 className="text-base sm:text-lg font-black text-white tracking-tight">Featured Games</h2>
+                  <p className="text-[11px] text-muted">Hot picks &bull; Highest multipliers</p>
                 </div>
               </div>
-              <Link href="/" className="text-xs text-muted-light hover:text-brand flex items-center gap-1 transition-colors">
-                View All <ChevronRight className="w-3 h-3" />
-              </Link>
             </div>
 
             <ScrollRow>
               {[
-                { name: 'Gates of\nOlympus', gradient: 'from-yellow-500 via-amber-600 to-yellow-900', glow: 'rgba(245,158,11,0.3)' },
-                { name: 'Sweet\nBonanza', gradient: 'from-pink-400 via-rose-500 to-pink-800', glow: 'rgba(244,63,94,0.3)' },
-                { name: 'Big Bass\nSplash', gradient: 'from-blue-400 via-blue-600 to-indigo-900', glow: 'rgba(59,130,246,0.3)' },
-                { name: 'Wanted\nDead', gradient: 'from-orange-400 via-red-500 to-red-900', glow: 'rgba(239,68,68,0.3)' },
-                { name: 'Sugar\nRush', gradient: 'from-fuchsia-400 via-pink-500 to-purple-800', glow: 'rgba(217,70,239,0.3)' },
-                { name: 'Dog\nHouse', gradient: 'from-teal-400 via-teal-600 to-emerald-900', glow: 'rgba(20,184,166,0.3)' },
-                { name: 'Lightning\nRoulette', gradient: 'from-yellow-300 via-amber-500 to-amber-900', glow: 'rgba(251,191,36,0.3)' },
-                { name: 'Fire\nStampede', gradient: 'from-red-400 via-orange-500 to-red-900', glow: 'rgba(249,115,22,0.3)' },
+                { name: 'Crash', gradient: 'from-red-500 via-orange-600 to-red-900', glow: 'rgba(239,68,68,0.3)', href: '/games/crash', tag: 'HOT', mult: '∞x' },
+                { name: 'Plinko', gradient: 'from-blue-400 via-blue-600 to-indigo-900', glow: 'rgba(59,130,246,0.3)', href: '/games/plinko', tag: null, mult: '1000x' },
+                { name: 'Mines', gradient: 'from-amber-400 via-amber-600 to-amber-900', glow: 'rgba(245,158,11,0.3)', href: '/games/mines', tag: 'HOT', mult: '24x' },
+                { name: 'Slots', gradient: 'from-purple-400 via-purple-600 to-purple-900', glow: 'rgba(168,85,247,0.3)', href: '/games/slots', tag: 'NEW', mult: '5000x' },
+                { name: 'Wheel', gradient: 'from-fuchsia-400 via-pink-500 to-purple-800', glow: 'rgba(217,70,239,0.3)', href: '/games/wheel', tag: null, mult: '50x' },
+                { name: 'Keno', gradient: 'from-teal-400 via-teal-600 to-emerald-900', glow: 'rgba(20,184,166,0.3)', href: '/games/keno', tag: null, mult: '100x' },
+                { name: 'Snake', gradient: 'from-green-400 via-emerald-500 to-green-900', glow: 'rgba(34,197,94,0.3)', href: '/games/snake', tag: 'NEW', mult: '100x' },
+                { name: 'Stairs', gradient: 'from-yellow-300 via-amber-500 to-amber-900', glow: 'rgba(251,191,36,0.3)', href: '/games/stairs', tag: null, mult: '200x' },
               ].map((slot, i) => (
-                <div key={i} className="shrink-0 group cursor-pointer">
+                <Link key={i} href={slot.href} className="shrink-0 group cursor-pointer">
                   <div className={cn(
                     'relative w-[140px] sm:w-[160px] aspect-[3/4] rounded-2xl overflow-hidden card-shine',
                     'group-hover:scale-[1.05] group-hover:-translate-y-1 transition-all duration-300'
@@ -1014,17 +1011,25 @@ export default function HomePage() {
                   style={{ boxShadow: `0 4px 20px -4px ${slot.glow}` }}>
                     <div className={cn('absolute inset-0 bg-gradient-to-br', slot.gradient)} />
                     <div className="absolute inset-0 bg-gradient-to-b from-white/[0.1] via-transparent to-black/40" />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px]">
-                      <div className="px-3 py-1.5 bg-black/60 rounded-lg border border-white/15">
-                        <span className="text-[10px] font-bold text-white/70 uppercase tracking-wider">Coming Soon</span>
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <div className="px-4 py-2 bg-brand/90 rounded-xl border border-brand/60 shadow-[0_0_20px_rgba(0,232,123,0.4)]">
+                        <span className="text-sm font-bold text-background-deep uppercase tracking-wide">Play Now</span>
                       </div>
                     </div>
+                    {slot.tag && (
+                      <div className="absolute top-2 right-2 z-10">
+                        <span className={cn('px-2 py-0.5 rounded text-[8px] font-extrabold uppercase', slot.tag === 'HOT' ? 'bg-red-500 text-white shadow-[0_0_12px_rgba(239,68,68,0.5)] animate-pulse' : 'bg-brand text-background-deep shadow-[0_0_12px_rgba(0,232,123,0.5)]')}>{slot.tag}</span>
+                      </div>
+                    )}
                     <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
-                      <p className="text-sm font-extrabold text-white uppercase leading-tight whitespace-pre-line">{slot.name}</p>
-                      <p className="text-[9px] text-white/40 mt-0.5">Pragmatic Play</p>
+                      <p className="text-sm font-extrabold text-white uppercase leading-tight">{slot.name}</p>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <span className="text-[9px] text-white/40">NeonBet Original</span>
+                        <span className="text-[10px] font-bold text-amber-300">{slot.mult}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </ScrollRow>
           </section>

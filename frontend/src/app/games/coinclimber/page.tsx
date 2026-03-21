@@ -130,12 +130,13 @@ export default function CoinClimberPage() {
   const startGame = async () => {
     if (parseFloat(betAmount) <= 0 || !initialized || isPlacing) return
     try {
+      await placeBet('coinclimber', betAmount, 'usdt', { action: 'start', cols })
       const nl = await generateLevels()
       setLevels(nl); setCurrentLevel(0); setPicked([]); setHitWrong(null); setCashedOut(false); setGameActive(true)
     } catch (err: any) { toast.error(err?.message || 'Error starting game') }
   }
 
-  const pickTile = (level: number, col: number) => {
+  const pickTile = async (level: number, col: number) => {
     if (!gameActive || level !== currentLevel || hitWrong || cashedOut) return
     const isCorrect = levels[level].correctIndex === col
     setPicked(p => [...p, { level, col }])
@@ -146,14 +147,16 @@ export default function CoinClimberPage() {
     } else if (level + 1 >= MAX_LEVELS) {
       setCurrentLevel(level + 1); setGameActive(false); setCashedOut(true)
       const fm = getMultiplier(cols, level + 1)
+      try { await placeBet('coinclimber', betAmount, 'usdt', { action: 'cashout', multiplier: fm, levels_completed: level + 1 }) } catch {}
       sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * fm - parseFloat(betAmount), fm)
       toast.success(`Summit! Won $${(parseFloat(betAmount) * fm).toFixed(2)}!`)
     } else { setCurrentLevel(level + 1) }
   }
 
-  const cashout = () => {
+  const cashout = async () => {
     if (!gameActive || currentLevel === 0) return
     setCashedOut(true); setGameActive(false)
+    try { await placeBet('coinclimber', betAmount, 'usdt', { action: 'cashout', multiplier: currentMult, levels_completed: currentLevel }) } catch {}
     sessionStats.recordBet(true, parseFloat(betAmount), parseFloat(betAmount) * currentMult - parseFloat(betAmount), currentMult)
     toast.success(`Cashed out $${(parseFloat(betAmount) * currentMult).toFixed(2)}!`)
   }

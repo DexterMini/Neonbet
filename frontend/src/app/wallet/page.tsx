@@ -494,16 +494,8 @@ export default function WalletPage() {
                   </>
                 ) : (
                   <div className="relative">
-                    {/* Coming Soon overlay */}
-                    <div className="absolute inset-0 z-10 bg-background/60 backdrop-blur-[2px] rounded-lg flex flex-col items-center justify-center">
-                      <div className="px-4 py-2 rounded-full bg-accent-amber/10 border border-accent-amber/20 mb-2">
-                        <span className="text-accent-amber text-xs font-bold uppercase tracking-wider">Coming Soon</span>
-                      </div>
-                      <p className="text-text-muted text-xs">Withdrawals will be enabled shortly</p>
-                    </div>
-
-                    {/* Disabled withdraw form (visible but not interactive) */}
-                    <div className="opacity-40 pointer-events-none select-none">
+                    {/* Withdraw form */}
+                    <div>
                       {/* Withdraw Amount */}
                       <div className="mb-4">
                         <label className="block text-text-muted text-xs font-medium mb-2">Amount</label>
@@ -513,12 +505,10 @@ export default function WalletPage() {
                             value={withdrawAmount}
                             onChange={e => setWithdrawAmount(e.target.value)}
                             placeholder="0.00"
-                            disabled
-                            className="w-full p-3.5 bg-background border border-border rounded-lg text-text-primary text-lg font-bold placeholder:text-text-muted/40 focus:outline-none transition-colors"
+                            className="w-full p-3.5 bg-background border border-border rounded-lg text-text-primary text-lg font-bold placeholder:text-text-muted/40 focus:outline-none focus:ring-1 focus:ring-brand/40 focus:border-brand/30 transition-colors"
                           />
                           <button
-                            disabled
-                            className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-brand/10 text-brand text-xs font-semibold rounded-md"
+                              className="absolute right-3 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-brand/10 text-brand text-xs font-semibold rounded-md hover:bg-brand/20 transition-colors"
                           >
                             MAX
                           </button>
@@ -536,8 +526,7 @@ export default function WalletPage() {
                           value={withdrawAddress}
                           onChange={e => setWithdrawAddress(e.target.value)}
                           placeholder={`Enter ${selectedSymbol} address`}
-                          disabled
-                          className="w-full p-3.5 bg-background border border-border rounded-lg text-text-primary placeholder:text-text-muted/40 focus:outline-none transition-colors"
+                          className="w-full p-3.5 bg-background border border-border rounded-lg text-text-primary placeholder:text-text-muted/40 focus:outline-none focus:ring-1 focus:ring-brand/40 focus:border-brand/30 transition-colors"
                         />
                       </div>
 
@@ -557,7 +546,7 @@ export default function WalletPage() {
                       <Button
                         className="w-full"
                         size="lg"
-                        disabled
+                        disabled={!withdrawAmount || !withdrawAddress}
                       >
                         Withdraw {selectedSymbol}
                       </Button>
