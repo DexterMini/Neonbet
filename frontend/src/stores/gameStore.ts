@@ -166,9 +166,18 @@ export const useGameStore = create<GameState>((set, get) => ({
     const token = useAuthStore.getState().token
     if (!token) return
     try {
-      const res = await fetch('/api/v1/wallet/balances', {
+      let res = await fetch('/api/v1/wallet/balances', {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 401) {
+        const refreshed = await useAuthStore.getState().refreshToken()
+        if (refreshed) {
+          const newToken = useAuthStore.getState().token!
+          res = await fetch('/api/v1/wallet/balances', {
+            headers: { Authorization: `Bearer ${newToken}` },
+          })
+        }
+      }
       if (!res.ok) return
       const data = await res.json()
       const map: BalanceMap = {}
@@ -191,27 +200,40 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   // ------- Place Bet (Backend API) -------
   placeBet: async (gameType, betAmount, currency, gameData, twoFactorCode) => {
-    const token = useAuthStore.getState().token
+    let token = useAuthStore.getState().token
     if (!token) throw new Error('Not authenticated')
     if (!BACKEND_GAMES.has(gameType)) throw new Error(`Game "${gameType}" not supported by backend`)
 
     set({ isPlacing: true })
     try {
-      const res = await fetch('/api/v1/bets/place', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'X-Idempotency-Key': crypto.randomUUID(),
-        },
-        body: JSON.stringify({
-          game_type: gameType,
-          bet_amount: typeof betAmount === 'string' ? parseFloat(betAmount) : betAmount,
-          currency: currency.toUpperCase(),
-          game_data: gameData,
-          ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
-        }),
-      })
+      const makeRequest = async (authToken: string) => {
+        return fetch('/api/v1/bets/place', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+            'X-Idempotency-Key': crypto.randomUUID(),
+          },
+          body: JSON.stringify({
+            game_type: gameType,
+            bet_amount: typeof betAmount === 'string' ? parseFloat(betAmount) : betAmount,
+            currency: currency.toUpperCase(),
+            game_data: gameData,
+            ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
+          }),
+        })
+      }
+
+      let res = await makeRequest(token)
+
+      // On 401, try refreshing the token once
+      if (res.status === 401) {
+        const refreshed = await useAuthStore.getState().refreshToken()
+        if (refreshed) {
+          token = useAuthStore.getState().token!
+          res = await makeRequest(token)
+        }
+      }
 
       if (!res.ok) {
         const err = await res.json().catch(() => null)

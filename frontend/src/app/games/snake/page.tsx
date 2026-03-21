@@ -33,7 +33,7 @@ function FloatingGems() {
 /* ── Grid config ──────────────────────────────────── */
 const GRID_ROWS = 15
 const GRID_COLS = 15
-const CELL_SIZE = 28
+const CELL_SIZE = 38
 const TICK_MS = 150
 
 type Dir = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT'
@@ -126,7 +126,7 @@ export default function SnakePage() {
     ctx.fillRect(0, 0, w, h)
 
     // Grid lines
-    ctx.strokeStyle = 'rgba(0, 232, 123, 0.04)'
+    ctx.strokeStyle = 'rgba(0, 232, 123, 0.06)'
     ctx.lineWidth = 0.5
     for (let r = 0; r <= GRID_ROWS; r++) {
       ctx.beginPath(); ctx.moveTo(0, r * CELL_SIZE); ctx.lineTo(w, r * CELL_SIZE); ctx.stroke()
@@ -135,26 +135,44 @@ export default function SnakePage() {
       ctx.beginPath(); ctx.moveTo(c * CELL_SIZE, 0); ctx.lineTo(c * CELL_SIZE, h); ctx.stroke()
     }
 
+    // Grid dots at intersections
+    ctx.fillStyle = 'rgba(0, 232, 123, 0.08)'
+    for (let r = 0; r <= GRID_ROWS; r++) {
+      for (let c = 0; c <= GRID_COLS; c++) {
+        ctx.beginPath(); ctx.arc(c * CELL_SIZE, r * CELL_SIZE, 1, 0, Math.PI * 2); ctx.fill()
+      }
+    }
+
     // Gem
     const g = gemRef.current
     const gx = g.c * CELL_SIZE + CELL_SIZE / 2
     const gy = g.r * CELL_SIZE + CELL_SIZE / 2
 
-    // Gem glow
-    const gemGlow = ctx.createRadialGradient(gx, gy, 0, gx, gy, CELL_SIZE)
-    gemGlow.addColorStop(0, 'rgba(0, 232, 123, 0.2)')
+    // Gem outer glow
+    const gemGlow = ctx.createRadialGradient(gx, gy, 0, gx, gy, CELL_SIZE * 1.5)
+    gemGlow.addColorStop(0, 'rgba(0, 232, 123, 0.25)')
+    gemGlow.addColorStop(0.5, 'rgba(0, 232, 123, 0.08)')
     gemGlow.addColorStop(1, 'rgba(0, 232, 123, 0)')
     ctx.fillStyle = gemGlow
-    ctx.fillRect(g.c * CELL_SIZE - CELL_SIZE / 2, g.r * CELL_SIZE - CELL_SIZE / 2, CELL_SIZE * 2, CELL_SIZE * 2)
+    ctx.fillRect(g.c * CELL_SIZE - CELL_SIZE, g.r * CELL_SIZE - CELL_SIZE, CELL_SIZE * 3, CELL_SIZE * 3)
 
+    // Gem diamond shape
     ctx.shadowColor = '#00E87B'
-    ctx.shadowBlur = 15
+    ctx.shadowBlur = 20
     ctx.fillStyle = '#00E87B'
     ctx.beginPath()
     ctx.moveTo(gx, gy - CELL_SIZE * 0.4)
     ctx.lineTo(gx + CELL_SIZE * 0.35, gy)
     ctx.lineTo(gx, gy + CELL_SIZE * 0.4)
     ctx.lineTo(gx - CELL_SIZE * 0.35, gy)
+    ctx.closePath()
+    ctx.fill()
+    // Inner highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'
+    ctx.beginPath()
+    ctx.moveTo(gx, gy - CELL_SIZE * 0.25)
+    ctx.lineTo(gx + CELL_SIZE * 0.1, gy - CELL_SIZE * 0.05)
+    ctx.lineTo(gx - CELL_SIZE * 0.1, gy - CELL_SIZE * 0.05)
     ctx.closePath()
     ctx.fill()
     ctx.shadowBlur = 0
@@ -164,18 +182,18 @@ export default function SnakePage() {
     bs.forEach(b => {
       const bx = b.c * CELL_SIZE + CELL_SIZE / 2
       const by = b.r * CELL_SIZE + CELL_SIZE / 2
-      const bombGlow = ctx.createRadialGradient(bx, by, 0, bx, by, CELL_SIZE)
-      bombGlow.addColorStop(0, 'rgba(248, 113, 113, 0.2)')
+      const bombGlow = ctx.createRadialGradient(bx, by, 0, bx, by, CELL_SIZE * 1.2)
+      bombGlow.addColorStop(0, 'rgba(248, 113, 113, 0.25)')
       bombGlow.addColorStop(1, 'rgba(248, 113, 113, 0)')
       ctx.fillStyle = bombGlow
       ctx.fillRect(b.c * CELL_SIZE - CELL_SIZE / 2, b.r * CELL_SIZE - CELL_SIZE / 2, CELL_SIZE * 2, CELL_SIZE * 2)
       ctx.shadowColor = '#F87171'
-      ctx.shadowBlur = 10
+      ctx.shadowBlur = 12
       ctx.fillStyle = '#F87171'
-      ctx.font = `${CELL_SIZE * 0.6}px sans-serif`
+      ctx.font = `bold ${CELL_SIZE * 0.55}px sans-serif`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.fillText('X', bx, by + 1)
+      ctx.fillText('💀', bx, by + 1)
       ctx.shadowBlur = 0
     })
 
@@ -185,22 +203,24 @@ export default function SnakePage() {
       const x = seg.c * CELL_SIZE
       const y = seg.r * CELL_SIZE
       const isHead = i === 0
-      const pad = 1
+      const pad = 2
 
       if (isHead) {
+        // Head glow
         ctx.shadowColor = '#00E87B'
-        ctx.shadowBlur = 10
+        ctx.shadowBlur = 18
         const headGrad = ctx.createLinearGradient(x, y, x + CELL_SIZE, y + CELL_SIZE)
         headGrad.addColorStop(0, '#00E87B')
         headGrad.addColorStop(1, '#00C466')
         ctx.fillStyle = headGrad
       } else {
         ctx.shadowBlur = 0
-        const alpha = 0.85 - (i / s.length) * 0.5
-        ctx.fillStyle = `rgba(0, 232, 123, ${alpha})`
+        const alpha = 0.9 - (i / s.length) * 0.55
+        const green = Math.round(232 - (i / s.length) * 60)
+        ctx.fillStyle = `rgba(0, ${green}, 123, ${alpha})`
       }
 
-      const radius = isHead ? 6 : 4
+      const radius = isHead ? 8 : 5
       const rx = x + pad, ry = y + pad, rw = CELL_SIZE - pad * 2, rh = CELL_SIZE - pad * 2
 
       ctx.beginPath()
@@ -216,16 +236,38 @@ export default function SnakePage() {
       ctx.closePath()
       ctx.fill()
 
+      // Body segment shine
+      if (!isHead) {
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.08 - (i / s.length) * 0.06})`
+        ctx.beginPath()
+        ctx.moveTo(rx + radius, ry)
+        ctx.lineTo(rx + rw - radius, ry)
+        ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + radius)
+        ctx.lineTo(rx, ry + radius)
+        ctx.quadraticCurveTo(rx, ry, rx + radius, ry)
+        ctx.closePath()
+        ctx.fill()
+      }
+
       if (isHead) {
         ctx.fillStyle = '#080d12'
         ctx.shadowBlur = 0
         const d = dirRef.current
-        const ex1 = d === 'LEFT' || d === 'RIGHT' ? 0 : -4
-        const ey1 = d === 'UP' || d === 'DOWN' ? 0 : -4
-        const ex2 = d === 'LEFT' || d === 'RIGHT' ? 0 : 4
-        const ey2 = d === 'UP' || d === 'DOWN' ? 0 : 4
-        ctx.beginPath(); ctx.arc(x + CELL_SIZE / 2 + ex1, y + CELL_SIZE / 2 + ey1, 2.5, 0, Math.PI * 2); ctx.fill()
-        ctx.beginPath(); ctx.arc(x + CELL_SIZE / 2 + ex2, y + CELL_SIZE / 2 + ey2, 2.5, 0, Math.PI * 2); ctx.fill()
+        const eyeOff = CELL_SIZE * 0.15
+        let ex1: number, ey1: number, ex2: number, ey2: number
+        if (d === 'RIGHT') { ex1 = eyeOff; ey1 = -eyeOff; ex2 = eyeOff; ey2 = eyeOff }
+        else if (d === 'LEFT') { ex1 = -eyeOff; ey1 = -eyeOff; ex2 = -eyeOff; ey2 = eyeOff }
+        else if (d === 'UP') { ex1 = -eyeOff; ey1 = -eyeOff; ex2 = eyeOff; ey2 = -eyeOff }
+        else { ex1 = -eyeOff; ey1 = eyeOff; ex2 = eyeOff; ey2 = eyeOff }
+        const eyeR = 3.5
+        // White of eye
+        ctx.fillStyle = '#ffffff'
+        ctx.beginPath(); ctx.arc(x + CELL_SIZE / 2 + ex1, y + CELL_SIZE / 2 + ey1, eyeR, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(x + CELL_SIZE / 2 + ex2, y + CELL_SIZE / 2 + ey2, eyeR, 0, Math.PI * 2); ctx.fill()
+        // Pupil
+        ctx.fillStyle = '#080d12'
+        ctx.beginPath(); ctx.arc(x + CELL_SIZE / 2 + ex1, y + CELL_SIZE / 2 + ey1, 1.8, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(x + CELL_SIZE / 2 + ex2, y + CELL_SIZE / 2 + ey2, 1.8, 0, Math.PI * 2); ctx.fill()
       }
     })
     ctx.shadowBlur = 0
@@ -520,9 +562,9 @@ export default function SnakePage() {
 
                 {/* Canvas container */}
                 <div className="relative z-10 flex items-center justify-center px-5 pb-5">
-                  <div className="relative">
+                  <div className="relative w-full max-w-[600px] aspect-square">
                     <canvas ref={canvasRef} width={GRID_COLS * CELL_SIZE} height={GRID_ROWS * CELL_SIZE}
-                      className="rounded-xl ring-1 ring-white/[0.06]" />
+                      className="rounded-xl ring-1 ring-white/[0.06] w-full h-full" style={{ imageRendering: 'auto' }} />
 
                     {/* Overlay: Idle */}
                     {!gameActive && !gameOver && !cashedOut && (

@@ -388,11 +388,20 @@ def get_payment_service() -> NOWPaymentsService:
     global _payment_service
     if _payment_service is None:
         import os
-        api_key = os.getenv("NOWPAYMENTS_API_KEY", "")
-        ipn_secret = os.getenv("NOWPAYMENTS_IPN_SECRET", "")
-        sandbox = os.getenv("NOWPAYMENTS_SANDBOX", "true").lower() == "true"
-        callback_url = os.getenv("NOWPAYMENTS_CALLBACK_URL", "")
-        success_url = os.getenv("NOWPAYMENTS_SUCCESS_URL", "")
+        # Try PAYMENT_ prefixed env vars first (matching PaymentSettings in config.py),
+        # then fall back to unprefixed names for backwards compatibility
+        api_key = os.getenv("PAYMENT_NOWPAYMENTS_API_KEY") or os.getenv("NOWPAYMENTS_API_KEY", "")
+        ipn_secret = os.getenv("PAYMENT_NOWPAYMENTS_IPN_SECRET") or os.getenv("NOWPAYMENTS_IPN_SECRET", "")
+        sandbox_str = os.getenv("PAYMENT_NOWPAYMENTS_SANDBOX") or os.getenv("NOWPAYMENTS_SANDBOX", "true")
+        sandbox = sandbox_str.lower() == "true"
+        callback_url = os.getenv("PAYMENT_NOWPAYMENTS_CALLBACK_URL") or os.getenv("NOWPAYMENTS_CALLBACK_URL", "")
+        success_url = os.getenv("PAYMENT_NOWPAYMENTS_SUCCESS_URL") or os.getenv("NOWPAYMENTS_SUCCESS_URL", "")
+
+        if not api_key:
+            raise RuntimeError(
+                "NOWPAYMENTS_API_KEY not configured. "
+                "Set PAYMENT_NOWPAYMENTS_API_KEY or NOWPAYMENTS_API_KEY environment variable."
+            )
         
         _payment_service = NOWPaymentsService(
             api_key=api_key,

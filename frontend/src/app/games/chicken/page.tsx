@@ -292,7 +292,7 @@ export default function ChickenPage() {
             {/* ── Right: Road Scene ──────────────────── */}
             <div className="flex-1 min-w-0 space-y-4">
               <div className="relative rounded-2xl overflow-hidden border border-white/[0.06]"
-                style={{ background: 'linear-gradient(180deg, #0d1a14 0%, #0a0e0c 30%, #0e1015 100%)' }}>
+                style={{ background: 'linear-gradient(180deg, #111816 0%, #0d1210 30%, #0e1215 100%)' }}>
 
                 {/* Floating particles */}
                 <FloatingParticles active={gameActive} color={diffPreset.accent} />
@@ -303,7 +303,7 @@ export default function ChickenPage() {
                   <div className="flex items-center gap-3">
                     <div className="relative">
                       <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500/25 to-orange-600/15 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10">
-                        <Bird className="w-6 h-6 text-brand" />
+                        <span className="text-2xl">🐔</span>
                       </div>
                       {gameActive && (
                         <motion.div animate={{ scale: [1, 1.5, 1], opacity: [0.8, 0.3, 0.8] }} transition={{ repeat: Infinity, duration: 2 }}
@@ -354,7 +354,7 @@ export default function ChickenPage() {
                         background: 'linear-gradient(135deg, rgba(0,232,123,0.08) 0%, rgba(0,232,123,0.02) 50%, rgba(0,232,123,0.06) 100%)',
                       }}>
                       {/* Checkered pattern */}
-                      <div className="absolute inset-0 opacity-[0.04]" style={{
+                      <div className="absolute inset-0 opacity-[0.12]" style={{
                         backgroundImage: `repeating-conic-gradient(#fff 0% 25%, transparent 0% 50%)`,
                         backgroundSize: '16px 16px'
                       }} />
@@ -435,7 +435,7 @@ export default function ChickenPage() {
                                     disabled={!isCurrentRow || !!hitCar || cashedOut}
                                     whileHover={isCurrentRow && !hitCar ? { scale: 1.05, y: -3, transition: { duration: 0.15 } } : {}}
                                     whileTap={isCurrentRow && !hitCar ? { scale: 0.93 } : {}}
-                                    className={`relative flex-1 h-[50px] sm:h-[54px] rounded-xl font-bold transition-all duration-200 flex items-center justify-center overflow-hidden
+                                    className={`relative flex-1 h-[56px] sm:h-[62px] rounded-xl font-bold transition-all duration-200 flex items-center justify-center overflow-hidden
                                       ${isHitPick
                                         ? 'shadow-2xl shadow-red-500/30'
                                         : isSafeRevealed && wasPicked
@@ -452,10 +452,10 @@ export default function ChickenPage() {
                                         : isSafeRevealed
                                         ? 'linear-gradient(135deg, rgba(0,232,123,0.06), rgba(0,232,123,0.02))'
                                         : isCarRevealed
-                                        ? 'rgba(255,255,255,0.015)'
+                                        ? 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(239,68,68,0.02))'
                                         : isCurrentRow
-                                        ? 'linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))'
-                                        : 'rgba(255,255,255,0.015)',
+                                        ? 'linear-gradient(135deg, rgba(55,55,65,0.6), rgba(40,40,50,0.4))'
+                                        : 'linear-gradient(135deg, rgba(35,35,42,0.3), rgba(25,25,32,0.2))',
                                     }}
                                   >
                                     {/* Ring border */}
@@ -475,8 +475,14 @@ export default function ChickenPage() {
 
                                     {/* Asphalt texture */}
                                     {!showResult && (
-                                      <div className="absolute inset-0 opacity-[0.025]" style={{
-                                        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 6px, rgba(255,255,255,0.15) 6px, rgba(255,255,255,0.15) 7px)',
+                                      <div className="absolute inset-0 opacity-[0.12]" style={{
+                                        backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 4px, rgba(255,255,255,0.08) 4px, rgba(255,255,255,0.08) 5px)',
+                                      }} />
+                                    )}
+                                    {/* Lane dashes */}
+                                    {!showResult && l < lanes - 1 && (
+                                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[2px] h-[60%] bg-amber-400/20" style={{
+                                        backgroundImage: 'repeating-linear-gradient(180deg, rgba(251,191,36,0.25) 0, rgba(251,191,36,0.25) 6px, transparent 6px, transparent 12px)',
                                       }} />
                                     )}
 
@@ -486,26 +492,30 @@ export default function ChickenPage() {
                                         <motion.div initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: [0, -5, 5, 0] }}
                                           transition={{ type: 'spring', damping: 8 }}
                                           className="flex flex-col items-center">
-                                          <Car className="w-6 h-6 text-red-400 drop-shadow-lg" />
+                                          <span className="text-2xl drop-shadow-lg">🚗</span>
                                           <motion.span initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
                                             className="text-[8px] text-red-400 font-black uppercase tracking-widest mt-0.5">CRASH</motion.span>
                                         </motion.div>
                                       ) : isCarRevealed ? (
-                                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.3 }}
-                                          className="text-base select-none flex items-center justify-center"><Car className="w-4 h-4 text-red-400/30" /></motion.span>
+                                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.5 }}
+                                          className="text-xl select-none">🚗</motion.span>
                                       ) : isSafeRevealed && wasPicked ? (
                                         <motion.div initial={{ scale: 0, y: 8 }} animate={{ scale: 1, y: 0 }}
                                           transition={{ type: 'spring', damping: 12 }}
                                           className="flex flex-col items-center">
-                                          <Bird className="w-5 h-5 text-brand" />
+                                          <span className="text-2xl">🐔</span>
                                         </motion.div>
                                       ) : isSafeRevealed ? (
-                                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.2 }}
-                                          className="text-xs text-brand select-none flex items-center justify-center"><Check className="w-3 h-3" /></motion.span>
+                                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 0.3 }}
+                                          className="text-lg select-none">✅</motion.span>
                                       ) : isCurrentRow ? (
-                                        <motion.span animate={{ y: [0, -2, 0], opacity: [0.25, 0.5, 0.25] }}
-                                          transition={{ repeat: Infinity, duration: 2.5, delay: l * 0.15 }}
-                                          className="text-base select-none">?</motion.span>
+                                        <motion.div
+                                          animate={{ y: [0, -3, 0] }}
+                                          transition={{ repeat: Infinity, duration: 2, delay: l * 0.15 }}
+                                          className="flex flex-col items-center gap-0.5">
+                                          <span className="text-xl">🐔</span>
+                                          <span className="text-[8px] text-amber-400/60 font-bold">PICK</span>
+                                        </motion.div>
                                       ) : null}
                                     </div>
                                   </motion.button>
@@ -535,7 +545,7 @@ export default function ChickenPage() {
                   <div className="mt-2">
                     <div className="flex items-center gap-3 py-2.5 px-4 rounded-xl border border-white/[0.05]"
                       style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.015), transparent, rgba(255,255,255,0.015))' }}>
-                      <User className="w-4 h-4 text-white/50" />
+                      <span className="text-lg">🚶</span>
                       <div>
                         <div className="text-white/50 text-[12px] font-bold">START</div>
                         <div className="text-white/20 text-[10px]">Step into the road</div>
@@ -570,7 +580,7 @@ export default function ChickenPage() {
                           <motion.div initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: 0 }}
                             transition={{ type: 'spring', damping: 10, delay: 0.1 }}
                             className="text-5xl mb-3">
-                            {hitCar ? <XCircle className="w-12 h-12 text-red-400" /> : <Trophy className="w-12 h-12 text-brand" />}
+                            {hitCar ? <span className="text-5xl">💥</span> : <span className="text-5xl">🏆</span>}
                           </motion.div>
                           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
                             transition={{ type: 'spring', damping: 10, delay: 0.25 }}

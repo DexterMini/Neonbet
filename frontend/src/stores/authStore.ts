@@ -25,11 +25,12 @@ interface AuthState {
   register: (username: string, email: string, password: string) => Promise<void>
   logout: () => void
   setHydrated: () => void
+  refreshToken: () => Promise<boolean>
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isAuthenticated: false,
@@ -102,6 +103,26 @@ export const useAuthStore = create<AuthState>()(
           token: null,
           isAuthenticated: false,
         })
+      },
+
+      refreshToken: async () => {
+        const currentToken = get().token
+        if (!currentToken) return false
+        try {
+          const res = await fetch('/api/v1/auth/refresh', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${currentToken}` },
+          })
+          if (!res.ok) {
+            get().logout()
+            return false
+          }
+          const data = await res.json()
+          set({ token: data.session_token })
+          return true
+        } catch {
+          return false
+        }
       },
     }),
     {
