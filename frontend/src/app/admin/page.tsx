@@ -44,7 +44,7 @@ interface SystemStats {
   unresolved_alerts: number
 }
 
-type AdminTab = 'overview' | 'users' | 'adjustments' | 'automation' | 'games' | 'audit'
+type AdminTab = 'overview' | 'users' | 'adjustments' | 'automation' | 'games' | 'rtp' | 'audit' | 'wallet'
 
 /* ── Sparkline component ───────────────────────────── */
 function Sparkline({ data, color = '#06d6a0', width = 80, height = 28 }: {
@@ -256,12 +256,27 @@ export default function AdminDashboard() {
   const [editDescription, setEditDescription] = useState<string>('')
   const [savingGame, setSavingGame] = useState(false)
 
+  // RTP Verification state
+  const [rtpResults, setRtpResults] = useState<any>(null)
+  const [rtpLoading, setRtpLoading] = useState(false)
+  const [rtpRounds, setRtpRounds] = useState('100000')
+  const [rtpGameFilter, setRtpGameFilter] = useState('all')
+
   // Balance Ops enhanced state
   const [adjPlayerSearch, setAdjPlayerSearch] = useState('')
   const [adjPlayerResults, setAdjPlayerResults] = useState<AdminUser[]>([])
   const [adjSelectedPlayer, setAdjSelectedPlayer] = useState<AdminUser | null>(null)
   const [adjDropdownOpen, setAdjDropdownOpen] = useState(false)
   const [recentOps, setRecentOps] = useState<{ id: number; type: string; amount: string; currency: string; username: string; time: string; reason: string }[]>([])
+
+  // Wallet Management state
+  const [walletTiers, setWalletTiers] = useState<Record<string, { hot: string; warm: string; cold: string; total: string }>>({})
+  const [walletTransfers, setWalletTransfers] = useState<any[]>([])
+  const [walletAlerts, setWalletAlerts] = useState<any[]>([])
+  const [arbStatus, setArbStatus] = useState<any>(null)
+  const [reserveSnapshot, setReserveSnapshot] = useState<any>(null)
+  const [walletLoading, setWalletLoading] = useState(false)
+  const [reserveGenerating, setReserveGenerating] = useState(false)
   const opsCounterRef = useRef(0)
 
   const automation = useAutomationStore()
@@ -407,6 +422,95 @@ export default function AdminDashboard() {
     } catch { /* ignore */ }
   }, [apiBase, headers])
 
+  // ── Wallet Management API calls ──
+  const fetchWalletTiers = useCallback(async () => {
+    setWalletLoading(true)
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/wallet/tiers`, { headers: headers() })
+      if (res.ok) {
+        const data = await res.json()
+        setWalletTiers(data.tiers || {})
+      }
+    } catch { /* ignore */ }
+    setWalletLoading(false)
+  }, [apiBase, headers])
+
+  const fetchWalletTransfers = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/wallet/transfers`, { headers: headers() })
+      if (res.ok) {
+        const data = await res.json()
+        setWalletTransfers(data.transfers || [])
+      }
+    } catch { /* ignore */ }
+  }, [apiBase, headers])
+
+  const fetchWalletAlerts = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/wallet/alerts`, { headers: headers() })
+      if (res.ok) {
+        const data = await res.json()
+        setWalletAlerts(data.alerts || [])
+      }
+    } catch { /* ignore */ }
+  }, [apiBase, headers])
+
+  const fetchArbStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/arbitrage/status`, { headers: headers() })
+      if (res.ok) setArbStatus(await res.json())
+    } catch { /* ignore */ }
+  }, [apiBase, headers])
+
+  const fetchLatestReserves = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/reserves/latest`, { headers: headers() })
+      if (res.ok) setReserveSnapshot(await res.json())
+    } catch { /* ignore */ }
+  }, [apiBase, headers])
+
+  const triggerRebalance = async () => {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/wallet/rebalance`, { method: 'POST', headers: headers() })
+      if (res.ok) {
+        toast.success('Rebalance check completed')
+        fetchWalletTiers()
+        fetchWalletTransfers()
+      } else toast.error('Rebalance failed')
+    } catch { toast.error('Network error') }
+  }
+
+  const executeTransfer = async (transferId: string) => {
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/wallet/transfers/${transferId}/execute`, { method: 'POST', headers: headers() })
+      if (res.ok) {
+        toast.success('Transfer executed')
+        fetchWalletTransfers()
+        fetchWalletTiers()
+      } else toast.error('Execute failed')
+    } catch { toast.error('Network error') }
+  }
+
+  const generateReserveSnapshot = async () => {
+    setReserveGenerating(true)
+    try {
+      const res = await fetch(`${apiBase}/api/v1/admin/reserves/snapshot`, { method: 'POST', headers: headers() })
+      if (res.ok) {
+        toast.success('Reserve snapshot generated')
+        setReserveSnapshot(await res.json())
+      } else toast.error('Snapshot failed')
+    } catch { toast.error('Network error') }
+    setReserveGenerating(false)
+  }
+
+  const refreshWalletData = () => {
+    fetchWalletTiers()
+    fetchWalletTransfers()
+    fetchWalletAlerts()
+    fetchArbStatus()
+    fetchLatestReserves()
+  }
+
   const handleUpdateGameRTP = async (gameType: string) => {
     const rtpValue = parseFloat(editRTP)
     if (!editRTP || isNaN(rtpValue) || rtpValue < 0 || rtpValue > 100) {
@@ -517,6 +621,8 @@ export default function AdminDashboard() {
     { key: 'users', label: 'Players', icon: Users, badge: users.length || undefined },
     { key: 'adjustments', label: 'Balance Ops', icon: Wallet },
     { key: 'games', label: 'Game Settings', icon: Gauge },
+    { key: 'rtp', label: 'RTP Verify', icon: Target },
+    { key: 'wallet', label: 'Wallet Mgmt', icon: Layers },
     { key: 'automation', label: 'Automation', icon: Settings },
     { key: 'audit', label: 'Audit Trail', icon: FileText, badge: auditLog.length || undefined },
   ]
@@ -1747,6 +1853,407 @@ export default function AdminDashboard() {
                   <p>• Changes apply immediately to all new bets</p>
                   <p>• All changes are logged in the audit trail</p>
                 </div>
+              </div>
+            )}
+
+            {/* ══════════════ RTP VERIFICATION ══════════════ */}
+            {tab === 'rtp' && (
+              <div className="space-y-5">
+                {/* Controls */}
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                  <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                        <Target className="w-4 h-4 text-cyan-400" />
+                      </div>
+                      <div>
+                        <h2 className="text-sm font-semibold text-white">RTP Verification Engine</h2>
+                        <p className="text-[11px] text-white/30">Monte Carlo simulation to verify Return-to-Player per game</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-5 flex flex-wrap items-end gap-4">
+                    <div>
+                      <label className="block text-xs text-white/50 mb-1.5">Rounds per config</label>
+                      <select
+                        value={rtpRounds}
+                        onChange={e => setRtpRounds(e.target.value)}
+                        className="px-3 py-2 bg-white/[0.05] border border-white/[0.1] rounded-lg text-white text-sm min-w-[160px]"
+                      >
+                        <option value="10000">10,000 (fast)</option>
+                        <option value="100000">100,000 (standard)</option>
+                        <option value="500000">500,000 (precise)</option>
+                        <option value="1000000">1,000,000 (high)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-white/50 mb-1.5">Game</label>
+                      <select
+                        value={rtpGameFilter}
+                        onChange={e => setRtpGameFilter(e.target.value)}
+                        className="px-3 py-2 bg-white/[0.05] border border-white/[0.1] rounded-lg text-white text-sm min-w-[160px]"
+                      >
+                        <option value="all">All Games</option>
+                        {['dice','limbo','flip','wheel','plinko','mines','keno','twentyone','hilo','stairs','chicken','coinclimber','snake','slots'].map(g => (
+                          <option key={g} value={g}>{g}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        setRtpLoading(true)
+                        setRtpResults(null)
+                        try {
+                          const url = rtpGameFilter === 'all'
+                            ? `/api/admin/rtp/verify?num_rounds=${rtpRounds}`
+                            : `/api/admin/rtp/verify/${rtpGameFilter}?num_rounds=${rtpRounds}`
+                          const res = await fetch(url, { headers: headers() })
+                          if (!res.ok) throw new Error(await res.text())
+                          setRtpResults(await res.json())
+                          toast.success('RTP verification complete')
+                        } catch (err: any) {
+                          toast.error('RTP verification failed: ' + err.message)
+                        } finally {
+                          setRtpLoading(false)
+                        }
+                      }}
+                      disabled={rtpLoading}
+                      className="px-4 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20 transition-all text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {rtpLoading ? (
+                        <><RefreshCw className="w-4 h-4 animate-spin" /> Running...</>
+                      ) : (
+                        <><Activity className="w-4 h-4" /> Run Verification</>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Results */}
+                {rtpResults && (
+                  <>
+                    {/* Summary */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                        <div className="text-[10px] text-white/40 mb-1">Total Rounds</div>
+                        <div className="text-lg font-bold text-white">{(rtpResults.total_rounds || 0).toLocaleString()}</div>
+                      </div>
+                      <div className="px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                        <div className="text-[10px] text-white/40 mb-1">Elapsed</div>
+                        <div className="text-lg font-bold text-white">{(rtpResults.total_elapsed_seconds || 0).toFixed(1)}s</div>
+                      </div>
+                      <div className="px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                        <div className="text-[10px] text-white/40 mb-1">Configs Tested</div>
+                        <div className="text-lg font-bold text-white">{(rtpResults.games || rtpResults.configs || []).length}</div>
+                      </div>
+                      <div className={cn(
+                        "px-4 py-3 rounded-xl border",
+                        rtpResults.all_passed
+                          ? "bg-emerald-500/5 border-emerald-500/20"
+                          : "bg-red-500/5 border-red-500/20"
+                      )}>
+                        <div className="text-[10px] text-white/40 mb-1">Status</div>
+                        <div className={cn("text-lg font-bold", rtpResults.all_passed ? "text-emerald-400" : "text-red-400")}>
+                          {rtpResults.all_passed ? 'ALL PASS' : 'FAILED'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Per-config table */}
+                    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                      <div className="px-5 py-3 border-b border-white/[0.06]">
+                        <h3 className="text-sm font-semibold text-white">Per-Configuration Results</h3>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-white/[0.06] text-white/40 text-[10px] uppercase tracking-wider">
+                              <th className="px-4 py-2.5 text-left">Game</th>
+                              <th className="px-4 py-2.5 text-left">Config</th>
+                              <th className="px-4 py-2.5 text-right">Theoretical</th>
+                              <th className="px-4 py-2.5 text-right">Measured</th>
+                              <th className="px-4 py-2.5 text-right">99.9% CI</th>
+                              <th className="px-4 py-2.5 text-right">H.Edge</th>
+                              <th className="px-4 py-2.5 text-right">Win Rate</th>
+                              <th className="px-4 py-2.5 text-right">Max Mult</th>
+                              <th className="px-4 py-2.5 text-center">Pass</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(rtpResults.games || rtpResults.configs || []).map((r: any, i: number) => (
+                              <tr key={i} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                                <td className="px-4 py-2.5 text-white/70 capitalize">{r.game_type}</td>
+                                <td className="px-4 py-2.5 text-white/50 font-mono text-[10px]">{r.config}</td>
+                                <td className="px-4 py-2.5 text-right text-white/60">{(r.theoretical_rtp * 100).toFixed(2)}%</td>
+                                <td className="px-4 py-2.5 text-right font-medium text-white">{(r.measured_rtp * 100).toFixed(3)}%</td>
+                                <td className="px-4 py-2.5 text-right text-white/40 font-mono text-[10px]">
+                                  [{(r.ci_99_9[0] * 100).toFixed(2)}, {(r.ci_99_9[1] * 100).toFixed(2)}]
+                                </td>
+                                <td className="px-4 py-2.5 text-right text-orange-400">{(r.house_edge_measured * 100).toFixed(3)}%</td>
+                                <td className="px-4 py-2.5 text-right text-white/50">{(r.win_rate * 100).toFixed(1)}%</td>
+                                <td className="px-4 py-2.5 text-right text-yellow-400">{r.max_multiplier.toFixed(1)}x</td>
+                                <td className="px-4 py-2.5 text-center">
+                                  {r.within_ci ? (
+                                    <span className="inline-flex items-center gap-1 text-emerald-400"><CheckCircle className="w-3.5 h-3.5" /></span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-red-400"><AlertTriangle className="w-3.5 h-3.5" /></span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* VIP Impact */}
+                    {rtpResults.vip_impact && (
+                      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                        <div className="px-5 py-3 border-b border-white/[0.06]">
+                          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                            <Star className="w-4 h-4 text-yellow-400" /> VIP Bonus Impact on Margin
+                          </h3>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-white/[0.06] text-white/40 text-[10px] uppercase tracking-wider">
+                                <th className="px-4 py-2.5 text-left">Tier</th>
+                                <th className="px-4 py-2.5 text-right">Rakeback</th>
+                                <th className="px-4 py-2.5 text-right">Lossback</th>
+                                <th className="px-4 py-2.5 text-right">Effective RTP</th>
+                                <th className="px-4 py-2.5 text-right">Effective Edge</th>
+                                <th className="px-4 py-2.5 text-center">Profitable</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {Object.entries(rtpResults.vip_impact).map(([tier, data]: [string, any]) => (
+                                <tr key={tier} className="border-b border-white/[0.04] hover:bg-white/[0.02] transition-colors">
+                                  <td className="px-4 py-2.5 text-white font-medium">{tier}</td>
+                                  <td className="px-4 py-2.5 text-right text-white/60">{(data.rakeback_rate * 100).toFixed(1)}%</td>
+                                  <td className="px-4 py-2.5 text-right text-white/60">{(data.lossback_rate * 100).toFixed(1)}%</td>
+                                  <td className="px-4 py-2.5 text-right text-cyan-400">{(data.effective_rtp * 100).toFixed(2)}%</td>
+                                  <td className={cn("px-4 py-2.5 text-right font-medium", data.profitable_for_house ? "text-emerald-400" : "text-red-400")}>
+                                    {(data.effective_house_edge * 100).toFixed(3)}%
+                                  </td>
+                                  <td className="px-4 py-2.5 text-center">
+                                    {data.profitable_for_house ? (
+                                      <span className="text-emerald-400"><CheckCircle className="w-3.5 h-3.5 inline" /></span>
+                                    ) : (
+                                      <span className="text-red-400"><AlertTriangle className="w-3.5 h-3.5 inline" /></span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                <div className="px-5 py-4 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[11px] text-white/40 space-y-1">
+                  <p>💡 <strong>How it works:</strong></p>
+                  <p>• Simulates N rounds per game using provably fair HMAC-SHA256</p>
+                  <p>• Measures actual RTP and checks it falls within 99.9% confidence interval</p>
+                  <p>• VIP impact shows effective RTP after rakeback &amp; lossback bonuses</p>
+                  <p>• A failing test means the game engine has a mathematical flaw</p>
+                </div>
+              </div>
+            )}
+
+            {/* ══════════════ WALLET MANAGEMENT ══════════════ */}
+            {tab === 'wallet' && (
+              <div className="space-y-6">
+                {/* Header row */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+                      <Layers className="w-4 h-4 text-brand" />
+                    </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-white">Wallet & Reserves</h2>
+                      <p className="text-[11px] text-white/30">Multi-tier wallet, anti-arbitrage, proof of reserves</p>
+                    </div>
+                  </div>
+                  <button onClick={refreshWalletData}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-white/50 hover:text-white text-xs transition-all">
+                    <RefreshCw className={cn('w-3.5 h-3.5', walletLoading && 'animate-spin')} /> Refresh
+                  </button>
+                </div>
+
+                {/* ── Tier Balances ── */}
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                  <div className="px-5 py-3 border-b border-white/[0.06] flex items-center justify-between">
+                    <span className="text-sm font-semibold text-white">Tier Balances</span>
+                    <button onClick={triggerRebalance}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-brand/10 hover:bg-brand/20 text-brand text-[11px] font-medium transition-all">
+                      <Zap className="w-3 h-3" /> Rebalance
+                    </button>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-white/[0.04]">
+                          <th className="text-left px-4 py-2.5 text-white/30 font-medium">Currency</th>
+                          <th className="text-right px-4 py-2.5 text-red-400/60 font-medium">🔥 Hot</th>
+                          <th className="text-right px-4 py-2.5 text-yellow-400/60 font-medium">🌡 Warm</th>
+                          <th className="text-right px-4 py-2.5 text-blue-400/60 font-medium">🧊 Cold</th>
+                          <th className="text-right px-4 py-2.5 text-white/30 font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/[0.03]">
+                        {Object.keys(walletTiers).length === 0 ? (
+                          <tr><td colSpan={5} className="text-center py-8 text-white/20">No tier data — click Refresh</td></tr>
+                        ) : Object.entries(walletTiers).map(([cur, t]) => (
+                          <tr key={cur} className="hover:bg-white/[0.02] transition-colors">
+                            <td className="px-4 py-2.5 font-mono font-semibold text-white">{cur}</td>
+                            <td className="px-4 py-2.5 text-right font-mono text-red-300">{Number(t.hot).toFixed(6)}</td>
+                            <td className="px-4 py-2.5 text-right font-mono text-yellow-300">{Number(t.warm).toFixed(6)}</td>
+                            <td className="px-4 py-2.5 text-right font-mono text-blue-300">{Number(t.cold).toFixed(6)}</td>
+                            <td className="px-4 py-2.5 text-right font-mono text-white/70">{Number(t.total).toFixed(6)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* ── Pending Transfers ── */}
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                  <div className="px-5 py-3 border-b border-white/[0.06]">
+                    <span className="text-sm font-semibold text-white">Inter-Tier Transfers</span>
+                  </div>
+                  <div className="divide-y divide-white/[0.03]">
+                    {walletTransfers.length === 0 ? (
+                      <div className="p-8 text-center text-white/20 text-xs">No pending transfers</div>
+                    ) : walletTransfers.map((t: any) => (
+                      <div key={t.id} className="flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors">
+                        <div className="flex items-center gap-3">
+                          <ChevronRight className="w-4 h-4 text-white/20" />
+                          <div>
+                            <span className="text-xs font-mono text-white">
+                              {t.amount} {t.currency}
+                            </span>
+                            <span className="text-[10px] text-white/30 ml-2">
+                              {t.from_tier} → {t.to_tier}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={cn('px-2 py-0.5 rounded text-[10px] font-medium',
+                            t.status === 'pending' && 'bg-yellow-500/10 text-yellow-400',
+                            t.status === 'approved' && 'bg-blue-500/10 text-blue-400',
+                            t.status === 'executed' && 'bg-emerald-500/10 text-emerald-400',
+                          )}>{t.status}</span>
+                          {(t.status === 'pending' || t.status === 'approved') && (
+                            <button onClick={() => executeTransfer(t.id)}
+                              className="px-2 py-1 rounded bg-brand/10 hover:bg-brand/20 text-brand text-[10px] font-medium transition-all">
+                              Execute
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Anti-Arbitrage Status ── */}
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                  <div className="px-5 py-3 border-b border-white/[0.06]">
+                    <span className="text-sm font-semibold text-white">Anti-Arbitrage Engine</span>
+                  </div>
+                  <div className="p-4">
+                    {!arbStatus ? (
+                      <p className="text-white/20 text-xs text-center">No data — click Refresh</p>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {arbStatus.prices && Object.entries(arbStatus.prices as Record<string, string>).map(([cur, price]) => (
+                            <div key={cur} className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.05]">
+                              <span className="text-[10px] text-white/30 uppercase">{cur}</span>
+                              <p className="text-sm font-mono text-white mt-0.5">${Number(price).toLocaleString()}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {arbStatus.blocked_currencies?.length > 0 && (
+                          <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/5 border border-red-500/10">
+                            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                            <span className="text-xs text-red-300">Blocked currencies: {arbStatus.blocked_currencies.join(', ')}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Proof of Reserves ── */}
+                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                  <div className="px-5 py-3 border-b border-white/[0.06] flex items-center justify-between">
+                    <span className="text-sm font-semibold text-white">Proof of Reserves</span>
+                    <button onClick={generateReserveSnapshot} disabled={reserveGenerating}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-[11px] font-medium transition-all disabled:opacity-40">
+                      {reserveGenerating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
+                      Generate Snapshot
+                    </button>
+                  </div>
+                  <div className="p-4">
+                    {!reserveSnapshot ? (
+                      <p className="text-white/20 text-xs text-center">No snapshot yet — generate one above</p>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.05]">
+                            <span className="text-[10px] text-white/30">Total Assets (USD)</span>
+                            <p className="text-sm font-mono text-emerald-400 mt-0.5">${Number(reserveSnapshot.total_assets_usd || 0).toLocaleString()}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.05]">
+                            <span className="text-[10px] text-white/30">Total Liabilities (USD)</span>
+                            <p className="text-sm font-mono text-red-400 mt-0.5">${Number(reserveSnapshot.total_liabilities_usd || 0).toLocaleString()}</p>
+                          </div>
+                          <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.05]">
+                            <span className="text-[10px] text-white/30">Reserve Ratio</span>
+                            <p className={cn('text-sm font-mono mt-0.5',
+                              Number(reserveSnapshot.reserve_ratio || 0) >= 1 ? 'text-emerald-400' : 'text-red-400'
+                            )}>{((Number(reserveSnapshot.reserve_ratio || 0)) * 100).toFixed(1)}%</p>
+                          </div>
+                        </div>
+                        {reserveSnapshot.merkle_root && (
+                          <div className="p-3 rounded-lg bg-white/[0.03] border border-white/[0.05]">
+                            <span className="text-[10px] text-white/30">Merkle Root</span>
+                            <p className="text-[11px] font-mono text-white/50 mt-1 break-all">{reserveSnapshot.merkle_root}</p>
+                          </div>
+                        )}
+                        <p className="text-[10px] text-white/20 text-right">
+                          Generated: {reserveSnapshot.timestamp ? new Date(reserveSnapshot.timestamp * 1000).toLocaleString() : 'N/A'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Wallet Alerts ── */}
+                {walletAlerts.length > 0 && (
+                  <div className="rounded-xl border border-yellow-500/10 bg-yellow-500/[0.02] overflow-hidden">
+                    <div className="px-5 py-3 border-b border-yellow-500/10">
+                      <span className="text-sm font-semibold text-yellow-300">Alerts ({walletAlerts.length})</span>
+                    </div>
+                    <div className="divide-y divide-yellow-500/[0.06]">
+                      {walletAlerts.map((a: any, i: number) => (
+                        <div key={i} className="flex items-start gap-3 px-4 py-3">
+                          <AlertTriangle className={cn('w-4 h-4 shrink-0 mt-0.5',
+                            a.severity === 'critical' ? 'text-red-400' : 'text-yellow-400'
+                          )} />
+                          <div>
+                            <p className="text-xs text-white">{a.message}</p>
+                            <p className="text-[10px] text-white/20 mt-0.5">{a.timestamp ? new Date(a.timestamp * 1000).toLocaleString() : ''}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

@@ -718,17 +718,25 @@ function GameCardGrid({ game }: { game: GameCardData }) {
 const GAME_NAMES = ['Crash', 'Dice', 'Mines', 'Plinko', 'Limbo', 'Wheel', 'Keno', 'Twenty One', 'Chicken', 'Snake', 'Coin Climber']
 const CURRENCIES = ['ETH', 'BTC', 'SOL', 'USDT', 'USDC', 'DOGE']
 
+function formatBetAmount(val: number): string {
+  if (val >= 100) return val.toFixed(2)
+  if (val >= 1) return val.toFixed(4)
+  return val.toFixed(4)
+}
+
 function randomBet() {
   const won = Math.random() > 0.45
-  const amount = (Math.random() * 2 + 0.001).toFixed(4)
-  const mult = won ? (Math.random() * 50 + 1.01).toFixed(2) : '0.00'
+  const amount = parseFloat((Math.random() * 2 + 0.01).toFixed(4))
+  const mult = won ? parseFloat((Math.random() * 50 + 1.01).toFixed(2)) : 0
+  const payout = won ? amount * mult : 0
+  const profit = won ? payout - amount : -amount
   return {
     user: `${Math.random().toString(36).slice(2, 5)}***${Math.random().toString(36).slice(2, 4)}`,
     game: GAME_NAMES[Math.floor(Math.random() * GAME_NAMES.length)],
-    amount,
+    amount: formatBetAmount(amount),
     currency: CURRENCIES[Math.floor(Math.random() * CURRENCIES.length)],
-    mult: `${mult}x`,
-    profit: won ? `+${(parseFloat(amount) * parseFloat(mult)).toFixed(4)}` : `-${amount}`,
+    mult: `${mult.toFixed(2)}x`,
+    profit: won ? `+${formatBetAmount(profit)}` : `-${formatBetAmount(Math.abs(profit))}`,
     won,
     time: 'just now',
   }
@@ -772,7 +780,7 @@ export default function HomePage() {
 
           {/* ═══════ Hero Promo Banner ═══════ */}
           <section className="px-3 sm:px-6 pt-4 sm:pt-5">
-            <div className="relative rounded-2xl overflow-hidden border border-white/[0.06]" style={{ minHeight: '160px' }}>
+            <div className="relative rounded-xl overflow-hidden border border-white/[0.06]" style={{ minHeight: '100px' }}>
               {promos.map((promo, i) => {
                 const Icon = promo.icon
                 return (
@@ -780,29 +788,27 @@ export default function HomePage() {
                     'transition-all duration-700 ease-in-out',
                     i === activePromo ? 'opacity-100 relative' : 'opacity-0 absolute inset-0 pointer-events-none'
                   )}>
-                    <div className={cn('relative flex items-center gap-5 sm:gap-8 p-5 sm:p-8 lg:p-10 bg-gradient-to-r overflow-hidden', promo.bg, 'border', promo.border, 'rounded-2xl')}>
+                    <div className={cn('relative flex items-center gap-4 sm:gap-6 p-3.5 sm:p-5 lg:p-6 bg-gradient-to-r overflow-hidden', promo.bg, 'border', promo.border, 'rounded-xl')}>
                       <div className="absolute inset-0 pointer-events-none" style={{ background: promo.glow }} />
-                      {/* Animated accent orbs */}
-                      <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full opacity-20 blur-3xl pointer-events-none" style={{ background: promo.glow }} />
-                      <div className="absolute -bottom-10 -left-10 w-40 h-40 rounded-full opacity-10 blur-2xl pointer-events-none" style={{ background: promo.glow }} />
-                      <div className="hidden sm:flex relative z-10 w-16 h-16 rounded-2xl bg-white/[0.07] border border-white/[0.1] items-center justify-center shrink-0 backdrop-blur-sm shadow-lg">
-                        <Icon className={cn('w-8 h-8', promo.accent)} />
+                      <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full opacity-15 blur-3xl pointer-events-none" style={{ background: promo.glow }} />
+                      <div className="hidden sm:flex relative z-10 w-11 h-11 rounded-xl bg-white/[0.07] border border-white/[0.1] items-center justify-center shrink-0 backdrop-blur-sm">
+                        <Icon className={cn('w-5 h-5', promo.accent)} />
                       </div>
                       <div className="flex-1 min-w-0 relative z-10">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={cn('text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.2em] opacity-90', promo.accent)}>Featured</span>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className={cn('text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.2em] opacity-90', promo.accent)}>Featured</span>
                           {'badge' in promo && promo.badge && (
-                            <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/25 animate-pulse">
+                            <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/25 animate-pulse">
                               {promo.badge}
                             </span>
                           )}
                         </div>
-                        <h2 className="text-xl sm:text-3xl font-black text-white mb-1.5 tracking-tight">{promo.title}</h2>
-                        <p className="text-xs sm:text-sm text-white/55 max-w-lg leading-relaxed">{promo.subtitle}</p>
+                        <h2 className="text-base sm:text-xl font-black text-white mb-0.5 tracking-tight">{promo.title}</h2>
+                        <p className="text-[11px] sm:text-xs text-white/50 max-w-lg leading-relaxed">{promo.subtitle}</p>
                       </div>
                       <Link href={promo.href}
-                        className="hidden sm:inline-flex relative z-10 items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm bg-white/[0.08] text-white hover:bg-white/[0.16] border border-white/[0.1] transition-all backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98] shadow-lg">
-                        {promo.cta} <ArrowRight className="w-4 h-4" />
+                        className="hidden sm:inline-flex relative z-10 items-center gap-1.5 px-4 py-2 rounded-lg font-bold text-xs bg-white/[0.08] text-white hover:bg-white/[0.16] border border-white/[0.1] transition-all backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98]">
+                        {promo.cta} <ArrowRight className="w-3.5 h-3.5" />
                       </Link>
                     </div>
                   </div>
@@ -819,50 +825,44 @@ export default function HomePage() {
           </section>
 
           {/* ═══════ VIP Transfer Banner ═══════ */}
-          <section className="px-3 sm:px-6 pt-4">
+          <section className="px-3 sm:px-6 pt-3">
             <Link href="/vip" className="group block">
-              <div className="relative rounded-2xl overflow-hidden border border-amber-500/15 bg-gradient-to-r from-amber-950/50 via-yellow-950/30 to-amber-950/40 hover:border-amber-500/25 transition-all">
-                {/* Glow effects */}
+              <div className="relative rounded-xl overflow-hidden border border-amber-500/15 bg-gradient-to-r from-amber-950/50 via-yellow-950/30 to-amber-950/40 hover:border-amber-500/25 transition-all">
                 <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute -top-24 left-[10%] w-72 h-72 rounded-full bg-amber-500/10 blur-3xl" />
-                  <div className="absolute -bottom-16 right-[15%] w-48 h-48 rounded-full bg-yellow-500/8 blur-2xl" />
+                  <div className="absolute -top-16 left-[10%] w-48 h-48 rounded-full bg-amber-500/10 blur-3xl" />
                 </div>
-                <div className="relative z-10 flex items-center gap-4 sm:gap-6 p-4 sm:p-5">
-                  {/* Icon cluster */}
+                <div className="relative z-10 flex items-center gap-3 sm:gap-5 p-3 sm:p-4">
                   <div className="relative shrink-0">
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-amber-500/25 to-yellow-600/20 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-900/20">
-                      <Crown className="w-7 h-7 sm:w-8 sm:h-8 text-amber-400" />
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-amber-500/25 to-yellow-600/20 border border-amber-500/30 flex items-center justify-center">
+                      <Crown className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
                     </div>
-                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-brand flex items-center justify-center border-2 border-background">
-                      <ArrowUpRight className="w-3 h-3 text-background" />
+                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-brand flex items-center justify-center border-2 border-background">
+                      <ArrowUpRight className="w-2.5 h-2.5 text-background" />
                     </div>
                   </div>
-                  {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="text-base sm:text-lg font-black text-white tracking-tight">VIP Transfer</h3>
-                      <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-brand/15 text-brand border border-brand/20">
+                      <h3 className="text-sm sm:text-base font-black text-white tracking-tight">VIP Transfer</h3>
+                      <span className="text-[7px] sm:text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-brand/15 text-brand border border-brand/20">
                         Instant
                       </span>
                     </div>
-                    <p className="text-[11px] sm:text-xs text-white/45 leading-relaxed">Already VIP on Stake, Rollbit, or another platform? Transfer your VIP status to NeonBet — keep your tier, get better rakeback.</p>
+                    <p className="text-[10px] sm:text-[11px] text-white/45 leading-relaxed">Already VIP on Stake, Rollbit, or another platform? Transfer your VIP status to NeonBet — keep your tier, get better rakeback.</p>
                   </div>
-                  {/* Benefits */}
-                  <div className="hidden lg:flex items-center gap-6 shrink-0">
+                  <div className="hidden lg:flex items-center gap-5 shrink-0">
                     {[
                       { label: 'Up to 35%', sub: 'Rakeback' },
                       { label: 'Personal', sub: 'VIP Host' },
                       { label: '$10K+', sub: 'Level-up Bonus' },
                     ].map((b, i) => (
                       <div key={i} className="text-center">
-                        <p className="text-sm font-black text-amber-400">{b.label}</p>
-                        <p className="text-[9px] text-white/35 font-medium uppercase tracking-wider">{b.sub}</p>
+                        <p className="text-xs font-black text-amber-400">{b.label}</p>
+                        <p className="text-[8px] text-white/35 font-medium uppercase tracking-wider">{b.sub}</p>
                       </div>
                     ))}
                   </div>
-                  {/* CTA */}
                   <div className="shrink-0">
-                    <div className="px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-500 to-yellow-500 text-background-deep hover:from-amber-400 hover:to-yellow-400 transition-all group-hover:scale-[1.03] group-hover:shadow-lg group-hover:shadow-amber-500/20 active:scale-[0.97]">
+                    <div className="px-3.5 sm:px-4 py-2 rounded-lg font-bold text-[11px] sm:text-xs bg-gradient-to-r from-amber-500 to-yellow-500 text-background-deep hover:from-amber-400 hover:to-yellow-400 transition-all group-hover:scale-[1.03] group-hover:shadow-lg group-hover:shadow-amber-500/20 active:scale-[0.97]">
                       Transfer Now →
                     </div>
                   </div>

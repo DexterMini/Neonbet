@@ -270,3 +270,137 @@ async def gambling_status(
         "restrictions": restrictions,
         "limits": _settings_to_response(settings),
     }
+
+
+# ============================================================================
+# REALITY CHECK & SESSION TIME TRACKING
+# ============================================================================
+
+@router.get("/reality-check")
+async def reality_check(
+    session_start: Optional[str] = None,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Reality check endpoint. Frontend calls this periodically.
+
+    Returns:
+    - Session duration
+    - Bets placed / net P&L this session
+    - Whether a reality check popup should be shown
+    - Whether session time limit is exceeded
+    """
+    from casino.models.database import Bet, BetStatus
+
+    settings = await _get_or_create_settings(db, user.id)
+    now = datetime.now(UTC)
+
+    # Parse session start time (ISO format) or default to 1 hour ago
+    if session_start:
+        try:
+            session_started = datetime.fromisoformat(session_start)
+        except (ValueError, TypeError):
+            session_started = now - timedelta(hours=1)
+    else:
+        session_started = now - timedelta(hours=1)
+
+    session_minutes = (now - session_started).total_seconds() / 60
+
+    # Bets placed since session start
+    result = await db.execute(
+        select(
+            func.count(Bet.id),
+            func.coalesce(func.sum(Bet.bet_amount), 0),
+            func.coalesce(func.sum(Bet.profit), 0),
+        ).where(
+            Bet.user_id == user.id,
+            Bet.created_at >= session_started,
+        )
+    )
+    row = result.one()
+    bets_count = row[0] or 0
+    total_wagered = float(row[1] or 0)
+    net_profit = float(row[2] or 0)
+
+    # Should show reality check popup?
+    show_reality_check = False
+    if settings.reality_check_interval is not None:
+        interval = int(settings.reality_check_interval)
+        if interval > 0 and session_minutes >= interval:
+            # Show every N minutes
+            show_reality_check = (int(session_minutes) % interval) < 2
+
+    # Session time limit exceeded?
+    session_limit_exceeded = False
+    if settings.session_time_limit is not None:
+        limit = int(settings.session_time_limit)
+        if limit > 0 and session_minutes >= limit:
+            session_limit_exceeded = True
+
+    await db.commit()
+
+    return {
+        "session_minutes": round(session_minutes, 1),
+        "bets_placed": bets_count,
+        "total_wagered": round(total_wagered, 2),
+        "net_profit": round(net_profit, 2),
+        "show_reality_check": show_reality_check,
+        "session_limit_exceeded": session_limit_exceeded,
+        "reality_check_interval": int(settings.reality_check_interval) if settings.reality_check_interval else None,
+        "session_time_limit": int(settings.session_time_limit) if settings.session_time_limit else None,
+    }
+
+
+@router.get("/activity-summary")
+async def activity_summary(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get responsible gambling activity summary.
+
+    Shows current usage vs configured limits for all periods.
+    """
+    from casino.services.responsible_gambling import ResponsibleGamblingEnforcer
+
+    settings = await _get_or_create_settings(db, user.id)
+    enforcer = ResponsibleGamblingEnforcer(db)
+
+    # Gather current period totals
+    daily_deposits = float(await enforcer.get_deposits_in_period(user.id, "daily"))
+    weekly_deposits = float(await enforcer.get_deposits_in_period(user.id, "weekly"))
+    monthly_deposits = float(await enforcer.get_deposits_in_period(user.id, "monthly"))
+
+    daily_wagers = float(await enforcer.get_wagers_in_period(user.id, "daily"))
+
+    daily_losses = float(await enforcer.get_losses_in_period(user.id, "daily"))
+    weekly_losses = float(await enforcer.get_losses_in_period(user.id, "weekly"))
+    monthly_losses = float(await enforcer.get_losses_in_period(user.id, "monthly"))
+
+    await db.commit()
+
+    def _limit_info(current: float, limit_val) -> dict:
+        limit = float(limit_val) if limit_val is not None else None
+        return {
+            "current": round(current, 2),
+            "limit": round(limit, 2) if limit is not None else None,
+            "remaining": round(max(0, limit - current), 2) if limit is not None else None,
+            "percentage": round(min(100, (current / limit) * 100), 1) if limit and limit > 0 else None,
+        }
+
+    return {
+        "deposits": {
+            "daily": _limit_info(daily_deposits, settings.daily_deposit_limit),
+            "weekly": _limit_info(weekly_deposits, settings.weekly_deposit_limit),
+            "monthly": _limit_info(monthly_deposits, settings.monthly_deposit_limit),
+        },
+        "wagers": {
+            "daily": _limit_info(daily_wagers, settings.daily_wager_limit),
+        },
+        "losses": {
+            "daily": _limit_info(daily_losses, settings.daily_loss_limit),
+            "weekly": _limit_info(weekly_losses, settings.weekly_loss_limit),
+            "monthly": _limit_info(monthly_losses, settings.monthly_loss_limit),
+        },
+    }

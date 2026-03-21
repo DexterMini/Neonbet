@@ -250,7 +250,11 @@ class LedgerService:
         amount: Decimal,
         reference_id: UUID
     ) -> None:
-        """Lock balance for a bet (move from available to locked)"""
+        """Lock balance for a bet (move from available to locked).
+        
+        The lock timestamp is stored in event metadata so stale locks
+        can be detected and released by the background sweeper.
+        """
         balance = await self.get_or_create_balance(user_id, currency)
         
         if balance.available < amount:
@@ -436,3 +440,52 @@ class LedgerService:
         
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def release_stale_locks(
+        self,
+        max_age_seconds: int = 300,
+    ) -> List[Dict[str, Any]]:
+        """
+        Release locked balances that have been held longer than *max_age_seconds*.
+
+        Handles the case where a process crashed between ``lock_balance``
+        and settlement, leaving funds permanently locked.
+
+        Returns a list of dicts describing each released lock for audit logging.
+        """
+        from datetime import timedelta
+        from casino.models import Bet, BetStatus
+
+        cutoff = datetime.utcnow() - timedelta(seconds=max_age_seconds)
+        released: List[Dict[str, Any]] = []
+
+        result = await self.session.execute(
+            select(Bet).where(
+                Bet.status == BetStatus.PENDING,
+                Bet.created_at < cutoff,
+            )
+        )
+        stale_bets = list(result.scalars().all())
+
+        for bet in stale_bets:
+            try:
+                balance = await self.get_or_create_balance(bet.user_id, bet.currency)
+                unlock_amount = min(bet.bet_amount, balance.locked)
+                if unlock_amount > 0:
+                    balance.locked -= unlock_amount
+                    balance.available += unlock_amount
+                    bet.status = BetStatus.VOIDED
+                    released.append({
+                        "bet_id": str(bet.id),
+                        "user_id": str(bet.user_id),
+                        "amount": str(unlock_amount),
+                        "currency": bet.currency.value,
+                        "locked_since": bet.created_at.isoformat() if bet.created_at else None,
+                    })
+            except Exception:
+                continue  # Skip problematic rows; will be retried next sweep
+
+        if released:
+            await self.session.flush()
+
+        return released

@@ -33,6 +33,7 @@ class VIPTier:
     name: str
     min_wagered: Decimal  # Monthly wagered requirement (USD)
     rakeback_percent: Decimal
+    lossback_percent: Decimal  # Percentage of net losses returned
     level_up_bonus: Decimal
     weekly_bonus_percent: Decimal
     monthly_bonus_percent: Decimal
@@ -50,6 +51,7 @@ VIP_TIERS: Dict[VIPLevel, VIPTier] = {
         name="Bronze",
         min_wagered=Decimal("0"),
         rakeback_percent=Decimal("0.05"),  # 5%
+        lossback_percent=Decimal("0.00"),  # 0% — unlocks at Silver
         level_up_bonus=Decimal("0"),
         weekly_bonus_percent=Decimal("0.001"),
         monthly_bonus_percent=Decimal("0.005"),
@@ -61,6 +63,7 @@ VIP_TIERS: Dict[VIPLevel, VIPTier] = {
         name="Silver",
         min_wagered=Decimal("5000"),
         rakeback_percent=Decimal("0.10"),  # 10%
+        lossback_percent=Decimal("0.03"),  # 3%
         level_up_bonus=Decimal("25"),
         weekly_bonus_percent=Decimal("0.002"),
         monthly_bonus_percent=Decimal("0.01"),
@@ -73,6 +76,7 @@ VIP_TIERS: Dict[VIPLevel, VIPTier] = {
         name="Gold",
         min_wagered=Decimal("25000"),
         rakeback_percent=Decimal("0.15"),  # 15%
+        lossback_percent=Decimal("0.05"),  # 5%
         level_up_bonus=Decimal("100"),
         weekly_bonus_percent=Decimal("0.003"),
         monthly_bonus_percent=Decimal("0.015"),
@@ -85,6 +89,7 @@ VIP_TIERS: Dict[VIPLevel, VIPTier] = {
         name="Platinum",
         min_wagered=Decimal("100000"),
         rakeback_percent=Decimal("0.20"),  # 20%
+        lossback_percent=Decimal("0.08"),  # 8%
         level_up_bonus=Decimal("500"),
         weekly_bonus_percent=Decimal("0.004"),
         monthly_bonus_percent=Decimal("0.02"),
@@ -98,6 +103,7 @@ VIP_TIERS: Dict[VIPLevel, VIPTier] = {
         name="Diamond",
         min_wagered=Decimal("500000"),
         rakeback_percent=Decimal("0.25"),  # 25%
+        lossback_percent=Decimal("0.10"),  # 10%
         level_up_bonus=Decimal("2500"),
         weekly_bonus_percent=Decimal("0.005"),
         monthly_bonus_percent=Decimal("0.025"),
@@ -112,6 +118,7 @@ VIP_TIERS: Dict[VIPLevel, VIPTier] = {
         name="VIP",
         min_wagered=Decimal("2000000"),
         rakeback_percent=Decimal("0.30"),  # 30%
+        lossback_percent=Decimal("0.12"),  # 12%
         level_up_bonus=Decimal("10000"),
         weekly_bonus_percent=Decimal("0.006"),
         monthly_bonus_percent=Decimal("0.03"),
@@ -126,6 +133,7 @@ VIP_TIERS: Dict[VIPLevel, VIPTier] = {
         name="SVIP",
         min_wagered=Decimal("10000000"),
         rakeback_percent=Decimal("0.35"),  # 35%
+        lossback_percent=Decimal("0.15"),  # 15%
         level_up_bonus=Decimal("50000"),
         weekly_bonus_percent=Decimal("0.007"),
         monthly_bonus_percent=Decimal("0.035"),
@@ -366,6 +374,9 @@ class VIPService:
         # Calculate rakeback (percentage of house edge)
         rakeback_earned = house_edge_amount * tier.rakeback_percent
 
+        # Calculate XP earned (1 XP per $0.01 house edge contribution)
+        xp_earned = int(house_edge_amount * 100)
+
         # Update wagered amounts
         new_total = status.total_wagered + wager_amount
         new_monthly = status.wagered_this_month + wager_amount
@@ -402,6 +413,22 @@ class VIPService:
                 )
                 await db.commit()
 
+        # Persist XP to DB
+        if db is not None and xp_earned > 0:
+            from sqlalchemy import update
+            from casino.models.database import User
+            from uuid import UUID
+            try:
+                uid = UUID(user_id)
+            except (ValueError, AttributeError):
+                uid = user_id
+            await db.execute(
+                update(User).where(User.id == uid).values(
+                    vip_xp=User.vip_xp + xp_earned
+                )
+            )
+            await db.commit()
+
         # Calculate new progress
         progress, next_req = self.calculate_level_progress(new_monthly, new_level)
 
@@ -424,6 +451,7 @@ class VIPService:
         return {
             "rakeback_earned": str(rakeback_earned),
             "rakeback_available": str(new_rakeback),
+            "xp_earned": xp_earned,
             "leveled_up": leveled_up,
             "new_level": new_level.name if leveled_up else None,
             "level_up_bonus": str(level_up_bonus) if leveled_up else None,
@@ -630,6 +658,131 @@ class VIPService:
             "amount": str(amount)
         }
 
+    # ────────────────────────────────────────────
+    # Lossback System
+    # ────────────────────────────────────────────
+
+    async def record_loss(self, user_id: str, loss_amount: Decimal) -> None:
+        """
+        Record a bet loss for lossback calculation.
+
+        Accumulates net losses in a weekly Redis key.  Wins reset the counter
+        proportionally (net loss tracking).
+        """
+        week_key = self._lossback_week_key(user_id)
+        current = await self.redis.get(week_key)
+        current_loss = Decimal(current) if current else Decimal("0")
+        new_loss = current_loss + loss_amount
+        # TTL = 8 days so the key survives until claim window closes
+        await self.redis.setex(week_key, 691200, str(new_loss))
+
+    async def record_win(self, user_id: str, win_amount: Decimal) -> None:
+        """
+        Record a bet win — reduces accumulated net loss for lossback.
+        """
+        week_key = self._lossback_week_key(user_id)
+        current = await self.redis.get(week_key)
+        if not current:
+            return
+        current_loss = Decimal(current)
+        new_loss = max(Decimal("0"), current_loss - win_amount)
+        await self.redis.setex(week_key, 691200, str(new_loss))
+
+    async def get_lossback_available(self, user_id: str, db=None) -> Dict[str, Any]:
+        """
+        Calculate available lossback for the current week.
+
+        Returns dict with amount, tier lossback_percent, and net_loss.
+        """
+        status = await self.get_user_vip_status(user_id, db)
+        tier = self.get_tier(status.level)
+
+        if tier.lossback_percent <= Decimal("0"):
+            return {
+                "available": "0",
+                "net_loss": "0",
+                "lossback_percent": "0",
+                "message": "Lossback unlocks at Silver tier",
+            }
+
+        week_key = self._lossback_week_key(user_id)
+        net_loss = Decimal(await self.redis.get(week_key) or "0")
+        lossback_amount = net_loss * tier.lossback_percent
+
+        return {
+            "available": str(lossback_amount),
+            "net_loss": str(net_loss),
+            "lossback_percent": str(tier.lossback_percent * 100),
+        }
+
+    async def claim_lossback(self, user_id: str, db=None) -> Dict[str, Any]:
+        """
+        Claim weekly lossback.  Credits USDT via LedgerService.
+        """
+        info = await self.get_lossback_available(user_id, db)
+        amount = Decimal(info["available"])
+
+        if amount <= Decimal("0"):
+            return {
+                "success": False,
+                "message": "No lossback available to claim",
+                "amount": "0",
+            }
+
+        # Check if already claimed this week
+        claim_key = f"vip:lossback_claimed:{user_id}:{self._week_number()}"
+        already_claimed = await self.redis.get(claim_key)
+        if already_claimed:
+            return {
+                "success": False,
+                "message": "Lossback already claimed this week",
+                "amount": "0",
+            }
+
+        if db is not None:
+            from casino.services.ledger import LedgerService
+            from casino.models.database import Currency, LedgerEventType
+            from uuid import UUID
+
+            try:
+                uid = UUID(user_id)
+            except (ValueError, AttributeError):
+                uid = user_id
+
+            ledger = LedgerService(db)
+            await ledger.credit(
+                user_id=uid,
+                currency=Currency.usdt,
+                amount=amount,
+                event_type=LedgerEventType.LOSSBACK_CREDIT,
+                reference_type="lossback",
+                metadata={
+                    "week": self._week_number(),
+                    "net_loss": info["net_loss"],
+                    "lossback_percent": info["lossback_percent"],
+                    "claimed_at": datetime.now(UTC).isoformat(),
+                },
+            )
+
+        # Mark as claimed (TTL = 8 days)
+        await self.redis.setex(claim_key, 691200, "1")
+        # Reset net loss counter
+        await self.redis.delete(self._lossback_week_key(user_id))
+        await self.redis.delete(f"vip:status:{user_id}")
+
+        return {
+            "success": True,
+            "amount": str(amount),
+            "net_loss": info["net_loss"],
+        }
+
+    def _lossback_week_key(self, user_id: str) -> str:
+        return f"vip:net_loss:{user_id}:{self._week_number()}"
+
+    @staticmethod
+    def _week_number() -> str:
+        return datetime.now(UTC).strftime("%G-W%V")
+
     async def _cache_status(self, status: UserVIPStatus):
         """Cache user VIP status"""
         data = {
@@ -660,6 +813,7 @@ class VIPService:
                 "name": tier.name,
                 "min_wagered": str(tier.min_wagered),
                 "rakeback_percent": f"{tier.rakeback_percent * 100}%",
+                "lossback_percent": f"{tier.lossback_percent * 100}%",
                 "level_up_bonus": str(tier.level_up_bonus),
                 "weekly_bonus_percent": f"{tier.weekly_bonus_percent * 100}%",
                 "monthly_bonus_percent": f"{tier.monthly_bonus_percent * 100}%",

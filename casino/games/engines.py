@@ -201,16 +201,19 @@ class LimboGame(BaseGame):
         # Generate multiplier using limbo formula
         normalized = game_result.normalized
         
-        # Apply house edge to generation
-        effective_rtp = 1 - float(self.house_edge)
+        house_edge_f = float(self.house_edge)
         
-        # Avoid division by zero
-        if normalized >= effective_rtp:
-            normalized = effective_rtp - 0.0001
-        
-        # Multiplier formula: 1 / (1 - normalized)
-        generated = Decimal(str(round(effective_rtp / (1 - normalized), 2)))
-        generated = max(Decimal("1.00"), generated)
+        # House edge: small probability of instant 1.00x (always lose)
+        if normalized < house_edge_f:
+            generated = Decimal("1.00")
+        else:
+            # Map [house_edge, 1) → [0, 1) then invert
+            mapped = (normalized - house_edge_f) / (1.0 - house_edge_f)
+            if mapped >= 0.999999:
+                generated = Decimal("1000000")
+            else:
+                generated = Decimal(str(round(1.0 / (1.0 - mapped), 2)))
+            generated = max(Decimal("1.00"), generated)
         
         won = generated >= target
         
@@ -266,16 +269,13 @@ class MinesGame(BaseGame):
         game_result: GameResult, 
         mine_count: int
     ) -> List[int]:
-        """Generate mine positions using provably fair hash"""
-        import hashlib as _hashlib
+        """Generate mine positions using cursor-based provably fair system"""
         positions = list(range(self.grid_size))
-        hash_full = game_result.raw_hash
+        floats = game_result.get_float_sequence(self.grid_size - 1)
         
-        # Fisher-Yates shuffle using hash with extended randomness
-        for i in range(self.grid_size - 1, 0, -1):
-            # Generate unique 2-byte segment for each step via HMAC chain
-            step_hash = _hashlib.sha256(f"{hash_full}:{i}".encode()).hexdigest()
-            j = int(step_hash[:4], 16) % (i + 1)
+        # Fisher-Yates shuffle using cursor floats
+        for idx, i in enumerate(range(self.grid_size - 1, 0, -1)):
+            j = int(floats[idx] * (i + 1)) % (i + 1)
             positions[i], positions[j] = positions[j], positions[i]
         
         return sorted(positions[:mine_count])
@@ -446,16 +446,9 @@ class PlinkoGame(BaseGame):
         return True
     
     def generate_path(self, game_result: GameResult, rows: int) -> List[str]:
-        """Generate ball path (L/R for each row)"""
-        path = []
-        hash_full = game_result.raw_hash
-        
-        for i in range(rows):
-            byte_value = int(hash_full[i*2:(i+1)*2], 16)
-            direction = "R" if byte_value >= 128 else "L"
-            path.append(direction)
-        
-        return path
+        """Generate ball path (L/R for each row) using cursor system"""
+        floats = game_result.get_float_sequence(rows)
+        return ["R" if f >= 0.5 else "L" for f in floats]
     
     def calculate_result(
         self,
@@ -652,16 +645,13 @@ class KenoGame(BaseGame):
             return False
         return True
 
-    def _draw_numbers(self, hash_full: str) -> List[int]:
-        """Draw DRAW_COUNT unique numbers from 1..TOTAL_NUMBERS using the hash."""
+    def _draw_numbers(self, game_result: GameResult) -> List[int]:
+        """Draw DRAW_COUNT unique numbers from 1..TOTAL_NUMBERS using cursor system."""
         pool = list(range(1, self.TOTAL_NUMBERS + 1))
+        floats = game_result.get_float_sequence(self.DRAW_COUNT)
         drawn: List[int] = []
         for i in range(self.DRAW_COUNT):
-            # Use 4-hex-char segments for wider range
-            seg = hash_full[(i * 4) % len(hash_full): (i * 4 + 4) % len(hash_full)]
-            if len(seg) < 4:
-                seg = hash_full[:4]
-            idx = int(seg, 16) % len(pool)
+            idx = int(floats[i] * len(pool)) % len(pool)
             drawn.append(pool.pop(idx))
         return sorted(drawn)
 
@@ -674,7 +664,7 @@ class KenoGame(BaseGame):
         picks: List[int] = game_data["picks"]
         risk: str = game_data.get("risk", "classic")
 
-        drawn = self._draw_numbers(game_result.raw_hash)
+        drawn = self._draw_numbers(game_result)
         hits = len(set(picks) & set(drawn))
 
         payout_table = self.PAYOUTS[risk].get(len(picks), [0])
@@ -753,13 +743,12 @@ class BlackjackGame(BaseGame):
             aces -= 1
         return total
 
-    def _build_deck(self, hash_full: str) -> List[Dict[str, str]]:
-        """Build and shuffle a 52-card deck using the provably fair hash."""
-        import hashlib as _hashlib
+    def _build_deck(self, game_result: GameResult) -> List[Dict[str, str]]:
+        """Build and shuffle a 52-card deck using cursor-based provably fair system."""
         deck = [{"rank": r, "suit": s} for s in self.SUITS for r in self.RANKS]
-        for i in range(len(deck) - 1, 0, -1):
-            step_hash = _hashlib.sha256(f"{hash_full}:{i}".encode()).hexdigest()
-            j = int(step_hash[:4], 16) % (i + 1)
+        floats = game_result.get_float_sequence(len(deck) - 1)
+        for idx, i in enumerate(range(len(deck) - 1, 0, -1)):
+            j = int(floats[idx] * (i + 1)) % (i + 1)
             deck[i], deck[j] = deck[j], deck[i]
         return deck
 
@@ -770,7 +759,7 @@ class BlackjackGame(BaseGame):
         game_data: Dict[str, Any],
     ) -> BetResult:
         num_cards = int(game_data.get("num_cards", 2))
-        deck = self._build_deck(game_result.raw_hash)
+        deck = self._build_deck(game_result)
         hand = deck[:num_cards]
         total = self._hand_value(hand)
 
@@ -957,14 +946,9 @@ class StairsGame(BaseGame):
         return True
 
     def _get_trap_columns(self, game_result: GameResult, num_rows: int, num_cols: int) -> List[int]:
-        """Generate trap column for each row."""
-        import hashlib as _hashlib
-        traps = []
-        for i in range(num_rows):
-            step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{i}".encode()).hexdigest()
-            trap_col = int(step_hash[:4], 16) % num_cols
-            traps.append(trap_col)
-        return traps
+        """Generate trap column for each row using cursor system."""
+        floats = game_result.get_float_sequence(num_rows)
+        return [int(f * num_cols) % num_cols for f in floats]
 
     def calculate_result(
         self,
@@ -1043,13 +1027,9 @@ class ChickenGame(BaseGame):
         return True
 
     def _get_car_positions(self, game_result: GameResult, num_rows: int, lanes: int) -> List[int]:
-        import hashlib as _hashlib
-        positions = []
-        for i in range(num_rows):
-            step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{i}".encode()).hexdigest()
-            pos = int(step_hash[:4], 16) % lanes
-            positions.append(pos)
-        return positions
+        """Generate car positions for each row using cursor system."""
+        floats = game_result.get_float_sequence(num_rows)
+        return [int(f * lanes) % lanes for f in floats]
 
     def calculate_result(
         self,
@@ -1125,13 +1105,9 @@ class CoinClimberGame(BaseGame):
         return True
 
     def _get_correct_positions(self, game_result: GameResult, num_levels: int, cols: int) -> List[int]:
-        import hashlib as _hashlib
-        positions = []
-        for i in range(num_levels):
-            step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{i}".encode()).hexdigest()
-            pos = int(step_hash[:4], 16) % cols
-            positions.append(pos)
-        return positions
+        """Generate correct positions for each level using cursor system."""
+        floats = game_result.get_float_sequence(num_levels)
+        return [int(f * cols) % cols for f in floats]
 
     def calculate_result(
         self,
@@ -1202,16 +1178,10 @@ class SnakeGame(BaseGame):
         return True
 
     def _generate_gem_values(self, game_result: GameResult, count: int = 50) -> List[float]:
-        """Generate a sequence of gem multiplier values."""
-        import hashlib as _hashlib
-        values = []
-        for i in range(count):
-            step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{i}".encode()).hexdigest()
-            # Value 0.1x to 3.0x per gem
-            raw = int(step_hash[:4], 16)
-            value = round(0.1 + (raw / 65535) * 2.9, 2)
-            values.append(value)
-        return values
+        """Generate a sequence of gem multiplier values using cursor system."""
+        floats = game_result.get_float_sequence(count)
+        # Value 0.1x to 3.0x per gem
+        return [round(0.1 + f * 2.9, 2) for f in floats]
 
     def calculate_result(
         self,
@@ -1310,16 +1280,15 @@ class SlotsGame(BaseGame):
         return True
 
     def _generate_grid(self, game_result: GameResult) -> List[List[str]]:
-        """Generate 5 reels x 4 rows grid of symbol ids using provably fair hash."""
-        import hashlib as _hashlib
-        grid: List[List[str]] = []
+        """Generate 5 reels x 4 rows grid of symbol ids using cursor system."""
         num_symbols = len(self.SYMBOLS)
+        floats = game_result.get_float_sequence(20)  # 5 reels × 4 rows
+        grid: List[List[str]] = []
         for reel in range(5):
             column: List[str] = []
             for row in range(4):
                 idx = reel * 4 + row
-                step_hash = _hashlib.sha256(f"{game_result.raw_hash}:{idx}".encode()).hexdigest()
-                val = int(step_hash[:4], 16) % num_symbols
+                val = int(floats[idx] * num_symbols) % num_symbols
                 column.append(self.SYMBOLS[val])
             grid.append(column)
         return grid

@@ -1002,9 +1002,9 @@ TIMELINE = """
 ║  └─ [ ] Edge Case Handler                                                   ║
 ║                                                                              ║
 ║  FASE 2: TRANSAKSJONSSIKKERHET (Uke 5-8)                                    ║
-║  ├─ [ ] Idempotency Layer                                                   ║
-║  ├─ [ ] Circuit Breaker Pattern                                             ║
-║  └─ [ ] Event Sourcing Ledger                                               ║
+║  ├─ [✓] Idempotency Layer                                                   ║
+║  ├─ [✓] Circuit Breaker Pattern                                             ║
+║  └─ [✓] Event Sourcing Ledger                                               ║
 ║                                                                              ║
 ║  FASE 3: WALLET ARKITEKTUR (Uke 9-12)                                       ║
 ║  ├─ [ ] Multi-Tier Wallet System                                            ║
@@ -1012,13 +1012,13 @@ TIMELINE = """
 ║  └─ [ ] Proof of Reserves                                                   ║
 ║                                                                              ║
 ║  FASE 4: RISK ENGINE (Uke 13-16)                                            ║
-║  ├─ [ ] Real-Time Risk Scoring                                              ║
-║  ├─ [ ] Emergency Global Freeze                                             ║
+║  ├─ [✓] Real-Time Risk Scoring                                              ║
+║  ├─ [✓] Emergency Global Freeze                                             ║
 ║  └─ [ ] Behavioral Biometrics                                               ║
 ║                                                                              ║
 ║  FASE 5: SPILLMOTOR (Uke 17-20)                                             ║
 ║  ├─ [ ] Provably Fair 2.0                                                   ║
-║  └─ [ ] Game State Recovery                                                 ║
+║  └─ [✓] Game State Recovery                                                 ║
 ║                                                                              ║
 ║  FASE 6: INFRASTRUKTUR (Uke 21-24)                                          ║
 ║  ├─ [ ] Zero Trust Architecture                                             ║
@@ -1026,8 +1026,8 @@ TIMELINE = """
 ║  └─ [ ] Dual Approval System                                                ║
 ║                                                                              ║
 ║  FASE 7: VIP & RETENTION (Uke 25-28)                                        ║
-║  ├─ [ ] Rakeback System                                                     ║
-║  ├─ [ ] Lossback System                                                     ║
+║  ├─ [✓] Rakeback System                                                     ║
+║  ├─ [✓] Lossback System                                                     ║
 ║  └─ [ ] AI VIP Host                                                         ║
 ║                                                                              ║
 ║  FASE 8: COMPLIANCE & LAUNCH (Uke 29-32)                                    ║

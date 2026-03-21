@@ -30,6 +30,7 @@ from casino.services.payment import (
     PaymentError,
     NOWPaymentsService,
 )
+from casino.services.wallet_manager import MultiTierWalletManager
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +157,21 @@ async def create_deposit(
     currency = req.currency.upper()
     if currency not in SUPPORTED:
         raise HTTPException(400, f"Unsupported currency: {currency}")
+
+    # ── Responsible gambling: deposit limit check ──
+    from casino.api.routes.responsible_gambling import ResponsibleGamblingSettings
+    from casino.services.responsible_gambling import ResponsibleGamblingEnforcer
+    rg_result = await db.execute(
+        select(ResponsibleGamblingSettings).where(ResponsibleGamblingSettings.user_id == user.id)
+    )
+    rg = rg_result.scalar_one_or_none()
+    if rg:
+        enforcer = ResponsibleGamblingEnforcer(db)
+        dep_ok, dep_reason = await enforcer.check_deposit_limit(
+            user.id, Decimal(str(req.amount_usd)), rg
+        )
+        if not dep_ok:
+            raise HTTPException(status_code=403, detail=dep_reason)
     
     deposit_id = uuid4()
     order_id = f"dep_{user.id}_{deposit_id}"
@@ -224,6 +240,21 @@ async def create_deposit_invoice(
     currency = req.currency.upper()
     if currency not in SUPPORTED:
         raise HTTPException(400, f"Unsupported currency: {currency}")
+
+    # ── Responsible gambling: deposit limit check ──
+    from casino.api.routes.responsible_gambling import ResponsibleGamblingSettings
+    from casino.services.responsible_gambling import ResponsibleGamblingEnforcer
+    rg_result = await db.execute(
+        select(ResponsibleGamblingSettings).where(ResponsibleGamblingSettings.user_id == user.id)
+    )
+    rg = rg_result.scalar_one_or_none()
+    if rg:
+        enforcer = ResponsibleGamblingEnforcer(db)
+        dep_ok, dep_reason = await enforcer.check_deposit_limit(
+            user.id, Decimal(str(req.amount_usd)), rg
+        )
+        if not dep_ok:
+            raise HTTPException(status_code=403, detail=dep_reason)
     
     deposit_id = uuid4()
     order_id = f"dep_{user.id}_{deposit_id}"
@@ -457,6 +488,13 @@ async def nowpayments_ipn_callback(
                 dep.status = "credited"
                 dep.amount = amount_to_credit
                 
+                # Route deposit to appropriate wallet tier
+                redis_client = getattr(request.app.state, "redis", None)
+                if redis_client:
+                    wm = MultiTierWalletManager(redis_client)
+                    tier = await wm.route_deposit(cur_enum.value.upper(), amount_to_credit)
+                    logger.info(f"Deposit routed to {tier.value} tier")
+                
                 logger.info(
                     f"✅ Deposit credited: {amount_to_credit} {parsed['currency']} "
                     f"to user {user_id} (deposit {deposit_id})"
@@ -487,6 +525,7 @@ async def nowpayments_ipn_callback(
 @router.post("/payout/{withdrawal_id}")
 async def process_payout(
     withdrawal_id: str,
+    request: Request,
     admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -526,6 +565,12 @@ async def process_payout(
         
         wd.status = "processing"
         await db.commit()
+
+        # Track withdrawal against hot wallet tier
+        redis_client = getattr(request.app.state, "redis", None)
+        if redis_client:
+            wm = MultiTierWalletManager(redis_client)
+            await wm.process_withdrawal_from_hot(cur_name, Decimal(str(wd.amount)))
         
         return {
             "success": True,

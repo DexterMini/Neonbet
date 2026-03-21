@@ -52,7 +52,7 @@ export default function CrashPage() {
   const wsRef = useRef<WebSocket | null>(null)
   const { serverSeedHash, clientSeed, nonce, previousServerSeed, rotateSeed, setClientSeed } = useProvablyFair()
   const { isAuthenticated, isHydrated, token } = useAuthStore()
-  const { fetchBalance } = useGameStore()
+  const { fetchBalances } = useGameStore()
   const sessionStats = useSessionStats()
   const router = useRouter()
 
@@ -150,7 +150,7 @@ export default function CrashPage() {
               toast.error(`Crashed at ${parseFloat(data.crash_point).toFixed(2)}x! You lost $${myBet.toFixed(2)}`)
               sessionStats.recordBet(false, myBet, -myBet, 0)
             }
-            fetchBalance()
+            fetchBalances()
             break
 
           case 'new_bet':
@@ -178,7 +178,7 @@ export default function CrashPage() {
               const profit = parseFloat(data.profit)
               sessionStats.recordBet(true, myBet!, profit, mult)
               toast.success(`Cashed out at ${mult.toFixed(2)}x! Won $${parseFloat(data.payout).toFixed(2)}`)
-              fetchBalance()
+              fetchBalances()
             }
             break
         }

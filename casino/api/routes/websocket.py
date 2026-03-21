@@ -102,13 +102,13 @@ async def crash_websocket(
         )
         await manager.join_room(connection_id, crash_game.ROOM_NAME)
 
-        # Send current state
+        # Send current state (including reconnect info if player has active bet)
+        reconnect_state = await crash_game.handle_reconnect(user_id)
         await manager.send_personal(connection_id, {
             "type": "connected",
             "connection_id": connection_id,
             "username": username,
-            "state": crash_game.get_state(),
-            "history": crash_game.get_history(),
+            **reconnect_state,
         })
 
         # Handle messages
@@ -119,6 +119,16 @@ async def crash_websocket(
             if msg_type == "bet":
                 from decimal import Decimal
                 from uuid import UUID
+
+                # Check global freeze before accepting crash bet
+                _redis = getattr(websocket.app.state, "redis", None)
+                if _redis is not None and await _redis.get("system:global_freeze"):
+                    await manager.send_personal(connection_id, {
+                        "type": "bet_result",
+                        "success": False,
+                        "error": "Platform is temporarily paused",
+                    })
+                    continue
 
                 amount = Decimal(data.get("amount", "0"))
                 auto_cashout = data.get("auto_cashout")
@@ -152,8 +162,10 @@ async def crash_websocket(
 
     except WebSocketDisconnect:
         logger.info(f"Client disconnected: {connection_id}")
+        await crash_game.handle_disconnect(user_id)
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
+        await crash_game.handle_disconnect(user_id)
     finally:
         await manager.disconnect(connection_id)
 
@@ -179,3 +191,8 @@ async def start_crash_game():
 async def stop_crash_game():
     """Stop the crash game on application shutdown."""
     await crash_game.stop()
+
+
+def set_crash_game_redis(redis_client):
+    """Inject Redis client into crash game manager (called from lifespan)."""
+    crash_game.redis = redis_client

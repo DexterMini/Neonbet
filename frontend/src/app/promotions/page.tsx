@@ -7,6 +7,7 @@ import {
   Trophy, Crown, Target, Gift, Clock, Users, Zap, 
   ChevronRight, Star, Flame, Calendar, Timer
 } from 'lucide-react'
+import { GameLayout } from '@/components/GameLayout'
 
 const promotions = [
   {
@@ -97,6 +98,7 @@ export default function PromotionsPage() {
   })
 
   return (
+    <GameLayout>
     <div className="min-h-screen bg-background p-4 lg:p-8">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
@@ -301,5 +303,6 @@ export default function PromotionsPage() {
         </div>
       </div>
     </div>
+    </GameLayout>
   )
 }

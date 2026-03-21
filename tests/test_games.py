@@ -35,7 +35,8 @@ def game_result_win():
         normalized=0.75,
         server_seed_hash="hash123",
         client_seed="client123",
-        nonce=1
+        nonce=1,
+        _server_seed="test_server_seed_win"
     )
 
 
@@ -48,7 +49,8 @@ def game_result_lose():
         normalized=0.25,
         server_seed_hash="hash123",
         client_seed="client123",
-        nonce=1
+        nonce=1,
+        _server_seed="test_server_seed_lose"
     )
 
 
@@ -234,7 +236,8 @@ class TestMinesGame:
             normalized=0.5,
             server_seed_hash="hash",
             client_seed="client",
-            nonce=1
+            nonce=1,
+            _server_seed="test_mines_seed"
         )
         positions1 = game.generate_mine_positions(result, 5)
         positions2 = game.generate_mine_positions(result, 5)
@@ -266,7 +269,8 @@ class TestMinesGame:
             normalized=0,
             server_seed_hash="hash",
             client_seed="client",
-            nonce=1
+            nonce=1,
+            _server_seed="test_mines_seed"
         )
         mines = game.generate_mine_positions(result, 5)
         
@@ -313,7 +317,8 @@ class TestPlinkoGame:
             normalized=0.5,
             server_seed_hash="hash",
             client_seed="client",
-            nonce=1
+            nonce=1,
+            _server_seed="test_plinko_seed"
         )
         path1 = game.generate_path(result, 16)
         path2 = game.generate_path(result, 16)
@@ -331,7 +336,8 @@ class TestPlinkoGame:
                 normalized=0.5,
                 server_seed_hash="hash",
                 client_seed="client",
-                nonce=1
+                nonce=1,
+                _server_seed="test_plinko_seed"
             ),
             Decimal("10"),
             {"rows": 16, "risk": "high"}

@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Optional, Dict, List, Any
 from uuid import uuid4, UUID as _UUID
 
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -918,3 +918,442 @@ async def check_admin(
 ):
     """Check if the current user has admin privileges. No 403 — just returns the flag."""
     return {"is_admin": getattr(user, 'is_admin', False)}
+
+
+# ========================
+# Emergency Global Freeze
+# ========================
+
+class GlobalFreezeRequest(BaseModel):
+    reason: str
+    duration_minutes: Optional[int] = None  # None = indefinite
+
+
+@router.post("/system/freeze")
+async def activate_global_freeze(
+    request_body: GlobalFreezeRequest,
+    client_request: Request,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Activate emergency global freeze — halts ALL bet placement platform-wide.
+
+    Crash game bets, regular bets, everything stops immediately.
+    Withdrawals and deposits are unaffected.
+    """
+    import json as _json
+
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is None:
+        raise HTTPException(status_code=503, detail="Redis unavailable — cannot set freeze flag")
+
+    freeze_data = _json.dumps({
+        "activated_by": user.username,
+        "reason": request_body.reason,
+        "activated_at": datetime.now(UTC).isoformat(),
+    })
+
+    if request_body.duration_minutes:
+        await redis_client.setex("system:global_freeze", request_body.duration_minutes * 60, freeze_data)
+    else:
+        await redis_client.set("system:global_freeze", freeze_data)
+
+    # Audit log
+    db.add(AdminAction(
+        admin_id=user.id,
+        action="global_freeze",
+        target_type="system",
+        details={"reason": request_body.reason, "duration_minutes": request_body.duration_minutes},
+    ))
+    await db.commit()
+
+    return {
+        "status": "frozen",
+        "reason": request_body.reason,
+        "duration_minutes": request_body.duration_minutes,
+        "message": "All bet placement halted platform-wide",
+    }
+
+
+@router.post("/system/unfreeze")
+async def deactivate_global_freeze(
+    client_request: Request,
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Deactivate the emergency global freeze — resume normal operations."""
+
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is None:
+        raise HTTPException(status_code=503, detail="Redis unavailable")
+
+    deleted = await redis_client.delete("system:global_freeze")
+
+    db.add(AdminAction(
+        admin_id=user.id,
+        action="global_unfreeze",
+        target_type="system",
+        details={"was_frozen": bool(deleted)},
+    ))
+    await db.commit()
+
+    return {
+        "status": "active",
+        "message": "Platform resumed — bets are being accepted",
+    }
+
+
+@router.get("/system/freeze-status")
+async def get_freeze_status(
+    client_request: Request,
+    user: User = Depends(require_admin),
+):
+    """Check whether the platform is currently frozen."""
+    import json as _json
+
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is None:
+        return {"frozen": False, "redis_available": False}
+
+    raw = await redis_client.get("system:global_freeze")
+    if not raw:
+        return {"frozen": False}
+
+    data = _json.loads(raw)
+    ttl = await redis_client.ttl("system:global_freeze")
+    return {
+        "frozen": True,
+        "activated_by": data.get("activated_by"),
+        "reason": data.get("reason"),
+        "activated_at": data.get("activated_at"),
+        "remaining_seconds": ttl if ttl > 0 else None,
+    }
+
+
+# ========================
+# RTP Verification
+# ========================
+
+@router.post("/system/release-stale-locks")
+async def release_stale_locks(
+    user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    max_age_seconds: int = 300,
+):
+    """
+    Release locked balances from stale / abandoned bets.
+
+    Finds PENDING bets older than *max_age_seconds* and unlocks the
+    associated balance, voiding the bet.  Returns details of each
+    released lock for the audit trail.
+    """
+    if max_age_seconds < 60:
+        raise HTTPException(400, "max_age_seconds must be at least 60")
+
+    from casino.services.ledger import LedgerService
+
+    ledger = LedgerService(db)
+    released = await ledger.release_stale_locks(max_age_seconds=max_age_seconds)
+    await db.commit()
+
+    return {
+        "released_count": len(released),
+        "released": released,
+    }
+
+
+@router.get("/system/payout-failures")
+async def get_payout_failures(
+    user: User = Depends(require_admin),
+    request: Request = None,
+    limit: int = 50,
+):
+    """
+    Retrieve unresolved crash-game payout failures from the Redis alert queue.
+    """
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if redis_client is None:
+        return {"failures": [], "count": 0}
+
+    import json as _json
+    raw = await redis_client.lrange("alerts:payout_failures", 0, limit - 1)
+    failures = [_json.loads(item) for item in raw]
+
+    return {"failures": failures, "count": len(failures)}
+
+
+@router.get("/rtp/verify")
+async def verify_all_rtp(
+    user: User = Depends(require_admin),
+    num_rounds: int = 100_000,
+):
+    """
+    Run RTP verification across all game engines.
+
+    Simulates each game over *num_rounds* rounds and checks that the
+    measured RTP falls within a 99.9 % confidence interval of the
+    theoretical value.  Also returns VIP bonus impact analysis.
+
+    WARNING: CPU-intensive.  100 k rounds per config ≈ 5-15 s total.
+    """
+    if num_rounds < 1_000 or num_rounds > 10_000_000:
+        raise HTTPException(400, "num_rounds must be between 1,000 and 10,000,000")
+
+    from casino.services.rtp_verifier import RTPVerifier
+
+    verifier = RTPVerifier()
+    report = verifier.verify_all_games(num_rounds=num_rounds)
+    return report.to_dict()
+
+
+@router.get("/rtp/verify/{game_type}")
+async def verify_game_rtp(
+    game_type: str,
+    user: User = Depends(require_admin),
+    num_rounds: int = 100_000,
+):
+    """
+    Run RTP verification for a single game type.
+
+    Returns per-config results with measured vs theoretical RTP and
+    confidence intervals.
+    """
+    if num_rounds < 1_000 or num_rounds > 10_000_000:
+        raise HTTPException(400, "num_rounds must be between 1,000 and 10,000,000")
+
+    from casino.services.rtp_verifier import RTPVerifier
+
+    verifier = RTPVerifier()
+    try:
+        results = verifier.verify_game(game_type, num_rounds=num_rounds)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc))
+
+    return {
+        "game_type": game_type,
+        "num_rounds": num_rounds,
+        "all_passed": all(r.within_ci for r in results),
+        "configs": [r.to_dict() for r in results],
+    }
+
+
+# ========================
+# Multi-Tier Wallet Management
+# ========================
+
+@router.get("/wallet/tiers")
+async def get_wallet_tiers(
+    user: User = Depends(require_admin),
+    request: Request = None,
+):
+    """Get all wallet tier balances across all currencies."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    from casino.services.wallet_manager import MultiTierWalletManager
+
+    mgr = MultiTierWalletManager(redis_client)
+    balances = await mgr.get_all_balances()
+    return {"balances": [b.to_dict() for b in balances]}
+
+
+@router.get("/wallet/tiers/{currency}")
+async def get_wallet_tier_currency(
+    currency: str,
+    user: User = Depends(require_admin),
+    request: Request = None,
+):
+    """Get wallet tier breakdown for a single currency."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    from casino.services.wallet_manager import MultiTierWalletManager
+
+    mgr = MultiTierWalletManager(redis_client)
+    bal = await mgr.get_balance(currency.upper())
+    return bal.to_dict()
+
+
+@router.post("/wallet/rebalance")
+async def run_rebalance(
+    user: User = Depends(require_admin),
+    request: Request = None,
+):
+    """Run watermark checks and auto-rebalance across all currencies."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    from casino.services.wallet_manager import MultiTierWalletManager
+
+    mgr = MultiTierWalletManager(redis_client)
+    alerts = await mgr.run_rebalance_check()
+    return {"alerts": [a.to_dict() for a in alerts], "count": len(alerts)}
+
+
+@router.get("/wallet/transfers")
+async def list_wallet_transfers(
+    status: Optional[str] = None,
+    limit: int = 50,
+    user: User = Depends(require_admin),
+    request: Request = None,
+):
+    """List inter-tier wallet transfers."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    from casino.services.wallet_manager import MultiTierWalletManager
+
+    mgr = MultiTierWalletManager(redis_client)
+    transfers = await mgr.list_transfers(status=status, limit=limit)
+    return {"transfers": transfers, "count": len(transfers)}
+
+
+@router.post("/wallet/transfers/{transfer_id}/execute")
+async def execute_wallet_transfer(
+    transfer_id: str,
+    user: User = Depends(require_admin),
+    request: Request = None,
+):
+    """Approve and execute a pending wallet transfer."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    from casino.services.wallet_manager import MultiTierWalletManager
+
+    mgr = MultiTierWalletManager(redis_client)
+    result = await mgr.approve_and_execute_transfer(transfer_id, approver=str(user.id))
+    if not result["success"]:
+        raise HTTPException(400, result["error"])
+    return result
+
+
+@router.get("/wallet/alerts")
+async def get_wallet_alerts(
+    limit: int = 50,
+    user: User = Depends(require_admin),
+    request: Request = None,
+):
+    """Get wallet management alerts."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    from casino.services.wallet_manager import MultiTierWalletManager
+
+    mgr = MultiTierWalletManager(redis_client)
+    alerts = await mgr.get_alerts(limit=limit)
+    return {"alerts": alerts, "count": len(alerts)}
+
+
+# ========================
+# Anti-Arbitrage
+# ========================
+
+@router.get("/arbitrage/status")
+async def get_arbitrage_status(
+    user: User = Depends(require_admin),
+    request: Request = None,
+):
+    """Get current market prices and any blocked currencies."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    from casino.services.anti_arbitrage import AntiArbitrageEngine
+
+    engine = AntiArbitrageEngine(redis_client)
+    status = {}
+    for cur in ["BTC", "ETH", "SOL", "LTC"]:
+        blocked = await redis_client.exists(f"arb:blocked:{cur}")
+        try:
+            price = await engine.get_market_price(cur)
+            status[cur] = {"price_usd": str(price), "blocked": bool(blocked)}
+        except Exception:
+            status[cur] = {"price_usd": "unavailable", "blocked": bool(blocked)}
+
+    for sc in ["USDT", "USDC"]:
+        status[sc] = {"price_usd": "1.00", "blocked": False}
+
+    return {"currencies": status}
+
+
+# ========================
+# Proof of Reserves
+# ========================
+
+@router.post("/reserves/snapshot")
+async def generate_reserves_snapshot(
+    user: User = Depends(require_admin),
+    request: Request = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a new proof-of-reserves snapshot with Merkle tree."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    from casino.services.wallet_manager import MultiTierWalletManager
+    from casino.services.proof_of_reserves import ProofOfReservesService
+    from casino.services.anti_arbitrage import AntiArbitrageEngine
+
+    wallet_mgr = MultiTierWalletManager(redis_client)
+    arb_engine = AntiArbitrageEngine(redis_client)
+
+    # Fetch USD prices for non-stablecoins
+    usd_prices = {}
+    for cur in ["BTC", "ETH", "SOL", "LTC"]:
+        try:
+            usd_prices[cur] = await arb_engine.get_market_price(cur)
+        except Exception:
+            pass
+
+    por = ProofOfReservesService(db, wallet_mgr, redis_client)
+    snapshot = await por.generate_snapshot(usd_prices=usd_prices)
+    return snapshot.to_dict()
+
+
+@router.get("/reserves/latest")
+async def get_latest_reserves(
+    user: User = Depends(require_admin),
+    request: Request = None,
+):
+    """Get the most recent proof-of-reserves snapshot."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    from casino.services.proof_of_reserves import ProofOfReservesService
+    from casino.services.wallet_manager import MultiTierWalletManager
+
+    # Need a dummy DB for the service init, but get_latest just reads Redis
+    wallet_mgr = MultiTierWalletManager(redis_client)
+    # Pass None for db since we only read from Redis
+    latest = await redis_client.get("por:latest")
+    if not latest:
+        return {"snapshot": None, "message": "No snapshot generated yet"}
+
+    import json as _json
+    return {"snapshot": _json.loads(latest)}
+
+
+@router.get("/reserves/history")
+async def get_reserves_history(
+    limit: int = 20,
+    user: User = Depends(require_admin),
+    request: Request = None,
+):
+    """Get historical proof-of-reserves snapshots."""
+    redis_client = getattr(request.app.state, "redis", None) if request else None
+    if not redis_client:
+        raise HTTPException(503, "Redis unavailable")
+
+    import json as _json
+    raw_list = await redis_client.lrange("por:snapshots", 0, limit - 1)
+    snapshots = [_json.loads(r) for r in raw_list]
+    return {"snapshots": snapshots, "count": len(snapshots)}

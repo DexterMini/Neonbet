@@ -150,7 +150,7 @@ export default function ResponsibleGamblingPage() {
         <Input
           type="number"
           min={0}
-          value={limits[key] ?? ''}
+          value={(limits[key] as string | number) ?? ''}
           onChange={(e) => setLimits(prev => ({
             ...prev,
             [key]: e.target.value === '' ? null : Number(e.target.value),

@@ -9,7 +9,7 @@ Players can verify every outcome is fair and predetermined.
 import hashlib
 import hmac
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List, Tuple
@@ -21,6 +21,45 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from casino.models import ServerSeed, ClientSeed, User
 
 
+def cursor_generate_floats(
+    server_seed: str,
+    client_seed: str,
+    nonce: int,
+    count: int
+) -> List[float]:
+    """
+    Stake-style cursor system for generating multiple provably fair values.
+
+    Each HMAC-SHA256(server_seed, client_seed:nonce:cursor) produces 32 bytes.
+    Extract 4 bytes at a time for a float in [0, 1). 8 floats per cursor.
+    Cursor auto-increments when bytes are exhausted.
+
+    This is the canonical multi-value RNG for all games.
+    Verifiers can reproduce the exact same sequence given the revealed server seed.
+    """
+    floats: List[float] = []
+    cursor = 0
+
+    while len(floats) < count:
+        message = f"{client_seed}:{nonce}:{cursor}"
+        hash_bytes = hmac.new(
+            server_seed.encode(),
+            message.encode(),
+            hashlib.sha256
+        ).digest()  # 32 bytes
+
+        # Extract 4 bytes at a time → 8 floats per HMAC output
+        for i in range(0, 32, 4):
+            if len(floats) >= count:
+                break
+            value = int.from_bytes(hash_bytes[i:i + 4], "big")
+            floats.append(value / 0xFFFFFFFF)
+
+        cursor += 1
+
+    return floats[:count]
+
+
 @dataclass
 class GameResult:
     """Result of a provably fair calculation"""
@@ -30,13 +69,27 @@ class GameResult:
     server_seed_hash: str  # Commitment (shown before bet)
     client_seed: str
     nonce: int
-    
+    _server_seed: str = field(default=None, repr=False)
+
+    def get_float_sequence(self, count: int) -> List[float]:
+        """
+        Generate a sequence of provably fair random floats via cursor system.
+
+        Uses HMAC-SHA256(server_seed, client_seed:nonce:cursor) with 4-byte extraction.
+        This replaces all ad-hoc SHA256 chaining in game engines.
+        """
+        if self._server_seed is None:
+            raise ValueError("Server seed required for cursor generation")
+        return cursor_generate_floats(
+            self._server_seed, self.client_seed, self.nonce, count
+        )
+
     def verify(self, revealed_server_seed: str) -> bool:
         """Verify the result with revealed server seed"""
         # Check server seed matches commitment
         if hashlib.sha256(revealed_server_seed.encode()).hexdigest() != self.server_seed_hash:
             return False
-        
+
         # Regenerate result
         message = f"{self.client_seed}:{self.nonce}"
         expected_hash = hmac.new(
@@ -44,7 +97,7 @@ class GameResult:
             message.encode(),
             hashlib.sha256
         ).hexdigest()
-        
+
         return expected_hash == self.raw_hash
 
 
@@ -233,7 +286,8 @@ class ProvablyFairEngine:
             normalized=normalized,
             server_seed_hash=self.hash_seed(server_seed),
             client_seed=client_seed,
-            nonce=nonce
+            nonce=nonce,
+            _server_seed=server_seed
         )
     
     async def generate_bet_outcome(
@@ -316,50 +370,35 @@ class ProvablyFairEngine:
     
     @staticmethod
     def plinko_result(
-        normalized: float, 
-        rows: int = 16, 
-        hash_full: str = None
+        server_seed: str,
+        client_seed: str,
+        nonce: int,
+        rows: int = 16
     ) -> List[str]:
         """
-        Generate Plinko path (sequence of L/R bounces).
-        
-        Uses multiple bytes from hash for each row.
+        Generate Plinko path (sequence of L/R bounces) via cursor system.
         """
-        if hash_full is None:
-            raise ValueError("Full hash required for Plinko")
-        
-        path = []
-        for i in range(rows):
-            # Use different bytes for each row
-            byte_value = int(hash_full[i*2:(i+1)*2], 16)
-            direction = "R" if byte_value >= 128 else "L"
-            path.append(direction)
-        
-        return path
+        floats = cursor_generate_floats(server_seed, client_seed, nonce, rows)
+        return ["R" if f >= 0.5 else "L" for f in floats]
     
     @staticmethod
     def mines_generate_mines(
-        normalized: float,
-        hash_full: str,
+        server_seed: str,
+        client_seed: str,
+        nonce: int,
         grid_size: int = 25,
         mine_count: int = 5
     ) -> List[int]:
         """
-        Generate mine positions for Mines game.
-        
-        Uses Fisher-Yates shuffle seeded by hash.
+        Generate mine positions using cursor-based Fisher-Yates shuffle.
         """
-        # Create position array
         positions = list(range(grid_size))
+        floats = cursor_generate_floats(server_seed, client_seed, nonce, grid_size - 1)
         
-        # Use hash segments to shuffle
-        for i in range(grid_size - 1, 0, -1):
-            # Get random index from hash
-            hash_segment = hash_full[(i % 32) * 2: (i % 32) * 2 + 2]
-            j = int(hash_segment, 16) % (i + 1)
+        for idx, i in enumerate(range(grid_size - 1, 0, -1)):
+            j = int(floats[idx] * (i + 1)) % (i + 1)
             positions[i], positions[j] = positions[j], positions[i]
         
-        # First N positions are mines
         return sorted(positions[:mine_count])
     
     @staticmethod
@@ -410,19 +449,21 @@ def verify_bet(
     server_seed_hash: str,
     client_seed: str,
     nonce: int,
-    game_type: str
+    game_type: str,
+    num_values: int = 1
 ) -> dict:
     """
     Standalone verification function.
     
     Can be used client-side to verify any bet.
+    Supports both single-value and cursor-based multi-value verification.
     """
     # Verify server seed matches hash
     computed_hash = hashlib.sha256(server_seed.encode()).hexdigest()
     if computed_hash != server_seed_hash:
         return {"valid": False, "error": "Server seed doesn't match hash"}
     
-    # Generate result
+    # Generate primary result (backward-compatible single value)
     message = f"{client_seed}:{nonce}"
     raw_hash = hmac.new(
         server_seed.encode(),
@@ -433,6 +474,13 @@ def verify_bet(
     raw_value = int(raw_hash[:8], 16)
     normalized = raw_value / 0xFFFFFFFF
     
+    # Generate cursor-based float sequence for multi-value games
+    float_sequence = None
+    if num_values > 1:
+        float_sequence = cursor_generate_floats(
+            server_seed, client_seed, nonce, num_values
+        )
+    
     # Calculate game-specific result
     if game_type == "dice":
         result = round(normalized * 100, 2)
@@ -440,13 +488,33 @@ def verify_bet(
         result = max(1.00, round((1 / (1 - normalized)) * 0.97, 2))
     elif game_type == "wheel":
         result = int(normalized * 50) % 50
+    elif game_type == "plinko" and float_sequence:
+        result = ["R" if f >= 0.5 else "L" for f in float_sequence]
+    elif game_type == "keno" and float_sequence:
+        pool = list(range(1, 41))
+        drawn = []
+        for f in float_sequence[:10]:
+            idx = int(f * len(pool)) % len(pool)
+            drawn.append(pool.pop(idx))
+        result = sorted(drawn)
+    elif game_type == "mines" and float_sequence:
+        positions = list(range(25))
+        for idx, i in enumerate(range(24, 0, -1)):
+            j = int(float_sequence[idx] * (i + 1)) % (i + 1)
+            positions[i], positions[j] = positions[j], positions[i]
+        result = sorted(positions[:5])  # default 5 mines
     else:
         result = normalized
     
-    return {
+    response = {
         "valid": True,
         "raw_hash": raw_hash,
         "raw_value": raw_value,
         "normalized": normalized,
         "result": result
     }
+    
+    if float_sequence:
+        response["float_sequence"] = float_sequence
+    
+    return response

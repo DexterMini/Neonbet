@@ -10,9 +10,9 @@ import {
   Brain, Sparkles, AlertCircle, CheckCircle, Eye,
   Timer, Globe, Percent, Users,
 } from 'lucide-react'
-import { MobileNav } from '@/components/MobileNav'
 import { LiveMatchTracker } from '@/components/game/LiveMatchTracker'
 import { useAuthStore } from '@/stores/authStore'
+import { GameLayout } from '@/components/GameLayout'
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -1212,7 +1212,8 @@ export default function SportsPage() {
   }, [allMatches, tickCount]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="min-h-screen bg-background text-text-primary pb-mobile-nav">
+    <GameLayout>
+    <div className="min-h-screen bg-background text-text-primary">
       {/* Header */}
       <div className="border-b border-border bg-background-secondary">
         <div className="max-w-[1600px] mx-auto px-4 lg:px-6">
@@ -1619,7 +1620,7 @@ export default function SportsPage() {
       </AnimatePresence>
 
       <AnimatePresence>{toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}</AnimatePresence>
-      <MobileNav />
     </div>
+    </GameLayout>
   )
 }

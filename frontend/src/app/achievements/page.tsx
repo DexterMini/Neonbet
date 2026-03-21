@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Trophy, Star, Zap, Target, Compass, Award, Lock, ChevronRight, Flame } from 'lucide-react'
 import { useProgressionStore, ACHIEVEMENTS, XP_LEVELS, Achievement } from '@/stores/progressionStore'
+import { GameLayout } from '@/components/GameLayout'
 
 /* ── daily challenges ─────────────────────────────── */
 const DAILY_CHALLENGES = [
@@ -57,6 +58,7 @@ export default function AchievementsPage() {
   const categories = ['all', 'betting', 'winning', 'exploration', 'milestone'] as const
 
   return (
+    <GameLayout>
     <div className="min-h-screen bg-[#0a0e1a] text-white pb-24">
       {/* Hero */}
       <div className="relative overflow-hidden">
@@ -307,5 +309,6 @@ export default function AchievementsPage() {
         </div>
       </div>
     </div>
+    </GameLayout>
   )
 }

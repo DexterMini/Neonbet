@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 
 from casino.config import get_settings
 from casino.api.routes import auth_router, bets_router, wallet_router, admin_router, payments_router, responsible_gambling_router, leaderboard_router
-from casino.api.routes.websocket import router as ws_router, start_crash_game, stop_crash_game
+from casino.api.routes.websocket import router as ws_router, start_crash_game, stop_crash_game, set_crash_game_redis
 from casino.api.middleware import IdempotencyMiddleware
 from casino.models.session import init_db, close_db
 
@@ -65,6 +65,7 @@ async def lifespan(app: FastAPI):
         )
         await redis_client.ping()
         app.state.redis = redis_client
+        set_crash_game_redis(redis_client)
         logger.info("🔴 Redis connected")
     except Exception as e:
         logger.warning(f"⚠️  Redis not available: {e} — idempotency disabled")

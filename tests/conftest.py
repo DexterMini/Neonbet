@@ -62,10 +62,12 @@ def game_result_win():
     """Game result that should produce a win for most games"""
     return GameResult(
         raw_hash="a" * 64,
+        raw_value=int("aaaaaaaa", 16),
         normalized=0.75,
         server_seed_hash="hash123",
         client_seed="client123",
-        nonce=1
+        nonce=1,
+        _server_seed="test_server_seed_win"
     )
 
 
@@ -74,8 +76,10 @@ def game_result_lose():
     """Game result that should produce a loss for most games"""
     return GameResult(
         raw_hash="1" * 64,
+        raw_value=int("11111111", 16),
         normalized=0.25,
         server_seed_hash="hash123",
         client_seed="client123",
-        nonce=1
+        nonce=1,
+        _server_seed="test_server_seed_lose"
     )

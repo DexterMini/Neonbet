@@ -84,8 +84,9 @@ class CrashGameManager:
     TICK_RATE = 0.05  # 20 updates per second
     HOUSE_EDGE = Decimal("0.01")  # 1%
     
-    def __init__(self, connection_manager: ConnectionManager):
+    def __init__(self, connection_manager: ConnectionManager, redis_client=None):
         self.manager = connection_manager
+        self.redis = redis_client
         self.current_round: Optional[CrashRound] = None
         self.history: List[dict] = []
         self._running = False
@@ -372,25 +373,59 @@ class CrashGameManager:
         player.profit = player.bet_amount * multiplier - player.bet_amount
         payout = player.bet_amount * multiplier
         
-        # Credit winnings via ledger
-        try:
-            from casino.services.ledger import LedgerService
-            from casino.models import Currency, LedgerEventType
-            async with await _get_db_session() as db:
-                ledger = LedgerService(db)
-                cur_enum = Currency(player.currency.lower())
-                await ledger.credit(
-                    user_id=player.user_id,
-                    currency=cur_enum,
-                    amount=payout,
-                    event_type=LedgerEventType.BET_WON,
-                    reference_type="crash_cashout",
-                    reference_id=self.current_round.round_id,
-                    metadata={"game": "crash", "multiplier": str(multiplier), "round_id": str(self.current_round.round_id)},
-                )
-                await db.commit()
-        except Exception as e:
-            logger.error(f"Failed to credit crash cashout for {player.username}: {e}")
+        # Credit winnings via ledger with retry
+        credited = False
+        for attempt in range(3):
+            try:
+                from casino.services.ledger import LedgerService
+                from casino.models import Currency, LedgerEventType
+                async with await _get_db_session() as db:
+                    ledger = LedgerService(db)
+                    cur_enum = Currency(player.currency.lower())
+                    await ledger.credit(
+                        user_id=player.user_id,
+                        currency=cur_enum,
+                        amount=payout,
+                        event_type=LedgerEventType.BET_WON,
+                        reference_type="crash_cashout",
+                        reference_id=self.current_round.round_id,
+                        metadata={"game": "crash", "multiplier": str(multiplier), "round_id": str(self.current_round.round_id)},
+                    )
+                    await db.commit()
+                    credited = True
+                    break
+            except Exception as e:
+                logger.error(f"Failed to credit crash cashout for {player.username} (attempt {attempt + 1}): {e}")
+                if attempt < 2:
+                    await asyncio.sleep(0.5)
+        if not credited:
+            logger.critical(
+                f"CRITICAL: Could not credit {payout} {player.currency} to {player.username} "
+                f"for round {self.current_round.round_id} after 3 attempts — requires manual resolution"
+            )
+            # ── Escalation: record failure for admin review and trigger global freeze ──
+            try:
+                if self.redis:
+                    import json as _json
+                    alert_data = _json.dumps({
+                        "user_id": str(player.user_id),
+                        "username": player.username,
+                        "amount": str(payout),
+                        "currency": player.currency,
+                        "round_id": str(self.current_round.round_id),
+                        "multiplier": str(multiplier),
+                        "timestamp": datetime.utcnow().isoformat(),
+                    })
+                    await self.redis.lpush("alerts:payout_failures", alert_data)
+                    # Auto-freeze platform to prevent further damage
+                    await self.redis.set(
+                        "system:global_freeze",
+                        f"crash_payout_failure:{self.current_round.round_id}",
+                        ex=3600,  # 1-hour freeze, admin can clear earlier
+                    )
+                    logger.critical("GLOBAL FREEZE activated due to crash payout failure")
+            except Exception as alert_err:
+                logger.error(f"Failed to escalate payout failure alert: {alert_err}")
         
         # Broadcast cashout
         await self._broadcast({
@@ -437,3 +472,94 @@ class CrashGameManager:
     def get_history(self, limit: int = 20) -> List[dict]:
         """Get game history."""
         return self.history[:limit]
+
+    async def handle_disconnect(self, user_id: UUID) -> None:
+        """
+        Handle player disconnect during an active round.
+
+        Policy:
+        - WAITING / STARTING phase: refund the bet — the game hasn't begun.
+        - RUNNING phase: bet rides to crash (standard crash-game behaviour).
+          If auto_cashout is set, the server honours it automatically.
+        """
+        if not self.current_round:
+            return
+
+        user_key = str(user_id)
+        player = self.current_round.players.get(user_key)
+        if not player or player.cashed_out:
+            return
+
+        logger.info(
+            f"Player disconnected during round {self.current_round.round_id}: "
+            f"{player.username} (state={self.current_round.state.value}, "
+            f"auto_cashout={'%.2f' % player.auto_cashout if player.auto_cashout else 'none'})"
+        )
+
+        # ── Refund if the game hasn't started running yet ──
+        if self.current_round.state in (GameState.WAITING, GameState.STARTING):
+            try:
+                from casino.services.ledger import LedgerService
+                from casino.models import Currency, LedgerEventType
+                async with await _get_db_session() as db:
+                    ledger = LedgerService(db)
+                    cur_enum = Currency(player.currency.lower())
+                    await ledger.credit(
+                        user_id=player.user_id,
+                        currency=cur_enum,
+                        amount=player.bet_amount,
+                        event_type=LedgerEventType.DEPOSIT,  # refund
+                        reference_type="crash_refund",
+                        reference_id=self.current_round.round_id,
+                        metadata={
+                            "reason": "disconnect_before_game_start",
+                            "round_id": str(self.current_round.round_id),
+                        },
+                    )
+                    await db.commit()
+                # Remove from round so they aren't counted as a loser
+                del self.current_round.players[user_key]
+                logger.info(f"Refunded {player.bet_amount} {player.currency} to {player.username} (disconnect before game start)")
+            except Exception as e:
+                logger.error(f"Failed to refund disconnect bet for {player.username}: {e}")
+
+    async def handle_reconnect(self, user_id: UUID) -> dict:
+        """
+        Build a state snapshot for a reconnecting player so the client can
+        restore the UI without missing any round information.
+        """
+        user_key = str(user_id)
+
+        # Check current round
+        if self.current_round:
+            player = self.current_round.players.get(user_key)
+            return {
+                "type": "reconnect_state",
+                "round": {
+                    "round_id": str(self.current_round.round_id),
+                    "state": self.current_round.state.value,
+                    "hash": self.current_round.hash,
+                    "multiplier": str(self.current_round.current_multiplier),
+                    "crash_point": str(self.current_round.crash_point) if self.current_round.state == GameState.CRASHED else None,
+                    "server_seed": self.current_round.server_seed if self.current_round.state == GameState.CRASHED else None,
+                },
+                "your_bet": {
+                    "bet_amount": str(player.bet_amount),
+                    "auto_cashout": str(player.auto_cashout) if player.auto_cashout else None,
+                    "cashed_out": player.cashed_out,
+                    "cashout_multiplier": str(player.cashout_multiplier) if player.cashed_out else None,
+                    "profit": str(player.profit) if player.profit is not None else None,
+                    "status": "cashed_out" if player.cashed_out else (
+                        "riding" if self.current_round.state == GameState.RUNNING else "waiting"
+                    ),
+                } if player else None,
+                "history": self.get_history(10),
+            }
+
+        # No active round — just send history
+        return {
+            "type": "reconnect_state",
+            "round": None,
+            "your_bet": None,
+            "history": self.get_history(10),
+        }

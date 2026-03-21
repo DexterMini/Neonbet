@@ -25,6 +25,7 @@ from casino.models import (
 from casino.api.dependencies import get_db, get_current_user
 from casino.services.ledger import LedgerService, InsufficientBalanceError
 from casino.services.payment import get_payment_service, NOWPaymentsService
+from casino.services.anti_arbitrage import AntiArbitrageEngine
 
 
 router = APIRouter(prefix="/wallet", tags=["Wallet"])
@@ -474,6 +475,7 @@ async def get_deposits(
 
 @router.post("/convert")
 async def convert_currency(
+    client_request: Request,
     from_currency: str,
     to_currency: str,
     amount: Decimal,
@@ -497,6 +499,21 @@ async def convert_currency(
         raise HTTPException(status_code=400, detail="Cannot convert currency to itself")
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    # Anti-arbitrage checks
+    redis_client = getattr(client_request.app.state, "redis", None)
+
+    if redis_client:
+        arb_engine = AntiArbitrageEngine(redis_client)
+        # We pass a placeholder rate; the engine checks market price deviation independently
+        ok, reason = await arb_engine.pre_conversion_check(
+            user_id=str(user.id),
+            from_currency=from_currency,
+            to_currency=to_currency,
+            platform_rate=Decimal("0"),  # Validated against market inside
+        )
+        if not ok:
+            raise HTTPException(status_code=429, detail=reason)
 
     # Fetch USD value of source amount via NOWPayments
     try:
@@ -545,6 +562,10 @@ async def convert_currency(
     except InsufficientBalanceError:
         raise HTTPException(status_code=400, detail="Insufficient balance")
 
+    # Record conversion activity for cycling detection
+    if redis_client:
+        await arb_engine.record_activity(str(user.id), "convert")
+
     return {
         "success": True,
         "from_currency": from_currency,
@@ -554,3 +575,170 @@ async def convert_currency(
         "rate": str(rate.quantize(Decimal("0.00000001"))),
         "fee_percent": "0.5",
     }
+
+
+# ========================
+# VIP Rewards & Claims
+# ========================
+
+@router.get("/vip/status")
+async def get_vip_status(
+    client_request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get current VIP status including rakeback, lossback, and bonus info."""
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is None:
+        raise HTTPException(status_code=503, detail="VIP service temporarily unavailable")
+
+    from casino.services.vip_system import VIPService
+    vip = VIPService(redis_client)
+
+    status = await vip.get_user_vip_status(str(user.id), db)
+    lossback = await vip.get_lossback_available(str(user.id), db)
+    tier = vip.get_tier(status.level)
+
+    return {
+        "level": status.level.name,
+        "level_index": int(status.level),
+        "total_wagered": str(status.total_wagered),
+        "wagered_this_month": str(status.wagered_this_month),
+        "level_progress": status.level_progress,
+        "next_level_requirement": str(status.next_level_requirement) if status.next_level_requirement else None,
+        "xp": user.vip_xp,
+        "rakeback": {
+            "available": str(status.rakeback_available),
+            "claimed_total": str(status.rakeback_claimed_total),
+            "percent": str(tier.rakeback_percent * 100),
+        },
+        "lossback": {
+            "available": lossback["available"],
+            "net_loss": lossback["net_loss"],
+            "percent": str(tier.lossback_percent * 100),
+        },
+        "bonuses": {
+            "weekly_percent": str(tier.weekly_bonus_percent * 100),
+            "monthly_percent": str(tier.monthly_bonus_percent * 100),
+        },
+        "limits": {
+            "withdraw_daily": str(tier.withdraw_limit_daily),
+            "withdraw_monthly": str(tier.withdraw_limit_monthly),
+        },
+        "perks": {
+            "personal_manager": tier.personal_manager,
+            "priority_support": tier.priority_support,
+            "exclusive_events": tier.exclusive_events,
+        },
+    }
+
+
+@router.post("/vip/claim-rakeback")
+async def claim_rakeback(
+    client_request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Claim accumulated rakeback. Credits USDT balance instantly."""
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is None:
+        raise HTTPException(status_code=503, detail="VIP service temporarily unavailable")
+
+    from casino.services.vip_system import VIPService
+    vip = VIPService(redis_client)
+    result = await vip.claim_rakeback(str(user.id), db)
+
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.post("/vip/claim-lossback")
+async def claim_lossback(
+    client_request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Claim weekly lossback. Credits USDT balance. Can only be claimed once per week."""
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is None:
+        raise HTTPException(status_code=503, detail="VIP service temporarily unavailable")
+
+    from casino.services.vip_system import VIPService
+    vip = VIPService(redis_client)
+    result = await vip.claim_lossback(str(user.id), db)
+
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.post("/vip/claim-weekly-bonus")
+async def claim_weekly_bonus(
+    client_request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Claim weekly bonus based on last week's wagered amount."""
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is None:
+        raise HTTPException(status_code=503, detail="VIP service temporarily unavailable")
+
+    from casino.services.vip_system import VIPService
+    vip = VIPService(redis_client)
+    result = await vip.claim_weekly_bonus(str(user.id), db)
+
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.post("/vip/claim-monthly-bonus")
+async def claim_monthly_bonus(
+    client_request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Claim monthly bonus based on last month's wagered amount."""
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is None:
+        raise HTTPException(status_code=503, detail="VIP service temporarily unavailable")
+
+    from casino.services.vip_system import VIPService
+    vip = VIPService(redis_client)
+    result = await vip.claim_monthly_bonus(str(user.id), db)
+
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["message"])
+    return result
+
+
+@router.get("/vip/tiers")
+async def get_vip_tiers():
+    """Get all VIP tier information for display."""
+    from casino.services.vip_system import VIPService
+    import redis.asyncio as aioredis
+    from casino.config import settings as _settings
+
+    try:
+        r = aioredis.from_url(_settings.redis.url, decode_responses=True)
+        try:
+            vip = VIPService(r)
+            return {"tiers": vip.get_all_tiers()}
+        finally:
+            await r.close()
+    except Exception:
+        # Fallback: return tiers without Redis (static data)
+        from casino.services.vip_system import VIP_TIERS
+        return {
+            "tiers": [
+                {
+                    "level": int(t.level),
+                    "name": t.name,
+                    "min_wagered": str(t.min_wagered),
+                    "rakeback_percent": f"{t.rakeback_percent * 100}%",
+                    "lossback_percent": f"{t.lossback_percent * 100}%",
+                }
+                for t in VIP_TIERS.values()
+            ]
+        }

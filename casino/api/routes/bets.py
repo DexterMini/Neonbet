@@ -24,6 +24,7 @@ from casino.services.provably_fair import ProvablyFairEngine, GameResult
 from casino.services.ledger import LedgerService, InsufficientBalanceError
 from casino.services.game_settings import GameSettingsService
 from casino.services.risk_engine import RiskEngine, RiskAction
+from casino.services.vip_system import VIPService
 from casino.models import (
     User, Bet, BetStatus, Currency, GameType, LedgerEventType, ServerSeed, kyc_level_to_int,
 )
@@ -125,8 +126,17 @@ async def place_bet(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid currency")
 
+    # ── Emergency global freeze check ──
+    redis_client = getattr(client_request.app.state, "redis", None)
+    if redis_client is not None:
+        frozen = await redis_client.get("system:global_freeze")
+        if frozen:
+            raise HTTPException(status_code=503, detail="Platform is temporarily paused for maintenance")
+
     # ── Responsible gambling checks ──
     from casino.api.routes.responsible_gambling import ResponsibleGamblingSettings
+    from casino.services.responsible_gambling import ResponsibleGamblingEnforcer
+
     rg_result = await db.execute(
         select(ResponsibleGamblingSettings).where(ResponsibleGamblingSettings.user_id == user.id)
     )
@@ -138,6 +148,14 @@ async def place_bet(
             raise HTTPException(status_code=403, detail="Account is self-excluded")
         if rg.cool_off_until and now < rg.cool_off_until:
             raise HTTPException(status_code=403, detail="Cool-off period active")
+
+        # Enforce wager + loss limits
+        enforcer = ResponsibleGamblingEnforcer(db)
+        rg_allowed, rg_reason = await enforcer.check_betting_allowed(
+            user.id, request.bet_amount, rg
+        )
+        if not rg_allowed:
+            raise HTTPException(status_code=403, detail=rg_reason)
 
     # Resolve game type enum
     # Map engine names to DB enum values where they differ
@@ -265,61 +283,103 @@ async def place_bet(
                 status_code = 409
             raise HTTPException(status_code=status_code, detail=reason)
 
-    # Check & lock balance via ledger
-    ledger = LedgerService(db)
-    balance_info = await ledger.get_balance(user.id, cur_enum)
-    if balance_info["available"] < request.bet_amount:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+    # ── Per-user bet mutex (prevents double-spend from concurrent requests) ──
+    bet_lock_key = f"bet_mutex:{user.id}"
+    bet_lock_held = False
+    if redis_client is not None:
+        bet_lock_held = await redis_client.set(bet_lock_key, "1", nx=True, ex=30)
+        if not bet_lock_held:
+            raise HTTPException(status_code=429, detail="Another bet is being processed")
 
-    bet_id = uuid4()
-    await ledger.lock_balance(user.id, cur_enum, request.bet_amount, bet_id)
+    try:
+        # Check & lock balance via ledger
+        ledger = LedgerService(db)
+        balance_info = await ledger.get_balance(user.id, cur_enum)
+        if balance_info["available"] < request.bet_amount:
+            raise HTTPException(status_code=400, detail="Insufficient balance")
 
-    # Provably fair outcome
-    pf = ProvablyFairEngine(db)
+        bet_id = uuid4()
+        await ledger.lock_balance(user.id, cur_enum, request.bet_amount, bet_id)
 
-    if request.client_seed:
-        await pf.set_client_seed(user.id, request.client_seed)
+        # Provably fair outcome
+        pf = ProvablyFairEngine(db)
 
-    game_result, server_seed_id = await pf.generate_bet_outcome(user.id)
+        if request.client_seed:
+            await pf.set_client_seed(user.id, request.client_seed)
 
-    # Calculate game result
-    bet_result = game.calculate_result(
-        game_result=game_result,
-        bet_amount=request.bet_amount,
-        game_data=request.game_data,
-    )
+        game_result, server_seed_id = await pf.generate_bet_outcome(user.id)
 
-    # Determine status
-    if bet_result.outcome == GameOutcome.WIN:
-        bet_status = BetStatus.WON
-        await ledger.settle_bet_win(
-            user.id, cur_enum, request.bet_amount, bet_result.payout, bet_id,
+        # Calculate game result
+        bet_result = game.calculate_result(
+            game_result=game_result,
+            bet_amount=request.bet_amount,
+            game_data=request.game_data,
         )
-    else:
-        bet_status = BetStatus.LOST
-        await ledger.settle_bet_loss(user.id, cur_enum, request.bet_amount, bet_id)
 
-    # Persist bet row
-    bet_row = Bet(
-        id=bet_id,
-        user_id=user.id,
-        game_type=game_type_enum,
-        currency=cur_enum,
-        bet_amount=request.bet_amount,
-        status=bet_status,
-        multiplier=bet_result.multiplier,
-        payout=bet_result.payout,
-        profit=bet_result.profit,
-        server_seed_id=server_seed_id,
-        client_seed=game_result.client_seed,
-        nonce=game_result.nonce,
-        game_data=request.game_data,
-        result_data=bet_result.result_data,
-        idempotency_key=idempotency_key_scoped,
-        settled_at=datetime.now(UTC),
-    )
-    db.add(bet_row)
-    await db.commit()
+        # Determine status — settlement + bet record in a single atomic commit
+        if bet_result.outcome == GameOutcome.WIN:
+            bet_status = BetStatus.WON
+            await ledger.settle_bet_win(
+                user.id, cur_enum, request.bet_amount, bet_result.payout, bet_id,
+            )
+        else:
+            bet_status = BetStatus.LOST
+            await ledger.settle_bet_loss(user.id, cur_enum, request.bet_amount, bet_id)
+
+        # Persist bet row (same transaction as settlement — atomic)
+        bet_row = Bet(
+            id=bet_id,
+            user_id=user.id,
+            game_type=game_type_enum,
+            currency=cur_enum,
+            bet_amount=request.bet_amount,
+            status=bet_status,
+            multiplier=bet_result.multiplier,
+            payout=bet_result.payout,
+            profit=bet_result.profit,
+            server_seed_id=server_seed_id,
+            client_seed=game_result.client_seed,
+            nonce=game_result.nonce,
+            game_data=request.game_data,
+            result_data=bet_result.result_data,
+            idempotency_key=idempotency_key_scoped,
+            settled_at=datetime.now(UTC),
+        )
+        db.add(bet_row)
+        await db.commit()
+
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        # Roll back the entire transaction: settlement + bet record + balance lock
+        await db.rollback()
+        import logging as _log
+        _log.getLogger(__name__).error(f"Bet settlement failed for user {user.id}: {e}")
+        raise HTTPException(status_code=500, detail="Bet settlement failed — no funds were deducted")
+    finally:
+        # Always release per-user mutex
+        if redis_client is not None and bet_lock_held:
+            await redis_client.delete(bet_lock_key)
+
+    # ── VIP Rakeback: record wager and credit rakeback ──
+    if redis_client is not None:
+        try:
+            house_edge_amount = request.bet_amount * current_house_edge
+            vip_service = VIPService(redis_client)
+            await vip_service.record_wager(
+                user_id=str(user.id),
+                wager_amount=request.bet_amount,
+                house_edge_amount=house_edge_amount,
+                db=db,
+            )
+            # Track net losses / wins for lossback
+            if bet_status == BetStatus.LOST:
+                await vip_service.record_loss(str(user.id), request.bet_amount)
+            elif bet_status == BetStatus.WON and bet_result.profit > 0:
+                await vip_service.record_win(str(user.id), bet_result.profit)
+        except Exception:
+            pass  # Non-critical: don't fail the bet if VIP tracking errors
 
     return BetResponse(
         bet_id=str(bet_id),
