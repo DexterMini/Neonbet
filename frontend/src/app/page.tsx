@@ -557,42 +557,61 @@ const GAMES: GameCardData[] = [
 const promos = [
   {
     id: 1,
-    title: 'VIP TRANSFER',
-    subtitle: 'Already VIP elsewhere? Transfer your status instantly. Keep your level, get better rewards.',
-    cta: 'Transfer Now',
-    href: '/vip',
-    bg: 'from-amber-500/25 via-yellow-900/30 to-background',
+    title: 'WELCOME BONUS',
+    subtitle: 'Get up to 200% on your first deposit. Start winning big today.',
+    cta: 'Claim Bonus',
+    href: '/wallet',
+    bg: 'from-amber-600/40 via-yellow-900/30 to-transparent',
     accent: 'text-amber-400',
-    border: 'border-amber-500/20',
+    border: 'border-amber-500/30',
     icon: Crown,
-    glow: 'radial-gradient(ellipse at 20% 50%, rgba(251,191,36,0.18) 0%, rgba(245,158,11,0.06) 40%, transparent 70%)',
-    badge: '🔥 LIMITED TIME',
+    glow: 'radial-gradient(ellipse at 15% 50%, rgba(255,215,0,0.25) 0%, rgba(245,158,11,0.08) 40%, transparent 70%)',
+    badge: 'LIMITED TIME',
   },
   {
     id: 2,
     title: 'NEONBET ORIGINALS',
-    subtitle: '15 provably fair games. Lightning fast. Built from scratch.',
+    subtitle: '15 provably fair games with the lowest house edge. Built for winners.',
     cta: 'Play Now',
     href: '/games/crash',
-    bg: 'from-brand/20 via-emerald-900/30 to-background',
+    bg: 'from-brand/30 via-emerald-900/30 to-transparent',
     accent: 'text-brand',
-    border: 'border-brand/15',
+    border: 'border-brand/25',
     icon: Zap,
-    glow: 'radial-gradient(ellipse at 25% 50%, rgba(0,232,123,0.15) 0%, transparent 60%)',
+    glow: 'radial-gradient(ellipse at 15% 50%, rgba(0,232,123,0.22) 0%, transparent 60%)',
   },
   {
     id: 3,
-    title: '$10,000 DAILY RACE',
-    subtitle: 'Wager to climb the leaderboard. Cash prizes every single day.',
+    title: '$50,000 WEEKLY RACE',
+    subtitle: 'Wager to climb the leaderboard. Massive cash prizes every week.',
     cta: 'Join Race',
     href: '/promotions',
-    bg: 'from-purple-500/20 via-purple-900/25 to-background',
+    bg: 'from-purple-600/30 via-purple-900/25 to-transparent',
     accent: 'text-purple-400',
-    border: 'border-purple-500/15',
+    border: 'border-purple-500/25',
     icon: Trophy,
-    glow: 'radial-gradient(ellipse at 25% 50%, rgba(168,85,247,0.14) 0%, transparent 60%)',
+    glow: 'radial-gradient(ellipse at 15% 50%, rgba(168,85,247,0.22) 0%, transparent 60%)',
   },
 ] as const
+
+/* ------------------------------------------------------------------ */
+/* Big Win Data Generator                                              */
+/* ------------------------------------------------------------------ */
+const BIG_WIN_NAMES = ['Crypto***', 'Lucky***', 'Whale***', 'Moon***', 'Degen***', 'King***', 'Pro***', 'Ace***', 'Sharp***', 'High***']
+const BIG_WIN_GAMES = ['Crash', 'Mines', 'Plinko', 'Dice', 'Limbo', 'Slots', 'Keno', 'Wheel']
+
+function generateBigWin() {
+  const amt = (Math.random() * 50 + 0.5).toFixed(4)
+  const mult = (Math.random() * 500 + 2).toFixed(2)
+  const payout = (parseFloat(amt) * parseFloat(mult)).toFixed(2)
+  return {
+    user: BIG_WIN_NAMES[Math.floor(Math.random() * BIG_WIN_NAMES.length)],
+    game: BIG_WIN_GAMES[Math.floor(Math.random() * BIG_WIN_GAMES.length)],
+    mult: `${mult}x`,
+    payout: `$${parseFloat(payout).toLocaleString()}`,
+    currency: ['BTC', 'ETH', 'SOL', 'USDT'][Math.floor(Math.random() * 4)],
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /* Scrollable Row                                                      */
@@ -638,7 +657,7 @@ function ScrollRow({ children, className }: { children: React.ReactNode, classNa
 }
 
 /* ------------------------------------------------------------------ */
-/* Grid Game Card                                                      */
+/* Game Card — Casino Style with Neon Glow                             */
 /* ------------------------------------------------------------------ */
 function GameCardGrid({ game }: { game: GameCardData }) {
   const Visual = game.visual
@@ -658,55 +677,59 @@ function GameCardGrid({ game }: { game: GameCardData }) {
 
   return (
     <Link href={game.href} className="group block">
-      <div className="relative aspect-[3/4] rounded-2xl overflow-hidden transition-all duration-300 group-hover:scale-[1.04] group-hover:-translate-y-1"
-        style={{ boxShadow: `0 4px 20px -4px ${game.glow}, 0 0 0 1px rgba(255,255,255,0.04)` }}>
+      <div className="relative aspect-[3/4] rounded-2xl overflow-hidden card-shine transition-all duration-300 group-hover:scale-[1.05] group-hover:-translate-y-2"
+        style={{
+          boxShadow: `0 4px 25px -4px ${game.glow}, 0 0 0 1px rgba(255,255,255,0.06)`,
+        }}>
+        {/* Neon border glow on hover */}
+        <div className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-20 pointer-events-none"
+          style={{ boxShadow: `inset 0 0 20px ${game.glow}, 0 0 40px ${game.glow}` }} />
 
         <div className={cn('absolute inset-0 bg-gradient-to-br', game.gradient)} />
 
-        <div className="absolute inset-0 opacity-[0.05]" style={{
+        <div className="absolute inset-0 opacity-[0.06]" style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
         }} />
 
-        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.12] via-transparent to-black/40" />
+        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.15] via-transparent to-black/50" />
 
         <Visual />
 
         <div className="absolute top-2 left-2 z-10">
-          <div className="px-1.5 py-[2px] bg-black/40 backdrop-blur-md rounded border border-white/10">
-            <span className="text-[6px] sm:text-[7px] font-bold text-white/70 uppercase tracking-[0.1em]">NeonBet Originals</span>
+          <div className="px-1.5 py-[2px] bg-black/50 backdrop-blur-md rounded border border-white/15">
+            <span className="text-[6px] sm:text-[7px] font-bold text-white/80 uppercase tracking-[0.1em]">NeonBet</span>
           </div>
         </div>
 
         <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
           {game.tag && (
             <div className={cn(
-              "px-1.5 py-[2px] rounded text-[7px] sm:text-[8px] font-extrabold uppercase tracking-wide",
-              game.tag === 'HOT' ? 'bg-red-500 text-white shadow-[0_2px_10px_rgba(239,68,68,0.5)]' :
-              game.tag === 'NEW' ? 'bg-brand text-background-deep shadow-[0_2px_10px_rgba(0,232,123,0.5)]' :
-              'bg-amber-500 text-background-deep shadow-[0_2px_10px_rgba(245,158,11,0.4)]'
+              "px-2 py-0.5 rounded text-[7px] sm:text-[8px] font-extrabold uppercase tracking-wide",
+              game.tag === 'HOT' ? 'bg-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse' :
+              game.tag === 'NEW' ? 'bg-brand text-background-deep shadow-[0_0_15px_rgba(0,232,123,0.6)]' :
+              'bg-amber-500 text-background-deep shadow-[0_0_15px_rgba(245,158,11,0.5)]'
             )}>
               {game.tag}
             </div>
           )}
           {game.maxMult && (
-            <div className="px-1.5 py-[2px] rounded bg-black/50 backdrop-blur-md border border-white/15 text-[7px] sm:text-[8px] font-extrabold text-white/90 tracking-wide">
+            <div className="px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md border border-white/20 text-[7px] sm:text-[8px] font-extrabold text-amber-300 tracking-wide shadow-[0_0_10px_rgba(255,215,0,0.2)]">
               {game.maxMult}
             </div>
           )}
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-2.5 sm:p-3 bg-gradient-to-t from-black/70 via-black/30 to-transparent z-10">
+        <div className="absolute bottom-0 left-0 right-0 p-2.5 sm:p-3 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10">
           <h3 className="text-sm sm:text-base font-extrabold text-white tracking-wide leading-tight drop-shadow-lg">
             {game.name}
           </h3>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="w-1.5 h-1.5 bg-brand rounded-full animate-pulse shadow-[0_0_6px_rgba(0,232,123,0.8)]" />
+            <span className="text-[9px] sm:text-[10px] text-white/60 font-medium">{playerCount.toLocaleString()} playing</span>
+          </div>
         </div>
 
-        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-tr from-transparent via-white/[0.06] to-transparent pointer-events-none" />
-      </div>
-
-      <div className="flex items-center gap-1.5 mt-1.5 pl-0.5">
-        <span className="w-1.5 h-1.5 bg-brand rounded-full animate-pulse" />
-        <span className="text-[10px] sm:text-[11px] text-muted-light font-medium">{playerCount.toLocaleString()} playing</span>
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-tr from-transparent via-white/[0.08] to-transparent pointer-events-none" />
       </div>
     </Link>
   )
@@ -751,6 +774,8 @@ export default function HomePage() {
   const [bets, setBets] = useState<ReturnType<typeof randomBet>[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState('originals')
+  const [bigWins, setBigWins] = useState<ReturnType<typeof generateBigWin>[]>([])
+  const [liveStats, setLiveStats] = useState({ online: 12847, betsToday: 847293, wagered: 2847291 })
 
   const filteredGames = useMemo(() => {
     if (!searchQuery.trim()) return GAMES
@@ -758,6 +783,7 @@ export default function HomePage() {
   }, [searchQuery])
 
   useEffect(() => { setBets(Array.from({ length: 10 }, randomBet)) }, [])
+  useEffect(() => { setBigWins(Array.from({ length: 12 }, generateBigWin)) }, [])
 
   useEffect(() => {
     const t = setInterval(() => setActivePromo(p => (p + 1) % promos.length), 5000)
@@ -766,6 +792,17 @@ export default function HomePage() {
 
   useEffect(() => {
     const t = setInterval(() => setBets(prev => [randomBet(), ...prev.slice(0, 9)]), 2500)
+    return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setLiveStats(prev => ({
+        online: prev.online + Math.floor(Math.random() * 21) - 10,
+        betsToday: prev.betsToday + Math.floor(Math.random() * 50),
+        wagered: prev.wagered + Math.floor(Math.random() * 5000),
+      }))
+    }, 3000)
     return () => clearInterval(t)
   }, [])
 
@@ -778,9 +815,35 @@ export default function HomePage() {
 
         <main className="flex-1 overflow-y-auto pb-mobile-nav">
 
+          {/* ═══════ Big Wins Ticker ═══════ */}
+          <div className="relative overflow-hidden bg-gradient-to-r from-amber-950/60 via-background to-amber-950/60 border-b border-amber-500/10">
+            <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-transparent to-amber-500/5" />
+            <div className="flex items-center">
+              <div className="shrink-0 z-10 px-3 py-1.5 bg-gradient-to-r from-amber-500/20 to-transparent flex items-center gap-1.5 border-r border-amber-500/15">
+                <Flame className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                <span className="text-[10px] sm:text-[11px] font-bold text-amber-400 uppercase tracking-wider whitespace-nowrap">Big Wins</span>
+              </div>
+              <div className="overflow-hidden flex-1">
+                <div className="flex animate-ticker whitespace-nowrap">
+                  {[...bigWins, ...bigWins].map((win, i) => (
+                    <div key={i} className="inline-flex items-center gap-2 px-4 py-1.5">
+                      <span className="text-[11px] text-white/50 font-medium">{win.user}</span>
+                      <span className="text-[10px] text-white/30">won</span>
+                      <span className="text-[11px] font-bold text-brand">{win.payout}</span>
+                      <span className="text-[10px] text-white/30">on</span>
+                      <span className="text-[11px] text-amber-400 font-semibold">{win.game}</span>
+                      <span className="text-[10px] font-mono text-white/25">({win.mult})</span>
+                      <span className="text-white/10 mx-1">|</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* ═══════ Hero Promo Banner ═══════ */}
           <section className="px-3 sm:px-6 pt-4 sm:pt-5">
-            <div className="relative rounded-xl overflow-hidden border border-white/[0.06]" style={{ minHeight: '100px' }}>
+            <div className="relative rounded-2xl overflow-hidden border border-white/[0.08]" style={{ minHeight: '140px' }}>
               {promos.map((promo, i) => {
                 const Icon = promo.icon
                 return (
@@ -788,27 +851,29 @@ export default function HomePage() {
                     'transition-all duration-700 ease-in-out',
                     i === activePromo ? 'opacity-100 relative' : 'opacity-0 absolute inset-0 pointer-events-none'
                   )}>
-                    <div className={cn('relative flex items-center gap-4 sm:gap-6 p-3.5 sm:p-5 lg:p-6 bg-gradient-to-r overflow-hidden', promo.bg, 'border', promo.border, 'rounded-xl')}>
+                    <div className={cn('relative flex items-center gap-4 sm:gap-8 p-4 sm:p-6 lg:p-8 bg-gradient-to-r overflow-hidden', promo.bg, 'border', promo.border, 'rounded-2xl')}>
                       <div className="absolute inset-0 pointer-events-none" style={{ background: promo.glow }} />
-                      <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full opacity-15 blur-3xl pointer-events-none" style={{ background: promo.glow }} />
-                      <div className="hidden sm:flex relative z-10 w-11 h-11 rounded-xl bg-white/[0.07] border border-white/[0.1] items-center justify-center shrink-0 backdrop-blur-sm">
-                        <Icon className={cn('w-5 h-5', promo.accent)} />
+                      <div className="absolute inset-0 pointer-events-none opacity-[0.03]" style={{
+                        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+                      }} />
+                      <div className="hidden sm:flex relative z-10 w-14 h-14 rounded-2xl bg-white/[0.08] border border-white/[0.12] items-center justify-center shrink-0 backdrop-blur-sm animate-golden-pulse">
+                        <Icon className={cn('w-7 h-7', promo.accent)} />
                       </div>
                       <div className="flex-1 min-w-0 relative z-10">
-                        <div className="flex items-center gap-2 mb-0.5">
+                        <div className="flex items-center gap-2 mb-1">
                           <span className={cn('text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.2em] opacity-90', promo.accent)}>Featured</span>
                           {'badge' in promo && promo.badge && (
-                            <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/25 animate-pulse">
+                            <span className="text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/25 text-amber-300 border border-amber-500/30 animate-pulse">
                               {promo.badge}
                             </span>
                           )}
                         </div>
-                        <h2 className="text-base sm:text-xl font-black text-white mb-0.5 tracking-tight">{promo.title}</h2>
-                        <p className="text-[11px] sm:text-xs text-white/50 max-w-lg leading-relaxed">{promo.subtitle}</p>
+                        <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-white mb-1 tracking-tight">{promo.title}</h2>
+                        <p className="text-[11px] sm:text-sm text-white/50 max-w-lg leading-relaxed">{promo.subtitle}</p>
                       </div>
                       <Link href={promo.href}
-                        className="hidden sm:inline-flex relative z-10 items-center gap-1.5 px-4 py-2 rounded-lg font-bold text-xs bg-white/[0.08] text-white hover:bg-white/[0.16] border border-white/[0.1] transition-all backdrop-blur-sm hover:scale-[1.02] active:scale-[0.98]">
-                        {promo.cta} <ArrowRight className="w-3.5 h-3.5" />
+                        className="hidden sm:inline-flex relative z-10 items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm bg-white/[0.1] text-white hover:bg-white/[0.2] border border-white/[0.15] transition-all backdrop-blur-sm hover:scale-[1.03] active:scale-[0.97] hover:shadow-lg hover:shadow-brand/10">
+                        {promo.cta} <ArrowRight className="w-4 h-4" />
                       </Link>
                     </div>
                   </div>
@@ -818,61 +883,38 @@ export default function HomePage() {
                 {promos.map((_, i) => (
                   <button key={i} onClick={() => setActivePromo(i)}
                     className={cn('h-1.5 rounded-full transition-all duration-300',
-                      i === activePromo ? 'bg-white w-6' : 'bg-white/25 w-1.5 hover:bg-white/40')} />
+                      i === activePromo ? 'bg-brand w-8 shadow-[0_0_8px_rgba(0,232,123,0.5)]' : 'bg-white/25 w-1.5 hover:bg-white/40')} />
                 ))}
               </div>
             </div>
           </section>
 
-          {/* ═══════ VIP Transfer Banner ═══════ */}
+          {/* ═══════ Live Stats Bar ═══════ */}
           <section className="px-3 sm:px-6 pt-3">
-            <Link href="/vip" className="group block">
-              <div className="relative rounded-xl overflow-hidden border border-amber-500/15 bg-gradient-to-r from-amber-950/50 via-yellow-950/30 to-amber-950/40 hover:border-amber-500/25 transition-all">
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute -top-16 left-[10%] w-48 h-48 rounded-full bg-amber-500/10 blur-3xl" />
-                </div>
-                <div className="relative z-10 flex items-center gap-3 sm:gap-5 p-3 sm:p-4">
-                  <div className="relative shrink-0">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-amber-500/25 to-yellow-600/20 border border-amber-500/30 flex items-center justify-center">
-                      <Crown className="w-5 h-5 sm:w-6 sm:h-6 text-amber-400" />
+            <div className="flex items-center gap-3 sm:gap-6 overflow-x-auto scrollbar-none py-1">
+              {[
+                { label: 'Online Now', value: liveStats.online.toLocaleString(), icon: Users, color: 'text-brand', dotColor: 'bg-brand' },
+                { label: 'Bets Today', value: liveStats.betsToday.toLocaleString(), icon: Zap, color: 'text-amber-400', dotColor: 'bg-amber-400' },
+                { label: 'Total Wagered', value: `$${(liveStats.wagered).toLocaleString()}`, icon: TrendingUp, color: 'text-purple-400', dotColor: 'bg-purple-400' },
+              ].map((stat, i) => {
+                const Icon = stat.icon
+                return (
+                  <div key={i} className="flex items-center gap-2 shrink-0 px-3 py-2 rounded-xl bg-surface/60 border border-border/60 backdrop-blur-sm">
+                    <div className="relative">
+                      <span className={cn('absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-40', stat.dotColor)} />
+                      <span className={cn('relative w-2 h-2 rounded-full block', stat.dotColor)} />
                     </div>
-                    <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-brand flex items-center justify-center border-2 border-background">
-                      <ArrowUpRight className="w-2.5 h-2.5 text-background" />
-                    </div>
+                    <Icon className={cn('w-3.5 h-3.5', stat.color)} />
+                    <span className="text-[11px] sm:text-xs font-bold text-white tabular-nums">{stat.value}</span>
+                    <span className="text-[10px] text-muted hidden sm:inline">{stat.label}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="text-sm sm:text-base font-black text-white tracking-tight">VIP Transfer</h3>
-                      <span className="text-[7px] sm:text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-brand/15 text-brand border border-brand/20">
-                        Instant
-                      </span>
-                    </div>
-                    <p className="text-[10px] sm:text-[11px] text-white/45 leading-relaxed">Already VIP on Stake, Rollbit, or another platform? Transfer your VIP status to NeonBet — keep your tier, get better rakeback.</p>
-                  </div>
-                  <div className="hidden lg:flex items-center gap-5 shrink-0">
-                    {[
-                      { label: 'Up to 35%', sub: 'Rakeback' },
-                      { label: 'Personal', sub: 'VIP Host' },
-                      { label: '$10K+', sub: 'Level-up Bonus' },
-                    ].map((b, i) => (
-                      <div key={i} className="text-center">
-                        <p className="text-xs font-black text-amber-400">{b.label}</p>
-                        <p className="text-[8px] text-white/35 font-medium uppercase tracking-wider">{b.sub}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="shrink-0">
-                    <div className="px-3.5 sm:px-4 py-2 rounded-lg font-bold text-[11px] sm:text-xs bg-gradient-to-r from-amber-500 to-yellow-500 text-background-deep hover:from-amber-400 hover:to-yellow-400 transition-all group-hover:scale-[1.03] group-hover:shadow-lg group-hover:shadow-amber-500/20 active:scale-[0.97]">
-                      Transfer Now →
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Link>
+                )
+              })}
+            </div>
           </section>
 
           {/* ═══════ Search + Category Tabs ═══════ */}
-          <section className="px-3 sm:px-6 pt-5">
+          <section className="px-3 sm:px-6 pt-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               <div className="relative flex-1 max-w-xs">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
@@ -881,7 +923,7 @@ export default function HomePage() {
                   placeholder="Search games..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-surface border border-border rounded-xl text-sm text-white placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-brand/40 focus:border-brand/30 transition-all"
+                  className="w-full pl-9 pr-3 py-2.5 bg-surface border border-border rounded-xl text-sm text-white placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand/30 transition-all"
                 />
               </div>
               <div className="flex gap-1.5 overflow-x-auto scrollbar-none">
@@ -899,7 +941,7 @@ export default function HomePage() {
                       className={cn(
                         'shrink-0 flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-semibold transition-all',
                         isActive
-                          ? 'bg-brand/10 text-brand border border-brand/20'
+                          ? 'bg-brand/15 text-brand border border-brand/25 shadow-[0_0_10px_rgba(0,232,123,0.15)]'
                           : 'text-muted-light hover:text-white hover:bg-surface border border-transparent'
                       )}>
                       <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-brand' : tab.color)} />
@@ -915,20 +957,21 @@ export default function HomePage() {
           <section className="px-3 sm:px-6 pt-4 pb-2">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-brand/10 border border-brand/20 flex items-center justify-center">
-                  <Zap className="w-4 h-4 text-brand" />
+                <div className="w-9 h-9 rounded-xl bg-brand/15 border border-brand/25 flex items-center justify-center shadow-[0_0_12px_rgba(0,232,123,0.15)]">
+                  <Zap className="w-4.5 h-4.5 text-brand" />
                 </div>
                 <div>
-                  <h2 className="text-[15px] font-bold text-white tracking-tight">NeonBet Originals</h2>
-                  <p className="text-[11px] text-muted">Provably fair games</p>
+                  <h2 className="text-base sm:text-lg font-black text-white tracking-tight">NeonBet Originals</h2>
+                  <p className="text-[11px] text-muted">Provably fair &bull; Lowest house edge &bull; Instant payouts</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-light">
-                <span className="hidden sm:inline">Found games: {filteredGames.length}</span>
+                <Shield className="w-3.5 h-3.5 text-brand/60" />
+                <span className="hidden sm:inline text-[11px]">{filteredGames.length} games</span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
               {filteredGames.map(game => (
                 <GameCardGrid key={game.id} game={game} />
               ))}
@@ -939,12 +982,12 @@ export default function HomePage() {
           <section className="px-3 sm:px-6 pt-6 pb-2">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-                  <Flame className="w-4 h-4 text-purple-400" />
+                <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/25 flex items-center justify-center shadow-[0_0_12px_rgba(168,85,247,0.15)]">
+                  <Flame className="w-4.5 h-4.5 text-purple-400" />
                 </div>
                 <div>
-                  <h2 className="text-[15px] font-bold text-white tracking-tight">Popular Games</h2>
-                  <p className="text-[11px] text-muted">Coming soon</p>
+                  <h2 className="text-base sm:text-lg font-black text-white tracking-tight">Popular Slots</h2>
+                  <p className="text-[11px] text-muted">Top providers &bull; Exclusive titles</p>
                 </div>
               </div>
               <Link href="/" className="text-xs text-muted-light hover:text-brand flex items-center gap-1 transition-colors">
@@ -954,28 +997,29 @@ export default function HomePage() {
 
             <ScrollRow>
               {[
-                { name: 'Gates of\nOlympus', gradient: 'from-yellow-500 via-amber-600 to-yellow-900' },
-                { name: 'Sweet\nBonanza', gradient: 'from-pink-400 via-rose-500 to-pink-800' },
-                { name: 'Big Bass\nSplash', gradient: 'from-blue-400 via-blue-600 to-indigo-900' },
-                { name: 'Wanted\nDead', gradient: 'from-orange-400 via-red-500 to-red-900' },
-                { name: 'Sugar\nRush', gradient: 'from-fuchsia-400 via-pink-500 to-purple-800' },
-                { name: 'Dog\nHouse', gradient: 'from-teal-400 via-teal-600 to-emerald-900' },
-                { name: 'Lightning\nRoulette', gradient: 'from-yellow-300 via-amber-500 to-amber-900' },
-                { name: 'Fire\nStampede', gradient: 'from-red-400 via-orange-500 to-red-900' },
+                { name: 'Gates of\nOlympus', gradient: 'from-yellow-500 via-amber-600 to-yellow-900', glow: 'rgba(245,158,11,0.3)' },
+                { name: 'Sweet\nBonanza', gradient: 'from-pink-400 via-rose-500 to-pink-800', glow: 'rgba(244,63,94,0.3)' },
+                { name: 'Big Bass\nSplash', gradient: 'from-blue-400 via-blue-600 to-indigo-900', glow: 'rgba(59,130,246,0.3)' },
+                { name: 'Wanted\nDead', gradient: 'from-orange-400 via-red-500 to-red-900', glow: 'rgba(239,68,68,0.3)' },
+                { name: 'Sugar\nRush', gradient: 'from-fuchsia-400 via-pink-500 to-purple-800', glow: 'rgba(217,70,239,0.3)' },
+                { name: 'Dog\nHouse', gradient: 'from-teal-400 via-teal-600 to-emerald-900', glow: 'rgba(20,184,166,0.3)' },
+                { name: 'Lightning\nRoulette', gradient: 'from-yellow-300 via-amber-500 to-amber-900', glow: 'rgba(251,191,36,0.3)' },
+                { name: 'Fire\nStampede', gradient: 'from-red-400 via-orange-500 to-red-900', glow: 'rgba(249,115,22,0.3)' },
               ].map((slot, i) => (
                 <div key={i} className="shrink-0 group cursor-pointer">
                   <div className={cn(
-                    'relative w-[140px] sm:w-[160px] aspect-[3/4] rounded-2xl overflow-hidden',
-                    'group-hover:scale-[1.04] group-hover:shadow-xl transition-all duration-300'
-                  )}>
+                    'relative w-[140px] sm:w-[160px] aspect-[3/4] rounded-2xl overflow-hidden card-shine',
+                    'group-hover:scale-[1.05] group-hover:-translate-y-1 transition-all duration-300'
+                  )}
+                  style={{ boxShadow: `0 4px 20px -4px ${slot.glow}` }}>
                     <div className={cn('absolute inset-0 bg-gradient-to-br', slot.gradient)} />
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/[0.08] via-transparent to-black/30" />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]">
-                      <div className="px-3 py-1.5 bg-black/50 rounded-lg border border-white/10">
-                        <span className="text-[10px] font-bold text-white/60 uppercase tracking-wider">Coming Soon</span>
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/[0.1] via-transparent to-black/40" />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px]">
+                      <div className="px-3 py-1.5 bg-black/60 rounded-lg border border-white/15">
+                        <span className="text-[10px] font-bold text-white/70 uppercase tracking-wider">Coming Soon</span>
                       </div>
                     </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/70 to-transparent">
+                    <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
                       <p className="text-sm font-extrabold text-white uppercase leading-tight whitespace-pre-line">{slot.name}</p>
                       <p className="text-[9px] text-white/40 mt-0.5">Pragmatic Play</p>
                     </div>
@@ -990,16 +1034,17 @@ export default function HomePage() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2.5">
                 <div className="relative">
-                  <span className="absolute inset-0 w-2 h-2 bg-brand rounded-full animate-ping opacity-40" />
-                  <span className="relative w-2 h-2 bg-brand rounded-full block" />
+                  <span className="absolute inset-0 w-2.5 h-2.5 bg-brand rounded-full animate-ping opacity-40" />
+                  <span className="relative w-2.5 h-2.5 bg-brand rounded-full block shadow-[0_0_8px_rgba(0,232,123,0.6)]" />
                 </div>
-                <h2 className="text-[15px] font-bold text-white">Live Bets</h2>
+                <h2 className="text-base sm:text-lg font-black text-white">Live Bets</h2>
+                <span className="text-[10px] text-muted font-medium">Real-time feed</span>
               </div>
               <div className="flex gap-1">
                 {['All Bets', 'My Bets', 'High Rollers'].map((tab, i) => (
                   <button key={tab} className={cn(
                     'px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all',
-                    i === 0 ? 'bg-surface border border-border text-white' : 'text-muted hover:text-white'
+                    i === 0 ? 'bg-surface border border-border text-white shadow-[0_0_8px_rgba(0,0,0,0.3)]' : 'text-muted hover:text-white'
                   )}>
                     {tab}
                   </button>
@@ -1020,8 +1065,9 @@ export default function HomePage() {
               <div className="divide-y divide-border/30">
                 {bets.map((bet, i) => (
                   <div key={i} className={cn(
-                    'grid grid-cols-5 gap-2 px-4 py-2.5 text-[12px] sm:text-[13px] transition-all hover:bg-white/[0.015]',
-                    i === 0 && 'animate-fade-in'
+                    'grid grid-cols-5 gap-2 px-4 py-2.5 text-[12px] sm:text-[13px] transition-all hover:bg-white/[0.02]',
+                    i === 0 && 'animate-fade-in bg-brand/[0.03]',
+                    bet.won && i === 0 && 'bg-brand/[0.04]'
                   )}>
                     <span className="text-white font-medium truncate">{bet.game}</span>
                     <span className="text-muted-light font-mono text-[11px] truncate">{bet.user}</span>
@@ -1031,7 +1077,7 @@ export default function HomePage() {
                     <span className={cn('text-right font-mono font-semibold', bet.won ? 'text-brand' : 'text-muted')}>
                       {bet.mult}
                     </span>
-                    <span className={cn('text-right font-mono text-[12px]', bet.won ? 'text-brand' : 'text-red-400/70')}>
+                    <span className={cn('text-right font-mono text-[12px] font-semibold', bet.won ? 'text-brand' : 'text-red-400/70')}>
                       {bet.profit}
                     </span>
                   </div>
@@ -1042,30 +1088,33 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* ═══════ Trust Section ═══════ */}
+          {/* ═══════ Trust / Features Section ═══════ */}
           <section className="px-3 sm:px-6 pb-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 {
-                  icon: Shield, color: 'text-brand', bg: 'bg-brand/[0.06] border-brand/10',
+                  icon: Shield, color: 'text-brand', bg: 'bg-brand/[0.08] border-brand/15',
+                  glow: 'shadow-[0_0_15px_rgba(0,232,123,0.08)]',
                   title: 'Provably Fair',
-                  desc: 'HMAC-SHA256 cryptographic verification. Every bet verifiable.',
+                  desc: 'HMAC-SHA256 cryptographic verification. Every single bet verifiable on-chain.',
                 },
                 {
-                  icon: Zap, color: 'text-amber-400', bg: 'bg-amber-400/[0.06] border-amber-400/10',
+                  icon: Zap, color: 'text-amber-400', bg: 'bg-amber-400/[0.08] border-amber-400/15',
+                  glow: 'shadow-[0_0_15px_rgba(251,191,36,0.08)]',
                   title: 'Instant Payouts',
-                  desc: 'Wins credited immediately. Zero delays, zero holds.',
+                  desc: 'Wins credited instantly to your balance. No delays, no holds, no KYC hassle.',
                 },
                 {
-                  icon: TrendingUp, color: 'text-sky-400', bg: 'bg-sky-400/[0.06] border-sky-400/10',
-                  title: 'Transparent Edge',
-                  desc: 'Published house edge for every game. Full transparency.',
+                  icon: Gem, color: 'text-purple-400', bg: 'bg-purple-400/[0.08] border-purple-400/15',
+                  glow: 'shadow-[0_0_15px_rgba(168,85,247,0.08)]',
+                  title: 'VIP Rewards',
+                  desc: 'Up to 35% rakeback, personal VIP host, exclusive bonuses & level-up rewards.',
                 },
               ].map((item, i) => {
                 const Icon = item.icon
                 return (
-                  <div key={i} className={cn('flex items-start gap-3 p-4 rounded-2xl border backdrop-blur-sm', item.bg)}>
-                    <div className="w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center shrink-0">
+                  <div key={i} className={cn('flex items-start gap-3 p-4 rounded-2xl border backdrop-blur-sm card-shine', item.bg, item.glow)}>
+                    <div className="w-11 h-11 rounded-xl bg-white/[0.05] flex items-center justify-center shrink-0">
                       <Icon className={cn('w-5 h-5', item.color)} />
                     </div>
                     <div>
@@ -1079,18 +1128,31 @@ export default function HomePage() {
           </section>
 
           {/* ═══════ Footer ═══════ */}
-          <footer className="px-4 sm:px-6 py-5 border-t border-border/40">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-muted">
-              <div className="flex items-center gap-4">
-                <span>&copy; {new Date().getFullYear()} NeonBet</span>
-                <a href="#" className="hover:text-muted-light transition-colors">Terms</a>
-                <a href="#" className="hover:text-muted-light transition-colors">Privacy</a>
-                <a href="#" className="hover:text-muted-light transition-colors">Fairness</a>
+          <footer className="px-4 sm:px-6 py-6 border-t border-border/40 bg-background-deep/50">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-brand/10 border border-brand/20 flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-brand" />
+                  </div>
+                  <span className="text-sm font-bold text-white">NeonBet</span>
+                  <span className="text-[10px] text-muted">Provably Fair Casino</span>
+                </div>
+                <div className="flex items-center gap-4 text-[11px] text-muted">
+                  <a href="#" className="hover:text-white transition-colors">Terms</a>
+                  <a href="#" className="hover:text-white transition-colors">Privacy</a>
+                  <a href="#" className="hover:text-white transition-colors">Fairness</a>
+                  <a href="#" className="hover:text-white transition-colors">Support</a>
+                </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span>18+</span>
-                <span className="w-px h-3 bg-border" />
-                <span>Play Responsibly</span>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] text-muted/70 border-t border-border/30 pt-4">
+                <span>&copy; {new Date().getFullYear()} NeonBet. All rights reserved.</span>
+                <div className="flex items-center gap-3">
+                  <span className="px-2 py-0.5 rounded bg-red-500/10 text-red-400/80 font-bold border border-red-500/10">18+</span>
+                  <span>Play Responsibly</span>
+                  <span className="w-px h-3 bg-border" />
+                  <span>Crypto Gambling</span>
+                </div>
               </div>
             </div>
           </footer>

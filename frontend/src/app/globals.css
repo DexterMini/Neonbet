@@ -100,11 +100,24 @@
 
   /* ─── Text utilities ─── */
   .text-gradient-gold {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-dark via-brand to-brand-light;
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 25%, #FFD700 50%, #FFEC8B 75%, #FFD700 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   .text-gradient-shine {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-white via-brand-light to-white;
+  }
+
+  .text-neon-green {
+    color: #00E87B;
+    text-shadow: 0 0 7px rgba(0,232,123,0.5), 0 0 20px rgba(0,232,123,0.2);
+  }
+
+  .text-neon-gold {
+    color: #FFD700;
+    text-shadow: 0 0 7px rgba(255,215,0,0.5), 0 0 20px rgba(255,215,0,0.2);
   }
 
   /* ─── Shimmer skeleton ─── */
@@ -116,6 +129,65 @@
   @keyframes shimmer {
     0%   { background-position: -200% 0; }
     100% { background-position:  200% 0; }
+  }
+
+  /* ─── Casino Neon Glow Effects ─── */
+  .neon-border-green {
+    box-shadow: 0 0 5px rgba(0,232,123,0.3), 0 0 15px rgba(0,232,123,0.1), inset 0 0 5px rgba(0,232,123,0.05);
+    border-color: rgba(0,232,123,0.4);
+  }
+  .neon-border-gold {
+    box-shadow: 0 0 5px rgba(255,215,0,0.3), 0 0 15px rgba(255,215,0,0.1), inset 0 0 5px rgba(255,215,0,0.05);
+    border-color: rgba(255,215,0,0.4);
+  }
+  .neon-border-purple {
+    box-shadow: 0 0 5px rgba(168,85,247,0.3), 0 0 15px rgba(168,85,247,0.1), inset 0 0 5px rgba(168,85,247,0.05);
+    border-color: rgba(168,85,247,0.4);
+  }
+
+  /* ─── Casino Card Hover Glow ─── */
+  .casino-card-glow {
+    position: relative;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .casino-card-glow:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 8px 30px -8px rgba(0,232,123,0.3), 0 0 0 1px rgba(0,232,123,0.15);
+  }
+
+  /* ─── Big Win Ticker ─── */
+  @keyframes ticker-scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
+  .animate-ticker {
+    animation: ticker-scroll 30s linear infinite;
+  }
+
+  /* ─── Casino Pulse Ring ─── */
+  @keyframes casino-pulse-ring {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  .casino-pulse-ring::before {
+    content: "";
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,232,123,0.4);
+    animation: casino-pulse-ring 2s ease-out infinite;
+  }
+
+  /* ─── Floating Particles ─── */
+  @keyframes float-up {
+    0% { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { transform: translateY(-100vh) translateX(20px) scale(0.5); opacity: 0; }
+  }
+  @keyframes float-slow {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-15px) rotate(5deg); }
   }
 
   /* ─── Game result overlays ─── */
@@ -141,9 +213,30 @@
     0%   { stroke-dashoffset: 1000; }
     100% { stroke-dashoffset: 0; }
   }
-  .animate-win-pulse      { animation: win-pulse 0.5s ease-in-out; }
+  @keyframes golden-pulse {
+    0%, 100% { box-shadow: 0 0 5px rgba(255,215,0,0.2), 0 0 15px rgba(255,215,0,0.1); }
+    50%      { box-shadow: 0 0 15px rgba(255,215,0,0.4), 0 0 30px rgba(255,215,0,0.2); }
+  }
+  @keyframes neon-breathe {
+    0%, 100% { opacity: 0.6; }
+    50%      { opacity: 1; }
+  }
+  @keyframes jackpot-flash {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
+  .animate-win-pulse       { animation: win-pulse 0.5s ease-in-out; }
   .animate-multiplier-glow { animation: multiplier-glow 2s ease-in-out infinite; }
   .animate-crash-line      { animation: crash-line 0.5s ease-out forwards; }
+  .animate-golden-pulse    { animation: golden-pulse 3s ease-in-out infinite; }
+  .animate-neon-breathe    { animation: neon-breathe 3s ease-in-out infinite; }
+
+  /* ─── Hero Jackpot Counter ─── */
+  .jackpot-display {
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+    border: 1px solid rgba(255,215,0,0.3);
+    box-shadow: 0 0 20px rgba(255,215,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
 
   /* ─── Noise texture ─── */
   .noise::before {
@@ -154,6 +247,34 @@
     opacity: 0.015;
     pointer-events: none;
     mix-blend-mode: overlay;
+  }
+
+  /* ─── Card Shine on Hover ─── */
+  .card-shine {
+    position: relative;
+    overflow: hidden;
+  }
+  .card-shine::after {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+      45deg,
+      transparent 40%,
+      rgba(255, 255, 255, 0.03) 45%,
+      rgba(255, 255, 255, 0.06) 50%,
+      rgba(255, 255, 255, 0.03) 55%,
+      transparent 60%
+    );
+    transform: translateX(-100%) translateY(-100%);
+    transition: transform 0.6s ease;
+    pointer-events: none;
+  }
+  .card-shine:hover::after {
+    transform: translateX(20%) translateY(20%);
   }
 }
 

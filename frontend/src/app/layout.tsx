@@ -54,10 +54,18 @@ export default function RootLayout({
       <body className="bg-background text-white antialiased min-h-screen overflow-x-hidden font-sans">
         <Providers>
           <div className="relative">
-            {/* Ambient background — subtle warm glow */}
+            {/* Casino ambient background — dramatic neon glows */}
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
-              <div className="absolute -top-[40%] -left-[20%] w-[60%] h-[60%] bg-brand/[0.015] rounded-full blur-[150px]" />
-              <div className="absolute -bottom-[30%] -right-[20%] w-[50%] h-[50%] bg-brand/[0.01] rounded-full blur-[120px]" />
+              {/* Top-left green neon wash */}
+              <div className="absolute -top-[30%] -left-[15%] w-[50%] h-[50%] bg-brand/[0.04] rounded-full blur-[180px]" />
+              {/* Bottom-right purple neon wash */}
+              <div className="absolute -bottom-[20%] -right-[15%] w-[45%] h-[45%] bg-purple-500/[0.025] rounded-full blur-[160px]" />
+              {/* Center golden accent */}
+              <div className="absolute top-[30%] left-[50%] -translate-x-1/2 w-[30%] h-[20%] bg-amber-500/[0.015] rounded-full blur-[140px]" />
+              {/* subtle noise overlay for depth */}
+              <div className="absolute inset-0 opacity-[0.012]" style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+              }} />
             </div>
             
             {/* Main content */}
