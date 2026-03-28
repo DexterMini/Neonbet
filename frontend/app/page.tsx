@@ -5,6 +5,7 @@ import { CasinoSidebar } from "@/components/casino/sidebar"
 import { CasinoHeader } from "@/components/casino/header"
 import { GameGrid } from "@/components/casino/game-grid"
 import { AdminPanel } from "@/components/casino/admin-panel"
+import { AuthModal } from "@/components/casino/auth-modal"
 import { useCasinoStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -13,39 +14,18 @@ export default function CasinoPage() {
     currentView, 
     sidebarCollapsed, 
     user,
-    setUser,
-    updateOnlineUsers 
+    isAuthenticated,
+    fetchMe,
   } = useCasinoStore()
   
   const [mounted, setMounted] = useState(false)
+  const [authOpen, setAuthOpen] = useState(false)
 
-  // Simulate live data updates
+  // Restore session from saved token on mount
   useEffect(() => {
     setMounted(true)
-    
-    // Auto-login as admin for demo (remove in production)
-    if (!user) {
-      setUser({
-        id: 'admin-1',
-        username: 'Admin',
-        email: 'admin@celora.net',
-        vipLevel: 'svip',
-        balance: 0,
-        currency: 'USD',
-        isAdmin: true,
-        createdAt: new Date(),
-        totalWagered: 0,
-        totalWon: 0,
-      })
-    }
-
-    // Simulate online users updates
-    const interval = setInterval(() => {
-      updateOnlineUsers(Math.floor(Math.random() * 500) + 800)
-    }, 5000)
-
-    return () => clearInterval(interval)
-  }, [user, setUser, updateOnlineUsers])
+    fetchMe()
+  }, [fetchMe])
 
   if (!mounted) {
     return (
@@ -75,13 +55,16 @@ export default function CasinoPage() {
         "flex-1 flex flex-col transition-all duration-300 relative",
         sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"
       )}>
-        <CasinoHeader />
+        <CasinoHeader onSignIn={() => setAuthOpen(true)} />
         
         <main className="flex-1 overflow-auto p-6">
           {currentView === "lobby" && <GameGrid />}
-          {currentView === "admin" && user?.isAdmin && <AdminPanel />}
+          {currentView === "admin" && user?.isAdmin === true && <AdminPanel />}
+          {currentView === "admin" && !user?.isAdmin && <GameGrid />}
         </main>
       </div>
+
+      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
     </div>
   )
 }

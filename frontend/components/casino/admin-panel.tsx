@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,9 +18,10 @@ import {
   TrendingUp, TrendingDown, DollarSign, AlertTriangle,
   Activity, Clock, Server, Cpu, HardDrive, Wifi,
   RefreshCw, Search, Star, Gift, CreditCard, Zap,
-  ArrowUpRight, ArrowDownRight, MoreHorizontal
+  ArrowUpRight, ArrowDownRight, MoreHorizontal, Trophy
 } from "lucide-react"
 import { useCasinoStore, CELORA_GAMES, VIP_LEVELS } from "@/lib/store"
+import * as api from "@/lib/api"
 
 type AdminTab = "overview" | "players" | "balance" | "settings" | "automation" | "audit"
 
@@ -127,50 +128,60 @@ export function AdminPanel() {
 
 function OverviewTab() {
   const [liveStats, setLiveStats] = useState({
-    activeUsers: 1247,
-    bets24h: 8492,
-    wagered: 142847,
-    revenue: 12547,
-    pendingWithdrawals: 23,
-    alerts: 2,
+    activeUsers: 0,
+    bets24h: 0,
+    wagered: 0,
+    revenue: 0,
+    pendingWithdrawals: 0,
+    alerts: 0,
   })
+  const [gamePerformance, setGamePerformance] = useState<any[]>([])
 
-  // Simulate live stat updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveStats(prev => ({
-        activeUsers: Math.max(0, prev.activeUsers + Math.floor((Math.random() - 0.5) * 50)),
-        bets24h: Math.max(0, prev.bets24h + Math.floor((Math.random() - 0.3) * 20)),
-        wagered: Math.max(0, prev.wagered + Math.floor((Math.random() - 0.3) * 500)),
-        revenue: Math.max(0, prev.revenue + Math.floor((Math.random() - 0.4) * 100)),
-        pendingWithdrawals: Math.max(0, Math.min(50, prev.pendingWithdrawals + Math.floor((Math.random() - 0.5) * 3))),
-        alerts: prev.alerts,
-      }))
-    }, 2000)
-    return () => clearInterval(interval)
+  const fetchStats = useCallback(async () => {
+    try {
+      const [overview, games, pending, alerts] = await Promise.all([
+        api.getAdminStatsOverview().catch(() => null),
+        api.getAdminStatsGames().catch(() => []),
+        api.getPendingWithdrawals().catch(() => []),
+        api.getRiskAlerts().catch(() => []),
+      ])
+      if (overview) {
+        setLiveStats({
+          activeUsers: overview.active_users || overview.active_users_24h || 0,
+          bets24h: overview.total_bets || overview.bets_24h || 0,
+          wagered: overview.total_wagered || overview.wagered_24h || 0,
+          revenue: overview.ggr || overview.revenue || 0,
+          pendingWithdrawals: Array.isArray(pending) ? pending.length : 0,
+          alerts: Array.isArray(alerts) ? alerts.length : 0,
+        })
+      }
+      if (Array.isArray(games)) {
+        setGamePerformance(games.map((g: any) => ({
+          name: g.game_type || g.name || 'Unknown',
+          bets: g.total_bets || g.bets || 0,
+          wagered: g.total_wagered || g.wagered || 0,
+          payouts: g.total_payouts || g.payouts || 0,
+          profit: g.profit || ((g.total_wagered || 0) - (g.total_payouts || 0)),
+          edge: g.house_edge || g.houseEdge || 0,
+        })))
+      }
+    } catch { /* silently handle */ }
   }, [])
 
+  useEffect(() => {
+    fetchStats()
+    const interval = setInterval(fetchStats, 15000)
+    return () => clearInterval(interval)
+  }, [fetchStats])
+
   const stats = [
-    { label: "ACTIVE USERS", value: liveStats.activeUsers.toLocaleString(), change: "+12.5%", trend: "up", icon: Users, color: "text-blue-400", bgColor: "from-blue-500/20 to-blue-600/10" },
-    { label: "BETS (24H)", value: liveStats.bets24h.toLocaleString(), change: "+8.3%", trend: "up", icon: Activity, color: "text-purple-400", bgColor: "from-purple-500/20 to-purple-600/10" },
-    { label: "WAGERED", value: `$${liveStats.wagered.toLocaleString()}`, change: "+15.2%", trend: "up", icon: DollarSign, color: "text-primary", bgColor: "from-primary/20 to-primary/10" },
-    { label: "REVENUE", value: `$${liveStats.revenue.toLocaleString()}`, change: "+22.1%", trend: "up", icon: TrendingUp, color: "text-green-400", bgColor: "from-green-500/20 to-green-600/10" },
-    { label: "PENDING W/D", value: liveStats.pendingWithdrawals.toString(), change: "-3", trend: "down", icon: Clock, color: "text-amber-400", bgColor: "from-amber-500/20 to-amber-600/10" },
+    { label: "ACTIVE USERS", value: liveStats.activeUsers.toLocaleString(), change: "", trend: "neutral", icon: Users, color: "text-blue-400", bgColor: "from-blue-500/20 to-blue-600/10" },
+    { label: "BETS (24H)", value: liveStats.bets24h.toLocaleString(), change: "", trend: "neutral", icon: Activity, color: "text-purple-400", bgColor: "from-purple-500/20 to-purple-600/10" },
+    { label: "WAGERED", value: `$${liveStats.wagered.toLocaleString()}`, change: "", trend: "neutral", icon: DollarSign, color: "text-primary", bgColor: "from-primary/20 to-primary/10" },
+    { label: "REVENUE", value: `$${liveStats.revenue.toLocaleString()}`, change: "", trend: "neutral", icon: TrendingUp, color: "text-green-400", bgColor: "from-green-500/20 to-green-600/10" },
+    { label: "PENDING W/D", value: liveStats.pendingWithdrawals.toString(), change: "", trend: "neutral", icon: Clock, color: "text-amber-400", bgColor: "from-amber-500/20 to-amber-600/10" },
     { label: "ALERTS", value: liveStats.alerts.toString(), change: "", trend: "neutral", icon: AlertTriangle, color: "text-destructive", bgColor: "from-destructive/20 to-destructive/10" },
   ]
-
-  const gamePerformance = CELORA_GAMES.slice(0, 5).map(game => ({
-    name: game.name,
-    bets: Math.floor(Math.random() * 3000) + 500,
-    wagered: Math.floor(Math.random() * 80000) + 10000,
-    payouts: 0,
-    profit: 0,
-    edge: game.houseEdge,
-  })).map(game => ({
-    ...game,
-    payouts: Math.floor(game.wagered * (1 - game.edge / 100)),
-    profit: Math.floor(game.wagered * (game.edge / 100)),
-  }))
 
   return (
     <div className="space-y-6">
@@ -230,10 +241,10 @@ function OverviewTab() {
 
             <div className="grid grid-cols-4 gap-4 mb-8">
               {[
-                { label: "TOTAL WAGERED", value: `$${(liveStats.wagered * 1.5).toLocaleString()}`, color: "text-primary" },
-                { label: "TOTAL PAYOUTS", value: `$${Math.floor(liveStats.wagered * 1.4).toLocaleString()}`, color: "text-amber-400" },
-                { label: "GROSS PROFIT", value: `+$${Math.floor(liveStats.wagered * 0.1).toLocaleString()}`, color: "text-green-400" },
-                { label: "NET PROFIT", value: `+$${Math.floor(liveStats.wagered * 0.08).toLocaleString()}`, color: "text-green-400" },
+                { label: "TOTAL WAGERED", value: `$${liveStats.wagered.toLocaleString()}`, color: "text-primary" },
+                { label: "TOTAL PAYOUTS", value: `$${Math.max(0, liveStats.wagered - liveStats.revenue).toLocaleString()}`, color: "text-amber-400" },
+                { label: "GROSS PROFIT", value: `+$${liveStats.revenue.toLocaleString()}`, color: "text-green-400" },
+                { label: "NET PROFIT", value: `+$${Math.floor(liveStats.revenue * 0.85).toLocaleString()}`, color: "text-green-400" },
               ].map((item) => (
                 <div key={item.label} className="p-4 rounded-xl glass-light">
                   <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">{item.label}</div>
@@ -303,13 +314,13 @@ function OverviewTab() {
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-border">
               <div className="text-center p-4 rounded-xl glass-light">
                 <Wifi className="w-5 h-5 mx-auto text-primary mb-2" />
-                <div className="text-xl font-bold font-mono">858</div>
-                <div className="text-[10px] text-muted-foreground uppercase">Connections</div>
+                <div className="text-xl font-bold font-mono">{liveStats.activeUsers}</div>
+                <div className="text-[10px] text-muted-foreground uppercase">Active Users</div>
               </div>
               <div className="text-center p-4 rounded-xl glass-light">
                 <Activity className="w-5 h-5 mx-auto text-primary mb-2" />
-                <div className="text-xl font-bold font-mono">1,287</div>
-                <div className="text-[10px] text-muted-foreground uppercase">Req/sec</div>
+                <div className="text-xl font-bold font-mono">{liveStats.bets24h}</div>
+                <div className="text-[10px] text-muted-foreground uppercase">Bets/24h</div>
               </div>
             </div>
 
@@ -363,6 +374,29 @@ function HealthMetric({ label, value, progress, color }: {
 
 function PlayersTab() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [players, setPlayers] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const searchPlayers = useCallback(async (q: string) => {
+    setLoading(true)
+    try {
+      const results = await api.searchUsers(q || undefined)
+      setPlayers(Array.isArray(results) ? results : [])
+    } catch {
+      setPlayers([])
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    searchPlayers("")
+  }, [searchPlayers])
+
+  useEffect(() => {
+    const timeout = setTimeout(() => searchPlayers(searchQuery), 400)
+    return () => clearTimeout(timeout)
+  }, [searchQuery, searchPlayers])
   
   return (
     <div className="space-y-6">
@@ -388,17 +422,66 @@ function PlayersTab() {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td colSpan={5} className="p-16 text-center">
-                <div className="flex flex-col items-center">
-                  <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
-                    <Users className="w-8 h-8 text-muted-foreground/50" />
+            {loading ? (
+              <tr>
+                <td colSpan={5} className="p-16 text-center">
+                  <div className="flex flex-col items-center">
+                    <RefreshCw className="w-8 h-8 text-muted-foreground/50 animate-spin mb-4" />
+                    <p className="text-muted-foreground">Loading players...</p>
                   </div>
-                  <p className="text-muted-foreground">No players found</p>
-                  <p className="text-sm text-muted-foreground/60 mt-1">Players will appear here when they register</p>
-                </div>
-              </td>
-            </tr>
+                </td>
+              </tr>
+            ) : players.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="p-16 text-center">
+                  <div className="flex flex-col items-center">
+                    <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+                      <Users className="w-8 h-8 text-muted-foreground/50" />
+                    </div>
+                    <p className="text-muted-foreground">No players found</p>
+                    <p className="text-sm text-muted-foreground/60 mt-1">Players will appear here when they register</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              players.map((player: any) => (
+                <tr key={player.id || player.user_id} className="border-b border-border/50 hover:bg-white/[0.02] transition-colors">
+                  <td className="p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                        {(player.username || '?').slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="font-medium">{player.username}</div>
+                        <div className="text-xs text-muted-foreground">{player.email}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-5">
+                    <Badge variant="outline" className={cn(
+                      player.is_frozen ? "text-red-400 border-red-400/30" :
+                      player.is_banned ? "text-red-400 border-red-400/30" :
+                      "text-green-400 border-green-400/30"
+                    )}>
+                      {player.is_banned ? "Banned" : player.is_frozen ? "Frozen" : "Active"}
+                    </Badge>
+                  </td>
+                  <td className="p-5">
+                    <Badge variant="outline" className="capitalize">
+                      {player.vip_level || 'bronze'}
+                    </Badge>
+                  </td>
+                  <td className="p-5">
+                    <span className="font-mono text-sm">{player.risk_score ?? '-'}</span>
+                  </td>
+                  <td className="text-right p-5">
+                    <Button variant="ghost" size="icon" className="rounded-xl">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Button>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
@@ -411,6 +494,11 @@ function BalanceOpsTab() {
   const [currency, setCurrency] = useState("USD")
   const [amount, setAmount] = useState("")
   const [selectedReason, setSelectedReason] = useState("")
+  const [targetPlayer, setTargetPlayer] = useState("")
+  const [customReason, setCustomReason] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [recentOps, setRecentOps] = useState<any[]>([])
 
   const currencies = ["USD", "BTC", "ETH", "SOL", "USDT", "LTC"]
   const quickAmounts = [5, 10, 25, 50, 100, 250, 500, 1000]
@@ -422,6 +510,25 @@ function BalanceOpsTab() {
     { id: "manual", icon: Settings, label: "Manual Correction", color: "text-blue-400" },
     { id: "promo", icon: CreditCard, label: "Promo Code", color: "text-orange-400" },
   ]
+
+  const handleSubmit = async () => {
+    if (!amount || !targetPlayer) return
+    setSubmitting(true)
+    setMessage(null)
+    try {
+      const finalAmount = operation === "debit" ? -Math.abs(Number(amount)) : Math.abs(Number(amount))
+      const reason = customReason || selectedReason || "admin_adjustment"
+      await api.adminAdjustBalance(targetPlayer, currency, finalAmount, reason)
+      setMessage({ type: 'success', text: `Successfully ${operation}ed ${currency} ${Math.abs(Number(amount))} to ${targetPlayer}` })
+      setRecentOps(prev => [{ operation, currency, amount: Number(amount), player: targetPlayer, reason, time: new Date() }, ...prev].slice(0, 10))
+      setAmount("")
+      setTargetPlayer("")
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message || 'Operation failed' })
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -456,8 +563,22 @@ function BalanceOpsTab() {
         <div className="space-y-6">
           <div>
             <label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 block">Target Player</label>
-            <Input placeholder="Search by username or email..." className="h-12 bg-secondary/50 border-0 rounded-xl" />
+            <Input 
+              placeholder="Enter user ID or username..." 
+              value={targetPlayer}
+              onChange={(e) => setTargetPlayer(e.target.value)}
+              className="h-12 bg-secondary/50 border-0 rounded-xl" 
+            />
           </div>
+
+          {message && (
+            <div className={cn(
+              "p-4 rounded-xl text-sm",
+              message.type === 'success' ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"
+            )}>
+              {message.text}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-6">
             <div>
@@ -552,13 +673,16 @@ function BalanceOpsTab() {
             </div>
             <Input 
               placeholder="Or type a custom reason..." 
+              value={customReason}
+              onChange={(e) => setCustomReason(e.target.value)}
               className="mt-3 h-12 bg-secondary/50 border-0 rounded-xl"
             />
           </div>
 
           <Button 
             className="w-full h-14 rounded-xl bg-primary text-primary-foreground font-semibold text-lg neon-glow"
-            disabled={!amount}
+            disabled={!amount || !targetPlayer || submitting}
+            onClick={handleSubmit}
           >
             <TrendingUp className="w-5 h-5 mr-2" />
             {operation === "credit" ? "Credit" : "Debit"} Balance
@@ -577,8 +701,26 @@ function BalanceOpsTab() {
             <span className="text-xs text-muted-foreground">0 this session</span>
           </div>
           <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Activity className="w-12 h-12 text-muted-foreground/30 mb-4" />
-            <p className="text-muted-foreground">No operations yet this session</p>
+            {recentOps.length === 0 ? (
+              <>
+                <Activity className="w-12 h-12 text-muted-foreground/30 mb-4" />
+                <p className="text-muted-foreground">No operations yet this session</p>
+              </>
+            ) : (
+              <div className="w-full space-y-2">
+                {recentOps.map((op, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-lg glass-light text-sm">
+                    <div>
+                      <span className={op.operation === 'credit' ? 'text-green-400' : 'text-red-400'}>
+                        {op.operation === 'credit' ? '+' : '-'}{op.currency} {op.amount}
+                      </span>
+                      <span className="text-muted-foreground ml-2">→ {op.player}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">{op.reason}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -617,6 +759,44 @@ function GameSettingsTab() {
       enabled: true,
     }))
   )
+  const [saving, setSaving] = useState<string | null>(null)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
+
+  // Load real settings from API
+  useEffect(() => {
+    api.getGameSettings().then((settings: any) => {
+      if (Array.isArray(settings) && settings.length > 0) {
+        setGameSettings(prev => prev.map(game => {
+          const apiSetting = settings.find((s: any) => s.game_type === game.id || s.game_type === game.slug)
+          if (apiSetting) {
+            return {
+              ...game,
+              houseEdge: apiSetting.house_edge ?? game.houseEdge,
+              minBet: apiSetting.min_bet ?? game.minBet,
+              maxBet: apiSetting.max_bet ?? game.maxBet,
+              maxWin: apiSetting.max_win ?? game.maxWin,
+              enabled: apiSetting.enabled !== false,
+            }
+          }
+          return game
+        }))
+      }
+    }).catch(() => {})
+  }, [])
+
+  const handleSaveSetting = async (gameType: string, field: string, value: number | boolean) => {
+    setSaving(gameType)
+    try {
+      await api.updateGameSettings(gameType, { [field]: value })
+      setSaveMessage(`Updated ${gameType} ${field}`)
+      setTimeout(() => setSaveMessage(null), 2000)
+    } catch (err: any) {
+      setSaveMessage(`Error: ${err.message}`)
+      setTimeout(() => setSaveMessage(null), 3000)
+    } finally {
+      setSaving(null)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -628,6 +808,9 @@ function GameSettingsTab() {
           <div>
             <h3 className="font-semibold text-lg">Game RTP Settings</h3>
             <p className="text-xs text-muted-foreground">Adjust Return to Player % and House Edge for each game</p>
+            {saveMessage && (
+              <span className={cn("ml-3 text-xs", saveMessage.startsWith("Error") ? "text-red-400" : "text-green-400")}>{saveMessage}</span>
+            )}
           </div>
           <Button variant="ghost" size="icon" className="ml-auto rounded-xl">
             <RefreshCw className="w-4 h-4" />
@@ -659,6 +842,7 @@ function GameSettingsTab() {
                         const newSettings = [...gameSettings]
                         newSettings[index].enabled = checked
                         setGameSettings(newSettings)
+                        handleSaveSetting(game.id, 'enabled', checked)
                       }}
                     />
                   </td>
@@ -666,6 +850,7 @@ function GameSettingsTab() {
                     <Input 
                       type="number" 
                       defaultValue={game.houseEdge} 
+                      onBlur={(e) => handleSaveSetting(game.id, 'house_edge', Number(e.target.value))}
                       className="w-20 h-10 text-center bg-secondary/50 border-0 rounded-lg mx-auto"
                     />
                   </td>
@@ -673,6 +858,7 @@ function GameSettingsTab() {
                     <Input 
                       type="number" 
                       defaultValue={game.minBet} 
+                      onBlur={(e) => handleSaveSetting(game.id, 'min_bet', Number(e.target.value))}
                       className="w-20 h-10 text-center bg-secondary/50 border-0 rounded-lg mx-auto"
                     />
                   </td>
@@ -680,6 +866,7 @@ function GameSettingsTab() {
                     <Input 
                       type="number" 
                       defaultValue={game.maxBet} 
+                      onBlur={(e) => handleSaveSetting(game.id, 'max_bet', Number(e.target.value))}
                       className="w-24 h-10 text-center bg-secondary/50 border-0 rounded-lg mx-auto"
                     />
                   </td>
@@ -687,6 +874,7 @@ function GameSettingsTab() {
                     <Input 
                       type="number" 
                       defaultValue={game.maxWin} 
+                      onBlur={(e) => handleSaveSetting(game.id, 'max_win', Number(e.target.value))}
                       className="w-28 h-10 text-center bg-secondary/50 border-0 rounded-lg mx-auto"
                     />
                   </td>
@@ -938,6 +1126,19 @@ function AutomationTab() {
 }
 
 function AuditTrailTab() {
+  const [auditLog, setAuditLog] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchLog = useCallback(async () => {
+    try {
+      const data = await api.getAuditLog()
+      setAuditLog(data.actions || [])
+    } catch { /* ignore */ }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchLog() }, [fetchLog])
+
   return (
     <div className="space-y-6">
       <div className="p-6 rounded-2xl glass">
@@ -949,18 +1150,44 @@ function AuditTrailTab() {
             <h3 className="font-semibold text-lg">Audit Trail</h3>
             <p className="text-xs text-muted-foreground">All admin actions logged chronologically</p>
           </div>
-          <Button variant="ghost" size="icon" className="ml-auto rounded-xl">
+          <Button variant="ghost" size="icon" className="ml-auto rounded-xl" onClick={fetchLog}>
             <RefreshCw className="w-4 h-4" />
           </Button>
         </div>
 
-        <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl glass-light">
-          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
-            <FileText className="w-8 h-8 text-muted-foreground/50" />
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground">Loading...</div>
+        ) : auditLog.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl glass-light">
+            <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+              <FileText className="w-8 h-8 text-muted-foreground/50" />
+            </div>
+            <p className="text-muted-foreground">No admin actions recorded yet</p>
+            <p className="text-sm text-muted-foreground/60 mt-1">Actions will appear here as they occur</p>
           </div>
-          <p className="text-muted-foreground">No admin actions recorded yet</p>
-          <p className="text-sm text-muted-foreground/60 mt-1">Actions will appear here as they occur</p>
-        </div>
+        ) : (
+          <div className="space-y-2 max-h-[600px] overflow-y-auto">
+            {auditLog.map((action: any) => (
+              <div key={action.id} className="flex items-center gap-4 p-4 rounded-xl glass-light">
+                <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                  <Activity className="w-5 h-5 text-blue-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">{action.action_type}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {action.details || `Target: ${action.target_type || 'system'}${action.target_id ? ` (${action.target_id})` : ''}`}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xs text-muted-foreground">
+                    {action.created_at ? new Date(action.created_at).toLocaleString() : ''}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/60">Admin: {action.admin_id?.slice(0, 8)}...</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Users, TrendingUp, Flame, Star, Sparkles, Play, Zap, Trophy, ChevronRight, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CELORA_GAMES, type Game } from "@/lib/store"
+import * as api from "@/lib/api"
 
 // Consistent number formatting to avoid hydration mismatch
 function formatNumber(num: number): string {
@@ -25,19 +26,28 @@ export function GameGrid() {
   const [livePlayers, setLivePlayers] = useState<Record<string, number>>({})
   const [featuredMultiplier, setFeaturedMultiplier] = useState(156.42)
   
-  // Simulate live player counts
+  // Fetch real game stats from API
   useEffect(() => {
-    const updatePlayers = () => {
-      const players: Record<string, number> = {}
-      CELORA_GAMES.forEach(game => {
-        players[game.id] = Math.floor(Math.random() * 2000) + 200
-      })
-      setLivePlayers(players)
+    let cancelled = false
+    const fetchGameStats = async () => {
+      try {
+        const stats = await api.getAdminStatsGames()
+        if (cancelled) return
+        const players: Record<string, number> = {}
+        if (Array.isArray(stats)) {
+          stats.forEach((s: any) => {
+            players[s.game_type || s.id] = s.active_players || s.bets_24h || 0
+          })
+        }
+        setLivePlayers(players)
+      } catch {
+        // Not admin or API down — show 0 players
+      }
     }
     
-    updatePlayers()
-    const interval = setInterval(updatePlayers, 3000)
-    return () => clearInterval(interval)
+    fetchGameStats()
+    const interval = setInterval(fetchGameStats, 30000) // refresh every 30s
+    return () => { cancelled = true; clearInterval(interval) }
   }, [])
 
   // Simulate featured multiplier

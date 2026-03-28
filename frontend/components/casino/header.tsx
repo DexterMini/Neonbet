@@ -17,8 +17,8 @@ import { Badge } from "@/components/ui/badge"
 import { useCasinoStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
-export function CasinoHeader() {
-  const { user, onlineUsers, logout } = useCasinoStore()
+export function CasinoHeader({ onSignIn }: { onSignIn?: () => void }) {
+  const { user, onlineUsers, logout, isAuthenticated } = useCasinoStore()
   const [notifications] = useState(3)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [searchFocused, setSearchFocused] = useState(false)
@@ -104,107 +104,127 @@ export function CasinoHeader() {
           )}
         </Button>
 
-        {/* Wallet */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              variant="outline" 
-              className="h-11 border-primary/20 bg-primary/5 hover:bg-primary/10 gap-2 rounded-xl px-4"
-            >
-              <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
-                <Wallet className="w-3.5 h-3.5 text-primary" />
-              </div>
-              <span className="font-mono font-bold text-primary">
-                ${user?.balance.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
-              </span>
-              <ChevronDown className="w-4 h-4 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72 glass border-border rounded-xl p-0 overflow-hidden">
-            <div className="p-4 bg-gradient-to-br from-primary/10 to-transparent">
-              <div className="text-xs text-muted-foreground mb-1">Total Balance</div>
-              <div className="text-3xl font-bold text-primary font-mono">
-                ${user?.balance.toLocaleString('en-US', { minimumFractionDigits: 2 }) || '0.00'}
-              </div>
-            </div>
-            <div className="p-2">
-              <DropdownMenuItem className="gap-3 py-3 cursor-pointer rounded-lg hover:bg-primary/10">
-                <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                  <Plus className="w-4 h-4 text-green-400" />
-                </div>
-                <div>
-                  <div className="font-medium">Deposit</div>
-                  <div className="text-xs text-muted-foreground">Add funds to your account</div>
-                </div>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="gap-3 py-3 cursor-pointer rounded-lg hover:bg-primary/10">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                  <Wallet className="w-4 h-4 text-blue-400" />
-                </div>
-                <div>
-                  <div className="font-medium">Withdraw</div>
-                  <div className="text-xs text-muted-foreground">Cash out your winnings</div>
-                </div>
-              </DropdownMenuItem>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* User */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2 px-2 rounded-xl h-11">
-              <div className="relative">
-                <Avatar className="w-9 h-9 ring-2 ring-primary/20">
-                  <AvatarImage src={user?.avatar} />
-                  <AvatarFallback className="bg-gradient-to-br from-primary to-[#00a07a] text-primary-foreground text-sm font-bold">
-                    {user?.username?.slice(0, 2).toUpperCase() || 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                {user?.isAdmin && (
-                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-accent rounded-full flex items-center justify-center">
-                    <span className="text-[8px] text-accent-foreground font-bold">A</span>
+        {isAuthenticated && user ? (
+          <>
+            {/* Wallet */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="h-11 border-primary/20 bg-primary/5 hover:bg-primary/10 gap-2 rounded-xl px-4"
+                >
+                  <div className="w-6 h-6 rounded-lg bg-primary/20 flex items-center justify-center">
+                    <Wallet className="w-3.5 h-3.5 text-primary" />
                   </div>
-                )}
-              </div>
-              <ChevronDown className="w-4 h-4 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 glass border-border rounded-xl">
-            <DropdownMenuLabel className="pb-0">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold">{user?.username || 'Guest'}</span>
-                {user?.vipLevel && (
-                  <Badge variant="outline" className={cn("text-[10px] uppercase", getVipColor(user.vipLevel))}>
-                    {user.vipLevel}
-                  </Badge>
-                )}
-              </div>
-              <div className="text-xs text-muted-foreground font-normal mt-0.5">{user?.email}</div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer gap-2">
-              <User className="w-4 h-4" />
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer gap-2">
-              <History className="w-4 h-4" />
-              Transaction History
-            </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer gap-2">
-              <Settings className="w-4 h-4" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem 
-              className="cursor-pointer gap-2 text-destructive focus:text-destructive"
-              onClick={logout}
+                  <span className="font-mono font-bold text-primary">
+                    ${user.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72 glass border-border rounded-xl p-0 overflow-hidden">
+                <div className="p-4 bg-gradient-to-br from-primary/10 to-transparent">
+                  <div className="text-xs text-muted-foreground mb-1">Total Balance</div>
+                  <div className="text-3xl font-bold text-primary font-mono">
+                    ${user.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div className="p-2">
+                  <DropdownMenuItem className="gap-3 py-3 cursor-pointer rounded-lg hover:bg-primary/10">
+                    <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                      <Plus className="w-4 h-4 text-green-400" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Deposit</div>
+                      <div className="text-xs text-muted-foreground">Add funds to your account</div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="gap-3 py-3 cursor-pointer rounded-lg hover:bg-primary/10">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                      <Wallet className="w-4 h-4 text-blue-400" />
+                    </div>
+                    <div>
+                      <div className="font-medium">Withdraw</div>
+                      <div className="text-xs text-muted-foreground">Cash out your winnings</div>
+                    </div>
+                  </DropdownMenuItem>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* User */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="gap-2 px-2 rounded-xl h-11">
+                  <div className="relative">
+                    <Avatar className="w-9 h-9 ring-2 ring-primary/20">
+                      <AvatarImage src={user.avatar} />
+                      <AvatarFallback className="bg-gradient-to-br from-primary to-[#00a07a] text-primary-foreground text-sm font-bold">
+                        {user.username?.slice(0, 2).toUpperCase() || 'U'}
+                      </AvatarFallback>
+                    </Avatar>
+                    {user.isAdmin && (
+                      <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-accent rounded-full flex items-center justify-center">
+                        <span className="text-[8px] text-accent-foreground font-bold">A</span>
+                      </div>
+                    )}
+                  </div>
+                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 glass border-border rounded-xl">
+                <DropdownMenuLabel className="pb-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{user.username}</span>
+                    {user.vipLevel && (
+                      <Badge variant="outline" className={cn("text-[10px] uppercase", getVipColor(user.vipLevel))}>
+                        {user.vipLevel}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-normal mt-0.5">{user.email}</div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="cursor-pointer gap-2">
+                  <User className="w-4 h-4" />
+                  Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer gap-2">
+                  <History className="w-4 h-4" />
+                  Transaction History
+                </DropdownMenuItem>
+                <DropdownMenuItem className="cursor-pointer gap-2">
+                  <Settings className="w-4 h-4" />
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                  className="cursor-pointer gap-2 text-destructive focus:text-destructive"
+                  onClick={logout}
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        ) : (
+          <>
+            <Button 
+              variant="ghost" 
+              className="h-11 rounded-xl font-medium"
+              onClick={onSignIn}
             >
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              Sign In
+            </Button>
+            <Button 
+              className="h-11 rounded-xl font-semibold"
+              onClick={onSignIn}
+            >
+              Sign Up
+            </Button>
+          </>
+        )}
       </div>
     </header>
   )

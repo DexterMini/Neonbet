@@ -6,6 +6,7 @@ import {
   rotateServerSeed,
   type GameSession as ProvablyFairSession 
 } from './provably-fair'
+import * as api from './api'
 
 export interface User {
   id: string
@@ -83,6 +84,12 @@ interface CasinoState {
   updateOnlineUsers: (count: number) => void
   logout: () => void
   
+  // Real Auth Actions
+  loginUser: (username: string, password: string) => Promise<void>
+  registerUser: (username: string, email: string, password: string) => Promise<void>
+  fetchMe: () => Promise<void>
+  fetchBalances: () => Promise<void>
+  
   // Provably Fair Actions
   initGameSession: (clientSeed?: string) => void
   incrementGameNonce: () => void
@@ -135,12 +142,99 @@ export const useCasinoStore = create<CasinoState>()(
       
       updateOnlineUsers: (onlineUsers) => set({ onlineUsers }),
       
-      logout: () => set({ 
-        user: null, 
-        isAuthenticated: false, 
-        currentView: 'lobby',
-        gameSession: null 
-      }),
+      logout: () => {
+        api.logout().catch(() => {})
+        api.clearToken()
+        set({ 
+          user: null, 
+          isAuthenticated: false, 
+          currentView: 'lobby',
+          gameSession: null 
+        })
+      },
+      
+      // Real Auth Actions
+      loginUser: async (username, password) => {
+        const data = await api.login(username, password)
+        const me = await api.getMe()
+        const user: User = {
+          id: me.id || me.user_id,
+          username: me.username,
+          email: me.email,
+          avatar: me.avatar,
+          vipLevel: me.vip_level || me.vipLevel || 'bronze',
+          balance: 0,
+          currency: 'USD',
+          isAdmin: me.is_admin || false,
+          createdAt: new Date(me.created_at || Date.now()),
+          totalWagered: me.total_wagered || 0,
+          totalWon: me.total_won || 0,
+        }
+        set({ user, isAuthenticated: true })
+        get().initGameSession()
+        // fetch real balances
+        get().fetchBalances()
+      },
+
+      registerUser: async (username, email, password) => {
+        const data = await api.register(username, email, password)
+        const me = await api.getMe()
+        const user: User = {
+          id: me.id || me.user_id,
+          username: me.username,
+          email: me.email,
+          avatar: me.avatar,
+          vipLevel: me.vip_level || me.vipLevel || 'bronze',
+          balance: 0,
+          currency: 'USD',
+          isAdmin: me.is_admin || false,
+          createdAt: new Date(me.created_at || Date.now()),
+          totalWagered: me.total_wagered || 0,
+          totalWon: me.total_won || 0,
+        }
+        set({ user, isAuthenticated: true })
+        get().initGameSession()
+      },
+
+      fetchMe: async () => {
+        try {
+          const token = api.getToken()
+          if (!token) return
+          const me = await api.getMe()
+          const user: User = {
+            id: me.id || me.user_id,
+            username: me.username,
+            email: me.email,
+            avatar: me.avatar,
+            vipLevel: me.vip_level || me.vipLevel || 'bronze',
+            balance: get().user?.balance || 0,
+            currency: 'USD',
+            isAdmin: me.is_admin || false,
+            createdAt: new Date(me.created_at || Date.now()),
+            totalWagered: me.total_wagered || 0,
+            totalWon: me.total_won || 0,
+          }
+          set({ user, isAuthenticated: true })
+          if (!get().gameSession) get().initGameSession()
+          get().fetchBalances()
+        } catch {
+          api.clearToken()
+          set({ user: null, isAuthenticated: false })
+        }
+      },
+
+      fetchBalances: async () => {
+        try {
+          const balances = await api.getBalances()
+          // Sum all balances as USD equivalent (simplified)
+          const usdBalance = balances['USD'] || balances['usd'] || 0
+          set((state) => ({
+            user: state.user ? { ...state.user, balance: usdBalance } : null,
+          }))
+        } catch {
+          // silently fail, balance stays as-is
+        }
+      },
       
       // Provably Fair Actions
       initGameSession: (clientSeed) => {
