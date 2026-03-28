@@ -1,0 +1,348 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* CELORA - High-Tech Casino Theme */
+:root {
+  --background: #050508;
+  --foreground: #f0f2f5;
+  --card: #0c0d12;
+  --card-foreground: #f0f2f5;
+  --popover: #0f1015;
+  --popover-foreground: #f0f2f5;
+  --primary: #00ff9d;
+  --primary-foreground: #050508;
+  --secondary: #12141c;
+  --secondary-foreground: #f0f2f5;
+  --muted: #12141c;
+  --muted-foreground: #6b7280;
+  --accent: #f0b429;
+  --accent-foreground: #050508;
+  --destructive: #ff3b5c;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.06);
+  --input: #12141c;
+  --ring: #00ff9d;
+  --chart-1: #00ff9d;
+  --chart-2: #f0b429;
+  --chart-3: #ff3b5c;
+  --chart-4: #a855f7;
+  --chart-5: #00d4ff;
+  --radius: 0.75rem;
+  --sidebar: #08090d;
+  --sidebar-foreground: #f0f2f5;
+  --sidebar-primary: #00ff9d;
+  --sidebar-primary-foreground: #050508;
+  --sidebar-accent: #12141c;
+  --sidebar-accent-foreground: #f0f2f5;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #00ff9d;
+  
+  /* Celora Brand Colors */
+  --celora-neon: #00ff9d;
+  --celora-gold: #f0b429;
+  --celora-ruby: #ff3b5c;
+  --celora-cyan: #00d4ff;
+  --celora-purple: #a855f7;
+  --celora-glass: rgba(255, 255, 255, 0.03);
+  --celora-glass-border: rgba(255, 255, 255, 0.08);
+  --celora-glow: rgba(0, 255, 157, 0.12);
+}
+
+.dark {
+  --background: #050508;
+  --foreground: #f0f2f5;
+  --card: #0c0d12;
+  --card-foreground: #f0f2f5;
+  --popover: #0f1015;
+  --popover-foreground: #f0f2f5;
+  --primary: #00ff9d;
+  --primary-foreground: #050508;
+  --secondary: #12141c;
+  --secondary-foreground: #f0f2f5;
+  --muted: #12141c;
+  --muted-foreground: #6b7280;
+  --accent: #f0b429;
+  --accent-foreground: #050508;
+  --destructive: #ff3b5c;
+  --destructive-foreground: #ffffff;
+  --border: rgba(255, 255, 255, 0.06);
+  --input: #12141c;
+  --ring: #00ff9d;
+  --chart-1: #00ff9d;
+  --chart-2: #f0b429;
+  --chart-3: #ff3b5c;
+  --chart-4: #a855f7;
+  --chart-5: #00d4ff;
+  --sidebar: #08090d;
+  --sidebar-foreground: #f0f2f5;
+  --sidebar-primary: #00ff9d;
+  --sidebar-primary-foreground: #050508;
+  --sidebar-accent: #12141c;
+  --sidebar-accent-foreground: #f0f2f5;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #00ff9d;
+}
+
+@theme inline {
+  --font-sans: 'Inter', 'Inter Fallback', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Glass Morphism */
+.glass {
+  background: rgba(12, 13, 18, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-light {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Neon Glow Effects */
+.neon-glow {
+  box-shadow: 
+    0 0 20px rgba(0, 255, 157, 0.15),
+    0 0 40px rgba(0, 255, 157, 0.08),
+    inset 0 0 20px rgba(0, 255, 157, 0.03);
+}
+
+.neon-glow-gold {
+  box-shadow: 
+    0 0 20px rgba(240, 180, 41, 0.2),
+    0 0 40px rgba(240, 180, 41, 0.1);
+}
+
+.neon-glow-cyan {
+  box-shadow: 
+    0 0 20px rgba(0, 212, 255, 0.2),
+    0 0 40px rgba(0, 212, 255, 0.1);
+}
+
+.neon-border {
+  position: relative;
+}
+
+.neon-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0, 255, 157, 0.3), transparent, rgba(0, 255, 157, 0.1));
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+}
+
+/* Game Cards */
+.game-card {
+  background: linear-gradient(180deg, rgba(15, 16, 21, 0.9) 0%, rgba(12, 13, 18, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  position: relative;
+  overflow: hidden;
+}
+
+.game-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 157, 0.5), transparent);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.game-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  border-color: rgba(0, 255, 157, 0.2);
+  box-shadow: 
+    0 25px 50px rgba(0, 0, 0, 0.5),
+    0 0 40px rgba(0, 255, 157, 0.08);
+}
+
+.game-card:hover::before {
+  opacity: 1;
+}
+
+/* Live Pulse */
+@keyframes livePulse {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.6;
+    transform: scale(0.95);
+  }
+}
+
+.live-pulse {
+  animation: livePulse 1.5s ease-in-out infinite;
+}
+
+/* Neon Text Glow */
+@keyframes neonPulse {
+  0%, 100% { 
+    text-shadow: 0 0 10px rgba(0, 255, 157, 0.5), 0 0 20px rgba(0, 255, 157, 0.3);
+  }
+  50% { 
+    text-shadow: 0 0 20px rgba(0, 255, 157, 0.8), 0 0 40px rgba(0, 255, 157, 0.5);
+  }
+}
+
+.neon-text {
+  animation: neonPulse 2s ease-in-out infinite;
+}
+
+/* Gold Shimmer */
+@keyframes goldShimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.gold-shimmer {
+  background: linear-gradient(90deg, 
+    #f0b429 0%, 
+    #ffe082 25%, 
+    #f0b429 50%, 
+    #ffe082 75%, 
+    #f0b429 100%);
+  background-size: 200% auto;
+  animation: goldShimmer 3s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Cyber Grid Background */
+.cyber-grid {
+  background-image: 
+    linear-gradient(rgba(0, 255, 157, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 157, 0.03) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Floating Animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Counter Animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.count-up {
+  animation: countUp 0.5s ease-out forwards;
+}
+
+/* Scan Line Effect */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.scanline::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50%;
+  background: linear-gradient(to bottom, transparent, rgba(0, 255, 157, 0.03), transparent);
+  animation: scanline 4s linear infinite;
+  pointer-events: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Selection */
+::selection {
+  background: rgba(0, 255, 157, 0.3);
+  color: #ffffff;
+}
+
+/* Focus States */
+:focus-visible {
+  outline: 2px solid rgba(0, 255, 157, 0.5);
+  outline-offset: 2px;
+}
