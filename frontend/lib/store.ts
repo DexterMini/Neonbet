@@ -65,6 +65,7 @@ interface CasinoState {
   
   // UI State
   currentView: 'lobby' | 'admin' | 'game'
+  selectedCategory: string
   selectedGame: Game | null
   sidebarCollapsed: boolean
   
@@ -77,6 +78,7 @@ interface CasinoState {
   // Actions
   setUser: (user: User | null) => void
   setCurrentView: (view: 'lobby' | 'admin' | 'game') => void
+  setSelectedCategory: (category: string) => void
   setSelectedGame: (game: Game | null) => void
   setSidebarCollapsed: (collapsed: boolean) => void
   updateBalance: (amount: number) => void
@@ -111,9 +113,10 @@ export const useCasinoStore = create<CasinoState>()(
       gameSession: null,
       revealedSeeds: [],
       currentView: 'lobby',
+      selectedCategory: 'all',
       selectedGame: null,
       sidebarCollapsed: false,
-      onlineUsers: 0,
+      onlineUsers: 4283,
       totalBetsToday: 0,
       jackpotAmount: 0,
       betHistory: [],
@@ -128,6 +131,7 @@ export const useCasinoStore = create<CasinoState>()(
       },
       
       setCurrentView: (currentView) => set({ currentView }),
+      setSelectedCategory: (selectedCategory) => set({ selectedCategory, currentView: 'lobby' }),
       setSelectedGame: (selectedGame) => set({ selectedGame }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       

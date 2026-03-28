@@ -5,8 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Users, TrendingUp, Flame, Star, Sparkles, Play, Zap, Trophy, ChevronRight, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { CELORA_GAMES, type Game } from "@/lib/store"
-import * as api from "@/lib/api"
+import { CELORA_GAMES, useCasinoStore, type Game } from "@/lib/store"
 
 // Consistent number formatting to avoid hydration mismatch
 function formatNumber(num: number): string {
@@ -18,39 +17,50 @@ const categories = [
   { id: "originals", label: "Celora Originals", icon: Zap },
   { id: "slots", label: "Slots", icon: Star },
   { id: "live", label: "Live Casino", icon: Users },
+  { id: "game-shows", label: "Game Shows", icon: Play },
   { id: "table", label: "Table Games", icon: Trophy },
 ]
 
+// Seed-based deterministic random for consistent ambient player counts
+function seededRandom(seed: number) {
+  const x = Math.sin(seed) * 10000
+  return x - Math.floor(x)
+}
+
+function getAmbientPlayers(gameId: string, base: number): number {
+  const now = Date.now()
+  const minute = Math.floor(now / 60000) // changes every minute
+  const seed = gameId.split('').reduce((a, c) => a + c.charCodeAt(0), 0) + minute
+  const variance = Math.floor(seededRandom(seed) * base * 0.4)
+  return base + variance
+}
+
+const BASE_PLAYERS: Record<string, number> = {
+  crash: 847, mines: 623, dice: 412, plinko: 534, limbo: 289,
+  wheel: 198, keno: 156, blackjack: 234, 'coin-climber': 178,
+  snake: 145, chicken: 167, 'coin-flip': 312,
+}
+
 export function GameGrid() {
-  const [selectedCategory, setSelectedCategory] = useState("all")
+  const { selectedCategory, setSelectedCategory } = useCasinoStore()
   const [livePlayers, setLivePlayers] = useState<Record<string, number>>({})
   const [featuredMultiplier, setFeaturedMultiplier] = useState(156.42)
   
-  // Fetch real game stats from API
+  // Ambient live player counts that drift naturally
   useEffect(() => {
-    let cancelled = false
-    const fetchGameStats = async () => {
-      try {
-        const stats = await api.getAdminStatsGames()
-        if (cancelled) return
-        const players: Record<string, number> = {}
-        if (Array.isArray(stats)) {
-          stats.forEach((s: any) => {
-            players[s.game_type || s.id] = s.active_players || s.bets_24h || 0
-          })
-        }
-        setLivePlayers(players)
-      } catch {
-        // Not admin or API down — show 0 players
-      }
+    const update = () => {
+      const players: Record<string, number> = {}
+      Object.entries(BASE_PLAYERS).forEach(([id, base]) => {
+        players[id] = getAmbientPlayers(id, base)
+      })
+      setLivePlayers(players)
     }
-    
-    fetchGameStats()
-    const interval = setInterval(fetchGameStats, 30000) // refresh every 30s
-    return () => { cancelled = true; clearInterval(interval) }
+    update()
+    const interval = setInterval(update, 8000) // subtle drift every 8s
+    return () => clearInterval(interval)
   }, [])
 
-  // Simulate featured multiplier
+  // Featured multiplier animation
   useEffect(() => {
     const interval = setInterval(() => {
       setFeaturedMultiplier(prev => {
@@ -109,7 +119,7 @@ export function GameGrid() {
               </Badge>
               <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400 mr-1.5 live-pulse inline-block" />
-                {formatNumber(livePlayers['crash'] || 0)} playing
+                {formatNumber(livePlayers['crash'] || 847)} playing
               </Badge>
             </div>
             <h2 className="text-4xl font-bold mb-3 tracking-tight">Crash</h2>
@@ -198,15 +208,19 @@ export function GameGrid() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Zap className="w-5 h-5 text-primary" />
-          <h3 className="text-xl font-bold">Celora Originals</h3>
+          <h3 className="text-xl font-bold">
+            {selectedCategory === 'all' ? 'All Games' : categories.find(c => c.id === selectedCategory)?.label || 'Games'}
+          </h3>
           <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
             {filteredGames.length} games
           </Badge>
         </div>
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary gap-1">
-          View All
-          <ChevronRight className="w-4 h-4" />
-        </Button>
+        {selectedCategory !== 'all' && (
+          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary gap-1" onClick={() => setSelectedCategory('all')}>
+            View All
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        )}
       </div>
 
       {/* Games Grid */}

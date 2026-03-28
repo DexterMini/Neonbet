@@ -16,6 +16,7 @@ export default function CasinoPage() {
     user,
     isAuthenticated,
     fetchMe,
+    updateOnlineUsers,
   } = useCasinoStore()
   
   const [mounted, setMounted] = useState(false)
@@ -26,6 +27,21 @@ export default function CasinoPage() {
     setMounted(true)
     fetchMe()
   }, [fetchMe])
+
+  // Ambient online users drift
+  useEffect(() => {
+    const drift = () => {
+      const base = 4283
+      const hour = new Date().getHours()
+      // Higher during evening hours (18-02), lower during day
+      const timeMultiplier = (hour >= 18 || hour < 2) ? 1.4 : (hour >= 10 && hour < 18) ? 1.0 : 0.7
+      const variance = Math.floor((Math.random() - 0.5) * 120)
+      updateOnlineUsers(Math.floor(base * timeMultiplier) + variance)
+    }
+    drift()
+    const interval = setInterval(drift, 15000)
+    return () => clearInterval(interval)
+  }, [updateOnlineUsers])
 
   if (!mounted) {
     return (

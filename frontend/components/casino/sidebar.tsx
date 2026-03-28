@@ -45,6 +45,8 @@ export function CasinoSidebar() {
     setSidebarCollapsed, 
     currentView, 
     setCurrentView,
+    selectedCategory,
+    setSelectedCategory,
     user,
     onlineUsers 
   } = useCasinoStore()
@@ -179,7 +181,7 @@ interface NavSectionProps {
 }
 
 function NavSection({ title, items, collapsed }: NavSectionProps) {
-  const { currentView, setCurrentView } = useCasinoStore()
+  const { currentView, setCurrentView, selectedCategory, setSelectedCategory } = useCasinoStore()
   
   return (
     <div className="px-3">
@@ -190,14 +192,39 @@ function NavSection({ title, items, collapsed }: NavSectionProps) {
       )}
       <nav className="space-y-1">
         {items.map((item) => {
-          const isActive = item.id === "lobby" && currentView === "lobby"
+          const isLobbyItem = item.id === "lobby"
+          const isCategoryItem = ["originals", "slots", "live", "game-shows", "table"].includes(item.id)
+          const isGameItem = ["dice", "limbo", "crash", "plinko"].includes(item.id)
+          const isCommunityItem = ["leaderboard", "achievements", "promotions", "vip"].includes(item.id)
+          
+          const isActive = (isLobbyItem && currentView === "lobby" && selectedCategory === "all")
+            || (isCategoryItem && currentView === "lobby" && selectedCategory === item.id)
+            || (isGameItem && currentView === "lobby" && selectedCategory === "originals")
+            || (item.id === "favorites" && selectedCategory === "favorites")
+            || (item.id === "recent" && selectedCategory === "recent")
+          
+          const handleClick = () => {
+            if (isLobbyItem) {
+              setCurrentView("lobby")
+              setSelectedCategory("all")
+            } else if (isCategoryItem) {
+              setSelectedCategory(item.id)
+            } else if (isGameItem) {
+              // Click a specific game — go to originals and eventually open game
+              setSelectedCategory("originals")
+            } else if (item.id === "favorites") {
+              setSelectedCategory("favorites")
+            } else if (item.id === "recent") {
+              setSelectedCategory("recent")
+            } else if (isCommunityItem) {
+              setCurrentView("lobby")
+            }
+          }
           
           return (
             <button
               key={item.id}
-              onClick={() => {
-                if (item.id === "lobby") setCurrentView("lobby")
-              }}
+              onClick={handleClick}
               className={cn(
                 "flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all group",
                 isActive 
